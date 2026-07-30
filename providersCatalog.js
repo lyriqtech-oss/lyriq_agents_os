@@ -888,7 +888,7 @@ const FALLBACK_CATALOG = {
 };
 
 // Plan weights
-const PLAN_WEIGHTS = { free: 1, pro: 2, max: 3, business: 4 };
+const PLAN_WEIGHTS = { free: 1, flash: 2, pro: 3, max: 4, max_5x: 4, max_20x: 5, business: 6, enterprise: 7 };
 
 /**
  * Backend Plan Gating Function
@@ -948,6 +948,10 @@ async function getModelsForProvider(provider, apiKey = '') {
 
       const response = await fetch(fetchUrl, { headers, signal: controller.signal });
       clearTimeout(timeoutId);
+
+      if (!response.ok && apiKey && [401, 403].includes(response.status)) {
+        throw new Error(`PROVIDER_AUTH_FAILED:${provider}`);
+      }
 
       if (response.ok) {
         const data = await response.json();
@@ -1022,7 +1026,10 @@ async function getModelsForProvider(provider, apiKey = '') {
       }
     }
   } catch (e) {
-    // Silently fallback to catalog if network/API fails
+    if (apiKey && String(e?.message || '').startsWith('PROVIDER_AUTH_FAILED')) {
+      throw e;
+    }
+    // Fallback to catalog if network/API fails without proving the key invalid.
   }
 
   // Fallback catalog with top model marked as latest
@@ -1035,7 +1042,7 @@ async function getModelsForProvider(provider, apiKey = '') {
   return catalog;
 }
 
-module.exports = {
+export {
   FALLBACK_CATALOG,
   canUseModel,
   getModelsForProvider

@@ -378,20 +378,20 @@ const demoCompany: CompanyProfile = {
 const defaultAgentsList: Agent[] = [
   {
     id: 'main',
-    name: 'Agente Main (Boris)',
-    role: 'COO Operacional & Coordenador Principal',
+    name: 'Agente Main',
+    role: 'Orquestrador Operacional Principal',
     area: 'Coordenação Operacional',
-    status: true,
-    metric: 'Orquestração Central',
-    metricLabel: 'Coordenação Geral de Operações',
-    tasksToday: 12,
+    status: false,
+    metric: 'Configuração pendente',
+    metricLabel: 'Aguardando provider validado',
+    tasksToday: 0,
     description: 'Agente Principal e Coordenador Operacional da empresa. Gerencia todos os agentes e responde com visão estratégica.',
     details: 'Responsável pelo roteamento de tarefas, consulta da base de conhecimento corporativa e coordenação dos especialistas.',
     icon: 'Sparkles',
-    model: 'gemini-1.5-flash',
+    model: '',
     temperature: 0.2,
     lastActive: 'Agora mesmo',
-    systemPrompt: 'Você é o Agente Main (Boris), COO Operacional e Coordenador Principal do Lyriq Agent OS. Sua missão é gerenciar a operação da empresa, responder diretamente às solicitações com precisão e clareza, utilizar a base de dados de memória quando relevante e coordenar as áreas de Vendas, Atendimento, Marketing e Finanças.',
+    systemPrompt: 'Você é o Agente Main do workspace. Sua missão é coordenar a operação da empresa com base nas configurações reais, memória autorizada e provider validado pelo usuário.',
     toolsEnabled: ['web_search', 'task_create', 'report_generate', 'buscar_memoria'],
     memoryScope: 'global',
     boundaries: 'Decisões financeiras, alteração de contratos e exclusão de base de conhecimento exigem validação do gestor.'
@@ -745,7 +745,7 @@ export default function App() {
         const parsed = JSON.parse(session) as UserAccount;
         return {
           ...parsed,
-          role: parsed.role || (parsed.email === 'admin@lyriq.com' ? 'admin' : 'user'),
+          role: parsed.role || 'user',
           plan: parsed.plan || 'free'
         };
       } catch (e) {}
@@ -756,9 +756,13 @@ export default function App() {
   // PLAN & GATING CONTROL
   const PLAN_LEVELS: Record<string, number> = {
     free: 1,
-    pro: 2,
-    max: 3,
-    business: 4
+    flash: 2,
+    pro: 3,
+    max: 4,
+    max_5x: 4,
+    max_20x: 5,
+    business: 6,
+    enterprise: 7
   };
 
   const FEATURE_PLAN_REQUIREMENTS: Record<string, 'free' | 'pro' | 'max' | 'business'> = {
@@ -767,16 +771,23 @@ export default function App() {
     documents: 'free',
     chat: 'free',
     agents: 'free',
-    marketplace: 'free',
+    marketplace: 'pro',
+    marketplaces: 'pro',
     settings: 'free',
+    memory: 'pro',
     knowledge_bases: 'pro',
     rag_sandbox: 'pro',
     skills: 'pro',
     cron_automations: 'pro',
     swarm: 'max',
+    audit: 'max',
+    logs: 'max',
     audit_vault: 'max',
-    admin: 'max',
-    internal_ops: 'max'
+    admin: 'business',
+    security_dashboard: 'business',
+    security_checklist: 'business',
+    consolidated_architecture: 'business',
+    internal_ops: 'business'
   };
 
   const hasPlanAccess = (userPlan: string = 'free', tabOrFeature: string): boolean => {
@@ -2854,7 +2865,7 @@ export default function App() {
         email: authEmail,
         password: authPassword,
         name: authName,
-        role: authEmail === 'admin@lyriq.com' ? 'admin' : 'user',
+        role: 'user',
         plan: 'free'
       };
       usersList.push(newUser);
@@ -2888,7 +2899,7 @@ export default function App() {
         const demoUser: UserAccount = {
           email: 'demo@lyriq.com',
           name: 'Augusto Weymar (Demo)',
-          role: 'admin',
+          role: 'user',
           plan: 'pro'
         };
         localStorage.setItem('lyriq_session', JSON.stringify(demoUser));
@@ -2949,7 +2960,7 @@ export default function App() {
     const demoUser: UserAccount = {
       email: 'demo@lyriq.com',
       name: 'Augusto Weymar (Demo)',
-      role: 'admin',
+      role: 'user',
       plan: 'pro'
     };
     localStorage.setItem('lyriq_session', JSON.stringify(demoUser));
@@ -8313,6 +8324,8 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               </button>
 
+              {isAdminUser && (
+                <>
               <button
                 onClick={() => setCurrentTab('consolidated_architecture')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
@@ -8340,6 +8353,9 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   <span>Cybersegurança V1</span>
                 </div>
               </button>
+
+                </>
+              )}
 
               <button
                 onClick={() => setCurrentTab('storage_dashboard')}
@@ -8407,7 +8423,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold text-slate-900 truncate">{currentUser?.name || 'Membro Fundador'}</p>
-                  <p className="text-[10px] text-slate-400 truncate">{currentUser?.email || 'admin@lyriq.com'}</p>
+                  <p className="text-[10px] text-slate-400 truncate">{currentUser?.email || 'usuario@empresa.com'}</p>
                 </div>
               </div>
 
@@ -14035,7 +14051,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
               )}
 
               {/* SECURITY HARDENING DASHBOARD TAB */}
-              {currentTab === 'security_dashboard' && (
+              {currentTab === 'security_dashboard' && isAdminUser && (
                 <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200 font-sans">
                   <div className="flex justify-between items-start">
                     <div>
@@ -14132,7 +14148,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
               )}
 
               {/* PRODUCTION SELF-CHECK TAB */}
-              {currentTab === 'security_checklist' && (
+              {currentTab === 'security_checklist' && isAdminUser && (
                 <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200 font-sans">
                   <div className="flex justify-between items-start border-b border-slate-200 pb-3">
                     <div>
@@ -15421,7 +15437,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
               )}
 
               {/* CYBERSEGURANÇA, ANTI-ABUSO E PROTEÇÃO DE DADOS V1 TAB */}
-              {currentTab === 'security_dashboard' && (
+              {currentTab === 'security_dashboard' && isAdminUser && (
                 <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200 font-sans">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
                     <div>
@@ -15688,7 +15704,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
               )}
 
               {/* CONSOLIDAÇÃO FINAL DE ARQUITETURA E ESPECIFICAÇÃO V1 TAB */}
-              {currentTab === 'consolidated_architecture' && (
+              {currentTab === 'consolidated_architecture' && isAdminUser && (
                 <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200 font-sans">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
                     <div>

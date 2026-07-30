@@ -1204,6 +1204,49 @@ const sendError = (res, statusCode, code, message, fix = '', severity = 'blockin
   }));
 };
 
+
+
+const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || '';
+const PLAN_ORDER = { free: 1, flash: 2, pro: 3, max: 4, max_5x: 4, max_20x: 5, business: 6, enterprise: 7 };
+const normalizePlan = (plan = 'free') => String(plan || 'free').toLowerCase();
+const hasPlan = (actual = 'free', required = 'free') => (PLAN_ORDER[normalizePlan(actual)] || 1) >= (PLAN_ORDER[normalizePlan(required)] || 1);
+const getBearerToken = (req) => {
+  const auth = String(req.headers.authorization || '');
+  return auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+};
+const isServerAdminRequest = (req) => {
+  const token = getBearerToken(req) || String(req.headers['x-admin-token'] || '');
+  if (!ADMIN_API_TOKEN || !token) return false;
+  const tokenBuffer = Buffer.from(token);
+  const expectedBuffer = Buffer.from(ADMIN_API_TOKEN);
+  return tokenBuffer.length === expectedBuffer.length && crypto.timingSafeEqual(tokenBuffer, expectedBuffer);
+};
+const routeRequiresPlan = (pathName) => {
+  if (/^\/api\/(swarm)\/execute/.test(pathName)) return 'pro';
+  if (/^\/api\/(admin|security|audit-vault)/.test(pathName)) return 'business';
+  if (/^\/api\/internal/.test(pathName)) return pathName === '/api/internal/diagnostics/overview' ? 'free' : 'business';
+  return 'free';
+};
+const decodeStoredKey = (stored = '') => {
+  if (!stored) return '';
+  try { return atob(stored); } catch (e) { return ''; }
+};
+const getValidProviderForAgent = (db, agent, workspaceId = '') => {
+  const providers = db.providers || [];
+  return providers.find(p =>
+    p.status === 'valid' &&
+    (!workspaceId || !p.workspace_id || p.workspace_id === workspaceId) &&
+    (p.id === agent.provider_connection_id || p.provider === agent.provider || p.selected_chat_model === agent.model_id)
+  ) || providers.find(p => p.status === 'valid' && (!workspaceId || !p.workspace_id || p.workspace_id === workspaceId));
+};
+const isModelConfiguredForProvider = (providerConn, modelId) => {
+  if (!providerConn || !modelId || modelId === 'default') return false;
+  const available = providerConn.available_models || [];
+  if (!Array.isArray(available) || available.length === 0) return true;
+  return available.some(m => (typeof m === 'string' ? m : m?.id) === modelId);
+};
+const MODEL_NOT_CONFIGURED_MESSAGE = 'Nenhum modelo válido configurado. Configure e valide um provider antes de executar este agente.';
+
 const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
   let pathName = parsedUrl.pathname;
@@ -1234,18 +1277,19 @@ const server = http.createServer(async (req, res) => {
   // ----------------------------------------------------
   // SECURITY & PERMISSIONS MIDDLEWARE CHECKS
   // ----------------------------------------------------
-  const userRole = (req.headers['x-user-role'] || 'user').toString().toLowerCase();
-  const userPlan = (req.headers['x-user-plan'] || 'free').toString().toLowerCase();
+  const userPlan = normalizePlan(req.headers['x-user-plan'] || 'free');
 
-  // 1. Admin Endpoint Access Guard
-  if (pathName.startsWith('/api/admin/') || pathName.startsWith('/api/internal/')) {
-    if (userRole !== 'admin' && userRole !== 'super_admin') {
+  // Admin/internal routes must never trust client-controlled role headers.
+  // They require a server-side ADMIN_API_TOKEN via Bearer or x-admin-token.
+  const publicInternalReadOnlyRoutes = new Set(['/api/internal/diagnostics/overview']);
+  if (pathName.startsWith('/api/admin/') || (pathName.startsWith('/api/internal/') && !publicInternalReadOnlyRoutes.has(pathName))) {
+    if ((process.env.NODE_ENV === 'production' || ADMIN_API_TOKEN) && !isServerAdminRequest(req)) {
       return sendError(
         res,
         403,
         'ADMIN_ACCESS_REQUIRED',
-        'Acesso negado: Rota restrita a administradores.',
-        'Esta ação exige privilégios de administrador (admin/super_admin).',
+        'Acesso negado: rota restrita a administradores.',
+        'Use um token administrativo emitido pelo backend. Headers de role do cliente não concedem acesso.',
         'blocking',
         null,
         reqId
@@ -1253,20 +1297,16 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 2. Premium Plan Endpoint Access Guard (Pro/Max features)
-  const proMaxEndpoints = [
-    '/api/swarm/execute',
-    '/api/skills/generate',
-    '/api/v1/swarm/execute',
-    '/api/v1/skills/generate'
-  ];
-  if (proMaxEndpoints.includes(pathName) && userPlan === 'free') {
+  // Backend plan gate. Client-side locked menus are only UX, not enforcement.
+  const requiredPlanForRoute = routeRequiresPlan(pathName);
+  const isLocalUnsafeAdminDev = process.env.NODE_ENV !== 'production' && !ADMIN_API_TOKEN && (pathName.startsWith('/api/admin/') || pathName.startsWith('/api/internal/') || pathName.startsWith('/api/security/'));
+  if (!isLocalUnsafeAdminDev && !hasPlan(userPlan, requiredPlanForRoute)) {
     return sendError(
       res,
       402,
       'PLAN_LIMIT_EXCEEDED',
-      'Recurso bloqueado para o plano Free.',
-      'Faça upgrade para o plano Pro ou Max para utilizar executores Swarm e Skills avançadas.',
+      `Recurso bloqueado para o plano ${userPlan.toUpperCase()}.`,
+      `Faça upgrade para o plano ${requiredPlanForRoute.toUpperCase()} ou superior para usar este recurso.`,
       'blocking',
       null,
       reqId
@@ -1288,6 +1328,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const db = readDb();
+      if (!db.providers) db.providers = [];
       const newConn = {
         id: `provider-${Date.now()}`,
         workspace_id: workspaceId || 'workspace_123',
@@ -1322,7 +1363,7 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 404, 'PROVIDER_NOT_CONFIGURED', 'Conexão de provedor não encontrada.', 'Informe um ID válido.', 'blocking', null, reqId);
         }
         provider = conn.provider;
-        apiKey = atob(conn.encrypted_api_key);
+        apiKey = decodeStoredKey(conn.encrypted_api_key);
         workspaceId = conn.workspace_id;
       }
 
@@ -1433,19 +1474,19 @@ const server = http.createServer(async (req, res) => {
           return sendError(res, 401, 'PROVIDER_AUTH_FAILED', 'Chave rejeitada pelo provedor.', 'Confirme se a chave de API está correta.', 'blocking', null, reqId);
         }
 
-        const db = readDb();
-        let availableModels = ['gpt-4o-mini', 'gpt-4o'];
-        if (provider === 'gemini') {
-          availableModels = ['gemini-1.5-flash', 'gemini-1.5-pro'];
-        } else if (provider === 'anthropic') {
-          availableModels = ['claude-3-5-sonnet-20241022'];
-        } else if (provider === 'groq') {
-          availableModels = ['llama-3.3-70b-versatile', 'mixtral-8x7b-32768'];
-        } else if (provider === 'openrouter') {
-          availableModels = ['auto', 'anthropic/claude-3.5-sonnet', 'openai/gpt-4o-mini'];
-        } else if (provider === 'nvidia' || provider === 'nvidia-build') {
-          availableModels = ['deepseek-ai/deepseek-v4-flash', 'deepseek-ai/deepseek-v4-pro', 'meta/llama-3.3-70b-instruct'];
+        if (!testRes.ok) {
+          logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, 'PROVIDER_VALIDATION_FAILED');
+          return sendError(res, 400, 'PROVIDER_VALIDATION_FAILED', 'Não foi possível validar a chave no provedor.', 'Verifique permissões, saldo e provedor selecionado.', 'blocking', null, reqId);
         }
+
+        const modelsList = await getModelsForProvider(provider, key);
+        const availableModels = modelsList.filter(m => m.isAvailable !== false).map(m => m.id);
+        if (availableModels.length === 0) {
+          return sendError(res, 400, 'PROVIDER_NO_MODELS', 'A chave foi aceita, mas nenhum modelo utilizável foi encontrado.', 'Confirme se a chave tem permissão para modelos de chat.', 'blocking', null, reqId);
+        }
+
+        const db = readDb();
+        if (!db.providers) db.providers = [];
 
         const providerConn = {
           id: `provider-${Date.now()}`,
@@ -1476,7 +1517,8 @@ const server = http.createServer(async (req, res) => {
     // GET /api/providers
     if (pathName === '/api/providers' && method === 'GET') {
       const db = readDb();
-      return sendSuccess(res, db.providers, reqId);
+      const safeProviders = (db.providers || []).map(({ encrypted_api_key, ...p }) => p);
+      return sendSuccess(res, safeProviders, reqId);
     }
 
     // GET /api/providers/:providerConnectionId/health
@@ -1519,16 +1561,26 @@ const server = http.createServer(async (req, res) => {
         return sendError(res, 400, 'INVALID_API_KEY', 'Chave de API é obrigatória.', 'Informe uma API key.', 'blocking', null, reqId);
       }
 
-      const modelsList = await getModelsForProvider(providerId, apiKey);
+      let modelsList = [];
+      try {
+        modelsList = await getModelsForProvider(providerId, apiKey);
+      } catch (err) {
+        return sendError(res, 401, 'PROVIDER_AUTH_FAILED', 'Chave rejeitada pelo provedor.', 'Confirme se a API key está correta e tem permissão para listar modelos.', 'blocking', null, reqId);
+      }
+      const availableModels = modelsList.filter(m => m.isAvailable !== false).map(m => m.id);
+      if (availableModels.length === 0) {
+        return sendError(res, 400, 'PROVIDER_NO_MODELS', 'Nenhum modelo disponível foi encontrado para esta chave.', 'Escolha outro provider ou revise permissões/saldo.', 'blocking', null, reqId);
+      }
       const db = readDb();
+      if (!db.providers) db.providers = [];
       const conn = {
         id: `provider-${Date.now()}`,
         workspace_id: body.workspaceId || 'workspace_123',
         provider: providerId,
         encrypted_api_key: btoa(apiKey),
         status: 'valid',
-        available_models: modelsList.map(m => m.id),
-        selected_chat_model: modelsList[0]?.id || 'default',
+        available_models: availableModels,
+        selected_chat_model: availableModels[0],
         last_validated_at: new Date().toISOString()
       };
       db.providers = db.providers.filter(p => p.provider !== providerId);
@@ -1648,14 +1700,24 @@ const server = http.createServer(async (req, res) => {
       }
 
       const db = readDb();
+      if (!db.agents) db.agents = [];
+      const providerConn = (db.providers || []).find(p => p.id === providerConnectionId && p.status === 'valid');
+      if (!providerConn || !isModelConfiguredForProvider(providerConn, modelId)) {
+        logRuntimeEvent(workspaceId, '', '', 'main_agent_create_failed', 'failed', 0, {}, 'MODEL_NOT_CONFIGURED');
+        return sendError(res, 400, 'MODEL_NOT_CONFIGURED', MODEL_NOT_CONFIGURED_MESSAGE, 'Valide um provider e selecione um modelo disponível antes de criar o agente.', 'blocking', null, reqId);
+      }
+      const planCheck = canUseModel({ workspaceId, provider: providerConn.provider, modelId, plan: userPlan });
+      if (!planCheck.allowed) {
+        return sendError(res, 402, 'PLAN_RESTRICTED', planCheck.reason, 'Faça upgrade do plano para utilizar este modelo.', 'blocking', null, reqId);
+      }
       // Remove any existing main agent to ensure exactly one main agent
       db.agents = db.agents.filter(a => a.type !== 'main');
 
       const mainAgent = {
         id: `agent-main-${Date.now()}`,
         workspace_id: workspaceId || 'workspace_123',
-        provider_connection_id: providerConnectionId || 'provider-mock',
-        model_id: modelId || 'gpt-4o-mini',
+        provider_connection_id: providerConnectionId,
+        model_id: modelId,
         name: name || 'Assistente Principal',
         role: role || 'CEO',
         instructions: instructions,
@@ -1699,7 +1761,7 @@ const server = http.createServer(async (req, res) => {
         return sendError(res, 404, 'AGENT_NOT_FOUND', 'Agente principal não encontrado.', 'Crie o agente coordenador principal.', 'blocking', null, reqId);
       }
 
-      const providerConn = db.providers[0];
+      const providerConn = getValidProviderForAgent(db, agent, agent.workspace_id);
       const hasProvider = !!providerConn;
       const providerValid = providerConn && providerConn.status === 'valid';
       const instructionsConfigured = agent.instructions && agent.instructions.trim().length > 0;
@@ -1722,7 +1784,7 @@ const server = http.createServer(async (req, res) => {
         readinessScore: score,
         checks: [
           { key: 'provider', status: providerValid ? 'passed' : 'failed', label: 'Provedor validado' },
-          { key: 'chatModel', status: 'passed', label: 'Modelo de chat operacional' },
+          { key: 'chatModel', status: isModelConfiguredForProvider(providerConn, agent.model_id) ? 'passed' : 'failed', label: 'Modelo de chat operacional' },
           { key: 'instructions', status: instructionsConfigured ? 'passed' : 'failed', label: 'Instruções configuradas' }
         ]
       }, reqId);
@@ -1734,10 +1796,15 @@ const server = http.createServer(async (req, res) => {
       const agentId = agentTestMatch[1];
       const db = readDb();
       const agent = db.agents.find(a => a.id === agentId || (agentId === 'main' && a.type === 'main'));
-      if (agent) {
-        agent.status = 'active';
-        writeDb(db);
+      if (!agent) {
+        return sendError(res, 404, 'AGENT_NOT_FOUND', 'Agente não encontrado.', 'Cadastre o agente antes do teste.', 'blocking', null, reqId);
       }
+      const providerConn = getValidProviderForAgent(db, agent, agent.workspace_id);
+      if (!providerConn || !isModelConfiguredForProvider(providerConn, agent.model_id)) {
+        return sendError(res, 400, 'MODEL_NOT_CONFIGURED', MODEL_NOT_CONFIGURED_MESSAGE, 'Valide um provider e selecione um modelo disponível antes do teste.', 'blocking', null, reqId);
+      }
+      agent.status = 'active';
+      writeDb(db);
       return sendSuccess(res, { testPassed: true, latencyMs: 140 }, reqId);
     }
 
@@ -1773,10 +1840,14 @@ const server = http.createServer(async (req, res) => {
 
       logRuntimeEvent(workspaceId, agent.id, sessionId, 'chat_agent_loaded', 'completed', 0);
 
-      const providerConn = db.providers.find(p => p.id === agent.provider_connection_id || p.status === 'valid');
-      if (!providerConn || providerConn.status !== 'valid') {
-        logRuntimeEvent(workspaceId, agent.id, sessionId, 'chat_failed', 'failed', Date.now() - startTime, {}, 'PROVIDER_NOT_CONFIGURED');
-        return sendError(res, 400, 'PROVIDER_NOT_CONFIGURED', 'Provedor de IA desconectado.', 'Adicione credenciais nas configurações.', 'blocking', null, reqId);
+      const providerConn = getValidProviderForAgent(db, agent, workspaceId || agent.workspace_id);
+      if (!providerConn || !isModelConfiguredForProvider(providerConn, agent.model_id)) {
+        logRuntimeEvent(workspaceId, agent.id, sessionId, 'chat_failed', 'failed', Date.now() - startTime, {}, 'MODEL_NOT_CONFIGURED');
+        return sendError(res, 400, 'MODEL_NOT_CONFIGURED', MODEL_NOT_CONFIGURED_MESSAGE, 'Adicione credenciais, valide o provider e escolha um modelo disponível.', 'blocking', null, reqId);
+      }
+      const planCheck = canUseModel({ workspaceId, provider: providerConn.provider, modelId: agent.model_id, plan: userPlan });
+      if (!planCheck.allowed) {
+        return sendError(res, 402, 'PLAN_RESTRICTED', planCheck.reason, 'Faça upgrade do plano para utilizar este modelo.', 'blocking', null, reqId);
       }
 
       logRuntimeEvent(workspaceId, agent.id, sessionId, 'chat_provider_checked', 'completed', 0);
@@ -1811,7 +1882,7 @@ const server = http.createServer(async (req, res) => {
       };
       writeDbUser();
 
-      const key = atob(providerConn.encrypted_api_key);
+      const key = decodeStoredKey(providerConn.encrypted_api_key);
       const duration = Date.now() - startTime;
 
       let reply = null;
