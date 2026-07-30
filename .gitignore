@@ -1,0 +1,25 @@
+# Environment & Credentials (CRITICAL: DO NOT COMMIT)
+.env
+.env.*
+*.env
+
+# Dependencies & Build Outputs
+node_modules
+dist
+dist-ssr
+build
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Logs & Temporary Scratch
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+scratch

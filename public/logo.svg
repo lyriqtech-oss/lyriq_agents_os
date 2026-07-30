@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="lyriq-grad-main" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0055ff" />
+      <stop offset="50%" stop-color="#00aaff" />
+      <stop offset="100%" stop-color="#00f0ff" />
+    </linearGradient>
+    <linearGradient id="lyriq-grad-left" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0055ff" />
+      <stop offset="100%" stop-color="#00d5ff" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Circles at the vertices -->
+  <circle cx="50" cy="12" r="5" fill="#00f0ff" />
+  <circle cx="16" cy="72" r="5" fill="#0055ff" />
+  <circle cx="84" cy="72" r="5" fill="#00f0ff" />
+
+  <!-- Inner hexagon segment brackets -->
+  <!-- Top Left Segment -->
+  <path d="M 46 20 L 26 31.5 L 26 57.5 L 34 53 L 34 36 L 46 29 Z" fill="url(#lyriq-grad-left)" />
+  
+  <!-- Top Right Segment -->
+  <path d="M 54 20 L 74 31.5 L 74 57.5 L 66 53 L 66 36 L 54 29 Z" fill="url(#lyriq-grad-main)" />
+
+  <!-- Bottom Segment -->
+  <path d="M 30 63.5 L 50 75 L 70 63.5 L 62 59 L 50 66 L 38 59 Z" fill="url(#lyriq-grad-main)" />
+</svg>
