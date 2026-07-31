@@ -819,7 +819,8 @@ export default function App() {
   const [lockedFeatureName, setLockedFeatureName] = useState('');
 
   // Mandatory Onboarding Route Guard & Admin/Plan Guard
-  const isAdminUser = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'owner';
+  const isFounderUser = currentUser?.role === 'owner';
+  const isAdminUser = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || isFounderUser;
 
   useEffect(() => {
     if (currentUser) {
@@ -1021,13 +1022,22 @@ export default function App() {
 
   useEffect(() => {
     if (currentRoute === 'app') {
-      const adminTabs = ['admin', 'admin_panel', 'internal_ops', 'security_dashboard', 'security_checklist', 'consolidated_architecture'];
+      const founderOnlyTabs = ['admin', 'admin_panel', 'internal_ops'];
+      const adminTabs = ['security_dashboard', 'security_checklist', 'consolidated_architecture'];
       const userPlan = companyProfile.plan || currentUser?.plan || 'free';
+
+      if (founderOnlyTabs.includes(currentTab)) {
+        if (!isFounderUser) {
+          setCurrentTab('dashboard');
+          addToast('Acesso Negado (403): O Admin Geral é exclusivo do fundador da Lyriq.', 'error');
+        }
+        return;
+      }
 
       if (adminTabs.includes(currentTab)) {
         if (!isAdminUser) {
           setCurrentTab('dashboard');
-          addToast('Acesso Negado (403): O menu de Administração é exclusivo para administradores.', 'error');
+          addToast('Acesso Negado (403): Área técnica restrita.', 'error');
         }
         return;
       }
@@ -1039,7 +1049,7 @@ export default function App() {
         addToast(`Recurso "${currentTab.toUpperCase()}" bloqueado no plano ${userPlan.toUpperCase()}. Faça upgrade.`, 'info');
       }
     }
-  }, [currentTab, currentRoute, isAdminUser, currentUser, companyProfile.plan]);
+  }, [currentTab, currentRoute, isAdminUser, isFounderUser, currentUser, companyProfile.plan]);
 
   interface TaskItem {
     id: string;
@@ -7653,10 +7663,10 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               </button>
 
-              {isAdminUser && (
+              {isFounderUser && (
                 <>
                   <div className="pt-4 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-rose-500 font-mono text-left">
-                    Admin
+                    Interno Lyriq
                   </div>
 
                   <button
@@ -7669,7 +7679,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   >
                     <div className="flex items-center gap-2.5">
                       <ShieldCheck className="w-4 h-4 shrink-0 text-rose-500" />
-                      <span>Painel Admin</span>
+                      <span>Admin Geral</span>
                     </div>
                   </button>
                 </>
@@ -10604,14 +10614,23 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                     <div className="flex items-center justify-between gap-4">
                       <div>
                         <h2 className="text-sm font-bold">Regra de produto</h2>
-                        <p className="text-xs text-slate-300 mt-1">O usuário vê Conexões. Detalhe técnico, logs, chaves, webhooks avançados e segurança ficam no Admin.</p>
+                        <p className="text-xs text-slate-300 mt-1">Canais, apps e MCPs ficam agrupados aqui. Logs, chaves, billing e preferências ficam em Configurações avançadas.</p>
                       </div>
-                      <button
-                        onClick={() => setCurrentTab('status')}
-                        className="px-3 py-1.5 rounded bg-white text-slate-950 text-xs font-bold hover:bg-slate-100 transition"
-                      >
-                        Abrir Admin
-                      </button>
+                      {isFounderUser ? (
+                        <button
+                          onClick={() => setCurrentTab('admin_panel')}
+                          className="px-3 py-1.5 rounded bg-white text-slate-950 text-xs font-bold hover:bg-slate-100 transition"
+                        >
+                          Abrir Admin Geral
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setCurrentTab('settings')}
+                          className="px-3 py-1.5 rounded bg-white text-slate-950 text-xs font-bold hover:bg-slate-100 transition"
+                        >
+                          Abrir Configurações
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -11242,7 +11261,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               )}
 
               {/* 1.12. APP: ADMIN GERAL DA PLATAFORMA */}
-              {currentTab === 'admin_panel' && isAdminUser && (
+              {currentTab === 'admin_panel' && isFounderUser && (
                 <div className="space-y-6 max-w-6xl text-left">
                   <div className="flex items-start justify-between gap-4">
                     <div>
