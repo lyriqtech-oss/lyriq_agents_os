@@ -977,6 +977,18 @@ export default function App() {
   });
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [platformAdminSettings, setPlatformAdminSettings] = useState(() => {
+    const data = localStorage.getItem('lyriq_platform_admin_settings');
+    return data ? JSON.parse(data) : {
+      signupsBlocked: false,
+      maintenanceMode: false,
+      abuseShield: true,
+      billingLock: false
+    };
+  });
+  useEffect(() => {
+    localStorage.setItem('lyriq_platform_admin_settings', JSON.stringify(platformAdminSettings));
+  }, [platformAdminSettings]);
   const [configModalTab, setConfigModalTab] = useState<'overview' | 'instructions' | 'memory' | 'skills' | 'tools' | 'channels' | 'tests' | 'logs' | 'settings'>('overview');
   const [mainAgentSubTab, setMainAgentSubTab] = useState<'overview' | 'chat' | 'agents_md' | 'tools' | 'specialists'>('overview');
   const [marketplaceSubTab, setMarketplaceSubTab] = useState<'agents' | 'playbooks'>('agents');
@@ -11229,12 +11241,118 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
-              {/* 1.12. APP: PÁGINA PÚBLICA DE STATUS DO SISTEMA (PDF Specification) */}
+              {/* 1.12. APP: ADMIN GERAL DA PLATAFORMA */}
               {currentTab === 'admin_panel' && isAdminUser && (
                 <div className="space-y-6 max-w-6xl text-left">
-                  <div>
-                    <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Painel Admin</h1>
-                    <p className="text-xs text-slate-400 mt-0.5">Área técnica para operação, segurança, billing, QA, logs e infraestrutura. Isso não precisa ficar no menu do usuário.</p>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Admin Geral Lyriq</h1>
+                      <p className="text-xs text-slate-400 mt-0.5">Controle de dono da plataforma: cadastros, usuários, workspaces, abuso, billing, incidentes e infraestrutura.</p>
+                    </div>
+                    <span className="px-3 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-100 text-[10px] font-bold uppercase tracking-wider">
+                      Founder Control
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Usuários ativos', value: '1.284', delta: '+7 hoje' },
+                      { label: 'Workspaces', value: '312', delta: '24 Pro' },
+                      { label: 'MRR estimado', value: 'R$ 18.740', delta: '+12%' },
+                      { label: 'Alertas críticos', value: '0', delta: 'limpo' }
+                    ].map((metric) => (
+                      <div key={metric.label} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{metric.label}</span>
+                        <strong className="block text-xl text-slate-950 mt-1">{metric.value}</strong>
+                        <span className="text-[10px] text-emerald-600 font-semibold">{metric.delta}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="bg-slate-950 text-white rounded-2xl p-5 border border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h2 className="text-sm font-bold">Controles Globais da Plataforma</h2>
+                        <p className="text-xs text-slate-400 mt-0.5">Botões de emergência para controlar a Lyriq inteira. Nada disso fica disponível para cliente.</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      {[
+                        { key: 'signupsBlocked', label: 'Barrar novos cadastros', desc: 'Fecha signup público temporariamente.' },
+                        { key: 'maintenanceMode', label: 'Modo manutenção', desc: 'Mostra aviso global e reduz operações.' },
+                        { key: 'abuseShield', label: 'Anti-abuso ativo', desc: 'Rate limit, fraude e abuso ligados.' },
+                        { key: 'billingLock', label: 'Travar billing', desc: 'Bloqueia mudanças de planos/pagamentos.' }
+                      ].map((control) => {
+                        const enabled = Boolean(platformAdminSettings[control.key]);
+                        return (
+                          <button
+                            key={control.key}
+                            onClick={() => {
+                              setPlatformAdminSettings((prev: any) => ({ ...prev, [control.key]: !prev[control.key] }));
+                              addToast(`${control.label}: ${enabled ? 'desativado' : 'ativado'}.`, enabled ? 'info' : 'success');
+                            }}
+                            className={`rounded-xl p-4 text-left border transition ${enabled ? 'bg-emerald-500/10 border-emerald-400/40 text-emerald-100' : 'bg-white/5 border-white/10 text-slate-300 hover:bg-white/10'}`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-bold">{control.label}</span>
+                              <span className={`w-8 h-4 rounded-full p-0.5 ${enabled ? 'bg-emerald-500' : 'bg-slate-700'}`}>
+                                <span className={`block w-3 h-3 rounded-full bg-white transition ${enabled ? 'translate-x-4' : ''}`}></span>
+                              </span>
+                            </div>
+                            <p className="text-[10px] opacity-75 mt-2 leading-relaxed">{control.desc}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-sm font-bold text-slate-900">Workspaces para Monitorar</h2>
+                        <button onClick={() => addToast('Filtro de risco aplicado.', 'info')} className="text-[10px] font-bold text-indigo-600 hover:underline">Ver alto risco</button>
+                      </div>
+                      <div className="space-y-3">
+                        {[
+                          { name: 'Lyriq', plan: 'Business', risk: 'Baixo', status: 'Operando' },
+                          { name: 'Clínica Vitalis Demo', plan: 'Pro', risk: 'Médio', status: 'Uso alto de RAG' },
+                          { name: 'Workspace Teste Público', plan: 'Free', risk: 'Alto', status: 'Rate limit próximo' }
+                        ].map((workspace) => (
+                          <div key={workspace.name} className="flex items-center justify-between gap-3 p-3 rounded-lg border border-slate-100 bg-slate-50/60">
+                            <div>
+                              <strong className="block text-xs text-slate-900">{workspace.name}</strong>
+                              <span className="text-[10px] text-slate-500">{workspace.plan} · {workspace.status}</span>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${workspace.risk === 'Alto' ? 'bg-rose-50 text-rose-700' : workspace.risk === 'Médio' ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{workspace.risk}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-sm font-bold text-slate-900">Ações de Dono</h2>
+                        <span className="text-[10px] text-slate-400 font-mono">auditado</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[
+                          { label: 'Bloquear usuário', tab: 'audit' },
+                          { label: 'Congelar workspace', tab: 'status' },
+                          { label: 'Ver incidentes', tab: 'security_dashboard' },
+                          { label: 'Revisar billing', tab: 'providers' },
+                          { label: 'Abrir logs', tab: 'logs' },
+                          { label: 'Executar QA', tab: 'qa_report_v1' }
+                        ].map((action) => (
+                          <button
+                            key={action.label}
+                            onClick={() => setCurrentTab(action.tab)}
+                            className="px-3 py-2 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-xs font-bold text-slate-700 transition"
+                          >
+                            {action.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
