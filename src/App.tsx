@@ -3929,48 +3929,76 @@ export default function App() {
     addToast('Nó removido do Canvas.', 'info');
   };
 
-  // SWARM SIMULATION ACTIONS
-  const handleRunSwarmSimulation = (taskText: string) => {
+  // SWARM ORCHESTRATION ACTIONS
+  const handleRunSwarmSimulation = async (taskText: string) => {
     if (!taskText.trim()) return;
     setIsExecutingSwarm(true);
     setSwarmLogs([
-      { agent: 'System', text: `🚀 Iniciando cooperação de Enxame para a tarefa: "${taskText}"`, time: 'Agora', type: 'system' }
+      { agent: 'System', text: `Iniciando orquestração multiagente real para a tarefa: "${taskText}"`, time: 'Agora', type: 'system' }
     ]);
     setSwarmTask('');
 
-    // Step 1: Sales Agent
-    setTimeout(() => {
-      setSwarmLogs(prev => [
-        ...prev,
-        { agent: 'Estevão Sales', text: 'Entendido! Analisando o histórico do CRM e as últimas propostas de vendas para formatar a oferta.', time: 'Agora', type: 'message' }
-      ]);
-    }, 1000);
+    try {
+      const activeAgentId = agents.find(agent => agent.id === 'main')?.id || agents[0]?.id || 'agent-main';
+      const createConversationRes = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: 'workspace_123',
+          activeAgentId,
+          title: `Swarm: ${taskText.slice(0, 42)}`
+        })
+      });
 
-    // Step 2: Finance Agent
-    setTimeout(() => {
-      setSwarmLogs(prev => [
-        ...prev,
-        { agent: 'Felipe Finance', text: 'Análise financeira concluída. Com base nas margens sugeridas, o preço ideal consolidado para o fechamento é de R$ 45.000.', time: 'Agora', type: 'message' }
-      ]);
-    }, 2200);
+      const createConversationBody = await createConversationRes.json();
+      if (!createConversationRes.ok || !createConversationBody.ok) {
+        throw new Error(createConversationBody.error?.message || 'Não foi possível criar conversa de orquestração.');
+      }
 
-    // Step 3: Docs Agent
-    setTimeout(() => {
-      setSwarmLogs(prev => [
-        ...prev,
-        { agent: 'Daniel Docs', text: 'Contrato de compliance auditado sem inconformidades. Termos gerais aprovados conforme base RAG local.', time: 'Agora', type: 'message' }
-      ]);
-    }, 3400);
+      const conversationId = createConversationBody.data.id;
+      const orchestrationRes = await fetch(`/api/conversations/${conversationId}/orchestrate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: taskText, maxAgents: 4 })
+      });
 
-    // Step 4: Eva Executive Agent
-    setTimeout(() => {
+      const orchestrationBody = await orchestrationRes.json();
+      if (!orchestrationRes.ok || !orchestrationBody.ok) {
+        throw new Error(orchestrationBody.error?.message || 'Orquestração multiagente falhou.');
+      }
+
+      const data = orchestrationBody.data;
+      const decisionLogs = (data.decisions || []).map((decision: any) => ({
+        agent: decision.agentName || decision.agentId || 'Agente',
+        text: decision.recommendation || 'Análise concluída.',
+        time: 'Agora',
+        type: 'message' as const
+      }));
+
+      const taskLines = (data.nextTasks || [])
+        .map((task: any) => `- ${task.title}: ${task.description}`)
+        .join('\n');
+
       setSwarmLogs(prev => [
         ...prev,
-        { agent: 'Eva Executive', text: 'Enxame concluiu a tarefa! Proposta comercial consolidada, precificada e validada legalmente com sucesso! Status: PRONTO.', time: 'Agora', type: 'message' },
-        { agent: 'System', text: '✅ [SWARM SUCCESS] Cooperação finalizada com sucesso.', time: 'Agora', type: 'system' }
+        ...decisionLogs,
+        {
+          agent: 'System',
+          text: `${data.orchestrationRun.status === 'waiting_approval' ? '[APPROVAL REQUIRED]' : '[SWARM SUCCESS]'} Run ${data.orchestrationRun.id}\nRisco: ${data.risk?.level || 'medium'}${data.approvalRequest?.id ? `\nAprovação: ${data.approvalRequest.id}` : ''}\n${taskLines ? `Tarefas criadas:\n${taskLines}` : 'Nenhuma tarefa criada.'}`,
+          time: 'Agora',
+          type: 'system'
+        }
       ]);
+      addToast(data.orchestrationRun.status === 'waiting_approval' ? 'Orquestração criada aguardando aprovação.' : 'Orquestração multiagente concluída.', data.orchestrationRun.status === 'waiting_approval' ? 'info' : 'success');
+    } catch (err: any) {
+      setSwarmLogs(prev => [
+        ...prev,
+        { agent: 'System', text: `[SWARM ERROR] ${err.message || 'Falha ao executar orquestração.'}`, time: 'Agora', type: 'system' }
+      ]);
+      addToast(err.message || 'Falha ao executar orquestração multiagente.', 'error');
+    } finally {
       setIsExecutingSwarm(false);
-    }, 4600);
+    }
   };
 
   // CHANNELS

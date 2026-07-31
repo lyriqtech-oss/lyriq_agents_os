@@ -1,4 +1,5 @@
 import assert from 'assert';
+import { selectOrchestrationAgents, orchestrateMultiAgentTask } from '../src/services/main_chat_service.js';
 
 console.log('=== RUNNING UNIT TESTS ===');
 
@@ -1988,5 +1989,35 @@ assert.strictEqual(gateRes.stagingAllowed, true);
 assert.strictEqual(gateRes.betaClosedAllowed, true);
 assert.strictEqual(gateRes.productionAllowed, true);
 console.log('✅ Release Gate Decision Evaluator tests passed.');
+
+// 149. Test Multi-Agent Orchestration selection and approval gate
+const orchestrationAgents = [
+  { id: 'main', name: 'Main', role: 'Coordenador operacional', type: 'main', area: 'operations', status: 'active' },
+  { id: 'tech', name: 'Tech', role: 'Especialista técnico', area: 'technology', status: 'active' },
+  { id: 'mkt', name: 'Marketing', role: 'Growth', area: 'marketing', status: 'active' }
+];
+const selectedOrchestrationAgents = selectOrchestrationAgents({
+  agents: orchestrationAgents,
+  userText: 'corrigir bug de API e preparar deploy',
+  maxAgents: 3
+});
+assert.strictEqual(selectedOrchestrationAgents[0].id, 'main');
+assert.ok(selectedOrchestrationAgents.some(agent => agent.id === 'tech'));
+
+const orchestrationResult = orchestrateMultiAgentTask({
+  conversationId: 'conv-test',
+  agents: orchestrationAgents,
+  userText: 'corrigir bug de API e preparar deploy em produção',
+  workspaceId: 'workspace_123',
+  maxAgents: 3
+});
+assert.strictEqual(orchestrationResult.orchestrationRun.type, 'multi_agent_orchestration');
+assert.strictEqual(orchestrationResult.orchestrationRun.status, 'waiting_approval');
+assert.strictEqual(orchestrationResult.approvalRequest.status, 'pending');
+assert.ok(orchestrationResult.participantRuns.length >= 2);
+assert.ok(orchestrationResult.nextTasks.length >= 2);
+assert.ok(orchestrationResult.events.every(event => event.agentRunId && event.runId));
+assert.strictEqual(orchestrationResult.assistantMessage.metadata.orchestrationRunId, orchestrationResult.orchestrationRun.id);
+console.log('✅ Multi-Agent Orchestration selection and approval gate tests passed.');
 
 console.log('🎉 ALL UNIT TESTS PASSED SUCCESSFULLY!');

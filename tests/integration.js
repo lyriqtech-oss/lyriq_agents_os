@@ -2094,6 +2094,42 @@ setTimeout(async () => {
     });
     assert.strictEqual(resSwitchAgConv.status, 200);
 
+    // 5.1 POST /api/conversations/:id/orchestrate (Orquestração multiagente com approval gate)
+    const resOrchestrate = await fetch(`${baseUrl}/conversations/${createdConvId}/orchestrate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: 'Corrigir bug de API, coordenar agentes e preparar deploy em produção com validação.',
+        maxAgents: 4
+      })
+    });
+    assert.strictEqual(resOrchestrate.status, 200);
+    const bodyOrchestrate = await resOrchestrate.json();
+    assert.strictEqual(bodyOrchestrate.data.orchestrationRun.type, 'multi_agent_orchestration');
+    assert.strictEqual(bodyOrchestrate.data.orchestrationRun.status, 'waiting_approval');
+    assert.ok(bodyOrchestrate.data.participantRuns.length >= 1);
+    assert.ok(bodyOrchestrate.data.nextTasks.length >= 2);
+    assert.ok(bodyOrchestrate.data.approvalRequest.id);
+
+    const orchestrationRunId = bodyOrchestrate.data.orchestrationRun.id;
+    const resOrchestrateEvents = await fetch(`${baseUrl}/agent-runs/${orchestrationRunId}/events`);
+    assert.strictEqual(resOrchestrateEvents.status, 200);
+    const bodyOrchestrateEvents = await resOrchestrateEvents.json();
+    assert.ok(bodyOrchestrateEvents.data.events.length >= 2);
+
+    const resApproveOrchestration = await fetch(`${baseUrl}/approvals/${bodyOrchestrate.data.approvalRequest.id}/approve`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'Deploy revisado e aprovado para teste controlado.' })
+    });
+    assert.strictEqual(resApproveOrchestration.status, 200);
+
+    const resOrchestrationDetail = await fetch(`${baseUrl}/orchestrations/${orchestrationRunId}`);
+    assert.strictEqual(resOrchestrationDetail.status, 200);
+    const bodyOrchestrationDetail = await resOrchestrationDetail.json();
+    assert.strictEqual(bodyOrchestrationDetail.data.orchestrationRun.status, 'completed');
+    assert.ok(bodyOrchestrationDetail.data.events.some(e => e.type === 'orchestration_approved'));
+
     // 6. GET /api/agent-runs/:id/events (Timeline de Eventos do AgentRun)
     const resRunEvtsList = await fetch(`${baseUrl}/agent-runs/${runIdCreated}/events`);
     assert.strictEqual(resRunEvtsList.status, 200);

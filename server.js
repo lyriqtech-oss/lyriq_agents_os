@@ -13,7 +13,7 @@ import { validateFileAsset, extractTextFromDocument, chunkDocumentText, computeT
 import { normalizeMemoryContent, containsSecretOrCredential, detectMemoryCandidates, fitMemoriesIntoBudget, formatAgentMemoryContext } from './src/services/memory_service.js';
 import { PolicyEngine, SecretVault, scanInputForInjection, runProductionSelfCheck } from './src/services/security_service.js';
 import { validateAgentPublishChecklist, duplicateAgentSecurely, runAgentSandboxSimulation } from './src/services/agent_studio_service.js';
-import { switchConversationAgent, generateConversationTitle, postUserMessageAndRun, cancelAgentRun, createTaskFromConversation } from './src/services/main_chat_service.js';
+import { switchConversationAgent, generateConversationTitle, postUserMessageAndRun, cancelAgentRun, createTaskFromConversation, orchestrateMultiAgentTask } from './src/services/main_chat_service.js';
 import { MetricEventService, DashboardAggregationService, DashboardInsightService, ReportExportService } from './src/services/dashboard_metrics_service.js';
 import { COMMERCIAL_PLANS, PlanLimitService, EntitlementService, BillingService, StripeWebhookService } from './src/services/billing_stripe_service.js';
 import { STANDARD_ROLES, generateSlug, PermissionService, WorkspaceService, MemberService, WorkspaceSettingsService } from './src/services/workspace_team_service.js';
@@ -2845,6 +2845,46 @@ const server = http.createServer(async (req, res) => {
       };
       db.approvedActionExecutions.push(execObj);
 
+      if (target.sourceType === 'orchestration' && target.sourceId) {
+        const orchestrationRun = (db.agentRuns || []).find(r => r.id === target.sourceId && r.type === 'multi_agent_orchestration');
+        if (orchestrationRun) {
+          orchestrationRun.status = 'completed';
+          orchestrationRun.completedAt = new Date().toISOString();
+          orchestrationRun.approvalRequestId = target.id;
+          orchestrationRun.approvedByUserId = decidedByUserId;
+        }
+
+        if (!db.agentRunEvents) db.agentRunEvents = [];
+        db.agentRunEvents.push({
+          id: `runevt-${Date.now()}-approval`,
+          workspaceId: target.workspaceId || 'workspace_123',
+          runId: target.sourceId,
+          agentRunId: target.sourceId,
+          conversationId: orchestrationRun?.conversationId || target.conversationId || null,
+          type: 'orchestration_approved',
+          status: 'success',
+          title: 'Orquestração aprovada',
+          message: `Aprovação humana concedida: ${reason}`,
+          visibleToUser: true,
+          createdAt: new Date().toISOString()
+        });
+
+        if (orchestrationRun?.conversationId) {
+          if (!db.conversationMessages) db.conversationMessages = [];
+          db.conversationMessages.push({
+            id: `msg-${Date.now()}-orchestration-approved`,
+            workspaceId: target.workspaceId || 'workspace_123',
+            conversationId: orchestrationRun.conversationId,
+            senderType: 'agent',
+            agentId: target.agentId || orchestrationRun.selectedAgentIds?.[0] || 'agent-main',
+            role: 'assistant',
+            contentText: `Orquestração aprovada e liberada para execução. Motivo registrado: ${reason}`,
+            metadata: { mode: 'multi_agent_orchestration', orchestrationRunId: target.sourceId, approvalStatus: 'approved' },
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+
       writeDb(db);
       logRuntimeEvent(target.workspaceId || 'workspace_123', target.agentId || '', '', 'sensitive_action_approved', 'completed', 0, { action: target.action || target.actionType });
       return sendSuccess(res, Object.assign({}, target, { approval: target, execution: execObj, message: 'Ação aprovada e executada com sucesso.' }), reqId);
@@ -2868,6 +2908,31 @@ const server = http.createServer(async (req, res) => {
       target.status = 'rejected';
       target.rejectedAt = new Date().toISOString();
       target.resolvedAt = new Date().toISOString();
+
+      if (target.sourceType === 'orchestration' && target.sourceId) {
+        const orchestrationRun = (db.agentRuns || []).find(r => r.id === target.sourceId && r.type === 'multi_agent_orchestration');
+        if (orchestrationRun) {
+          orchestrationRun.status = 'rejected';
+          orchestrationRun.completedAt = new Date().toISOString();
+          orchestrationRun.approvalRequestId = target.id;
+          orchestrationRun.rejectedByUserId = decidedByUserId;
+        }
+
+        if (!db.agentRunEvents) db.agentRunEvents = [];
+        db.agentRunEvents.push({
+          id: `runevt-${Date.now()}-rejected`,
+          workspaceId: target.workspaceId || 'workspace_123',
+          runId: target.sourceId,
+          agentRunId: target.sourceId,
+          conversationId: orchestrationRun?.conversationId || target.conversationId || null,
+          type: 'orchestration_rejected',
+          status: 'failed',
+          title: 'Orquestração rejeitada',
+          message: `Aprovação humana negada: ${reason}`,
+          visibleToUser: true,
+          createdAt: new Date().toISOString()
+        });
+      }
 
       if (!db.approvalDecisions) db.approvalDecisions = [];
       db.approvalDecisions.push({
@@ -9486,6 +9551,88 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
 
       writeDb(db);
       return sendSuccess(res, runResult, reqId);
+    }
+
+    // 5.1 GET /api/orchestrations/:id (Consultar estado consolidado de uma orquestração)
+    const orchestrationDetailMatch = parsedUrl.pathname.match(/^\/api\/orchestrations\/([a-zA-Z0-9_-]+)$/);
+    if (req.method === 'GET' && orchestrationDetailMatch) {
+      const orchestrationRunId = orchestrationDetailMatch[1];
+      const db = readDb();
+      const orchestrationRun = (db.agentRuns || []).find(r => r.id === orchestrationRunId && r.type === 'multi_agent_orchestration');
+      if (!orchestrationRun) {
+        return sendError(res, 404, 'ORCHESTRATION_NOT_FOUND', 'Orquestração não encontrada.', 'Verifique o ID do run.', 'blocking', null, reqId);
+      }
+
+      const participantRuns = (db.agentRuns || []).filter(r => r.orchestrationRunId === orchestrationRunId);
+      const events = (db.agentRunEvents || []).filter(e => e.orchestrationRunId === orchestrationRunId || e.agentRunId === orchestrationRunId || e.runId === orchestrationRunId);
+      const tasks = (db.tasks || []).filter(t => t.sourceType === 'orchestration' && t.sourceId === orchestrationRunId);
+      const approvalRequest = (db.approvalRequests || []).find(a => a.sourceType === 'orchestration' && a.sourceId === orchestrationRunId) || null;
+      const messages = (db.conversationMessages || []).filter(m => m.conversationId === orchestrationRun.conversationId && m.metadata?.orchestrationRunId === orchestrationRunId);
+
+      return sendSuccess(res, { orchestrationRun, participantRuns, events, tasks, approvalRequest, messages }, reqId);
+    }
+
+    // 5.2 POST /api/conversations/:id/orchestrate (Disparar orquestração multiagente real no backend)
+    const convOrchestrateMatch = parsedUrl.pathname.match(/^\/api\/conversations\/([a-zA-Z0-9_-]+)\/orchestrate$/);
+    if (req.method === 'POST' && convOrchestrateMatch) {
+      const convId = convOrchestrateMatch[1];
+      const body = await parseBody(req);
+      const { text = '', maxAgents = 4 } = body;
+
+      const db = readDb();
+      const conv = (db.conversations || []).find(c => c.id === convId);
+      if (!conv) {
+        return sendError(res, 404, 'CONVERSATION_NOT_FOUND', 'Conversa não encontrada.', 'Verifique o ID.', 'blocking', null, reqId);
+      }
+
+      const orchestration = orchestrateMultiAgentTask({
+        conversationId: convId,
+        agents: db.agents || [],
+        userText: text,
+        workspaceId: conv.workspaceId,
+        maxAgents: Number(maxAgents) || 4
+      });
+
+      if (orchestration.error) {
+        return sendError(res, 400, 'ORCHESTRATION_INPUT_REQUIRED', orchestration.error, 'Informe uma tarefa clara para os agentes.', 'blocking', null, reqId);
+      }
+
+      const userMessage = {
+        id: `msg-${Date.now()}-orchestrate-u`,
+        workspaceId: conv.workspaceId,
+        conversationId: convId,
+        senderType: 'user',
+        role: 'user',
+        contentText: text,
+        metadata: { mode: 'multi_agent_orchestration' },
+        createdAt: new Date().toISOString()
+      };
+
+      if (!db.conversationMessages) db.conversationMessages = [];
+      db.conversationMessages.push(userMessage);
+      db.conversationMessages.push(orchestration.assistantMessage);
+
+      if (!db.agentRuns) db.agentRuns = [];
+      db.agentRuns.push(orchestration.orchestrationRun);
+      db.agentRuns.push(...orchestration.participantRuns);
+
+      if (!db.agentRunEvents) db.agentRunEvents = [];
+      db.agentRunEvents.push(...orchestration.events);
+
+      if (!db.tasks) db.tasks = [];
+      db.tasks.push(...orchestration.nextTasks);
+
+      if (orchestration.approvalRequest) {
+        if (!db.approvalRequests) db.approvalRequests = [];
+        db.approvalRequests.push(orchestration.approvalRequest);
+      }
+
+      conv.activeAgentId = orchestration.selectedAgents[0]?.id || conv.activeAgentId;
+      conv.lastMessageAt = new Date().toISOString();
+      conv.updatedAt = new Date().toISOString();
+      writeDb(db);
+
+      return sendSuccess(res, orchestration, reqId);
     }
 
     // 6. POST /api/agent-runs/:id/cancel (Cancelar AgentRun)
