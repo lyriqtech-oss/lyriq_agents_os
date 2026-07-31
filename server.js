@@ -3413,6 +3413,36 @@ const server = http.createServer(async (req, res) => {
       return sendSuccess(res, newTask, reqId);
     }
 
+    // PATCH /api/tasks/:id (Update task fields/status)
+    const taskPatchMatch = pathName.match(/^\/api\/tasks\/([a-zA-Z0-9_-]+)$/);
+    if (taskPatchMatch && method === 'PATCH') {
+      const body = await parseBody(req);
+      const db = readDb();
+      const task = (db.tasks || []).find(t => t.id === taskPatchMatch[1]);
+      if (!task) {
+        return sendError(res, 404, 'TASK_NOT_FOUND', 'Tarefa não encontrada.', 'Verifique o ID da tarefa.', 'blocking', null, reqId);
+      }
+
+      const allowedStatuses = ['backlog', 'todo', 'in_progress', 'waiting_approval', 'blocked', 'done', 'canceled'];
+      if (body.status && !allowedStatuses.includes(body.status)) {
+        return sendError(res, 400, 'TASK_STATUS_INVALID', 'Status de tarefa inválido.', 'Use um status operacional válido.', 'blocking', null, reqId);
+      }
+
+      Object.assign(task, {
+        ...(body.title !== undefined ? { title: body.title } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.assignedAgentId !== undefined ? { assignedAgentId: body.assignedAgentId } : {}),
+        ...(body.priority !== undefined ? { priority: body.priority } : {}),
+        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.dueDate !== undefined ? { dueDate: body.dueDate } : {}),
+        ...(body.progressPercent !== undefined ? { progressPercent: body.progressPercent } : {}),
+        updatedAt: new Date().toISOString()
+      });
+
+      writeDb(db);
+      return sendSuccess(res, task, reqId);
+    }
+
     // POST /api/tasks/:id/deliverables (Add task deliverable)
     const delivMatch = pathName.match(/^\/api\/tasks\/([a-zA-Z0-9_\-]+)\/deliverables$/);
     if (delivMatch && method === 'POST') {
@@ -3506,6 +3536,43 @@ const server = http.createServer(async (req, res) => {
       writeDb(db);
 
       return sendSuccess(res, newAuto, reqId);
+    }
+
+    // PATCH /api/automations/:id (Update automation status/config)
+    const autoPatchMatch = pathName.match(/^\/api\/automations\/([a-zA-Z0-9_-]+)$/);
+    if (autoPatchMatch && method === 'PATCH') {
+      const body = await parseBody(req);
+      const db = readDb();
+      const auto = (db.automations || []).find(a => a.id === autoPatchMatch[1]);
+      if (!auto) {
+        return sendError(res, 404, 'AUTOMATION_NOT_FOUND', 'Automação não encontrada.', 'Informe um ID válido.', 'blocking', null, reqId);
+      }
+
+      Object.assign(auto, {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.trigger !== undefined ? { trigger: body.trigger } : {}),
+        ...(body.steps !== undefined ? { steps: body.steps } : {}),
+        updatedAt: new Date().toISOString()
+      });
+
+      writeDb(db);
+      return sendSuccess(res, auto, reqId);
+    }
+
+    // DELETE /api/automations/:id (Remove automation)
+    const autoDeleteMatch = pathName.match(/^\/api\/automations\/([a-zA-Z0-9_-]+)$/);
+    if (autoDeleteMatch && method === 'DELETE') {
+      const db = readDb();
+      const before = (db.automations || []).length;
+      const automation = (db.automations || []).find(a => a.id === autoDeleteMatch[1]);
+      db.automations = (db.automations || []).filter(a => a.id !== autoDeleteMatch[1]);
+      if (db.automations.length === before) {
+        return sendError(res, 404, 'AUTOMATION_NOT_FOUND', 'Automação não encontrada.', 'Informe um ID válido.', 'blocking', null, reqId);
+      }
+      writeDb(db);
+      return sendSuccess(res, { deleted: true, id: autoDeleteMatch[1], name: automation?.name || '' }, reqId);
     }
 
     // POST /api/automations/:id/trigger (Trigger automation run)

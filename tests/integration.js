@@ -431,6 +431,17 @@ setTimeout(async () => {
     const createdTaskId = bodyTaskPost.data.id;
     console.log('✅ POST /api/tasks (Manual Task Creation) passed.');
 
+    const resTaskPatch = await fetch(`${baseUrl}/tasks/${createdTaskId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'in_progress', progressPercent: 35 })
+    });
+    assert.strictEqual(resTaskPatch.status, 200);
+    const bodyTaskPatch = await resTaskPatch.json();
+    assert.strictEqual(bodyTaskPatch.data.status, 'in_progress');
+    assert.strictEqual(bodyTaskPatch.data.progressPercent, 35);
+    console.log('✅ PATCH /api/tasks/:id (Task Status Update) passed.');
+
     // 31. Test POST /api/tasks/from-chat & POST /api/tasks/:id/deliverables
     const resTaskChat = await fetch(`${baseUrl}/tasks/from-chat`, {
       method: 'POST',
@@ -492,11 +503,32 @@ setTimeout(async () => {
     const bodyAutoPost = await resAutoPost.json();
     const createdAutoId = bodyAutoPost.data.id;
 
+    const resAutoPatch = await fetch(`${baseUrl}/automations/${createdAutoId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'paused' })
+    });
+    assert.strictEqual(resAutoPatch.status, 200);
+    const bodyAutoPatch = await resAutoPatch.json();
+    assert.strictEqual(bodyAutoPatch.data.status, 'paused');
+
+    const resAutoReactivate = await fetch(`${baseUrl}/automations/${createdAutoId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'active' })
+    });
+    assert.strictEqual(resAutoReactivate.status, 200);
+
     const resAutoTrig = await fetch(`${baseUrl}/automations/${createdAutoId}/trigger`, { method: 'POST' });
     assert.strictEqual(resAutoTrig.status, 200);
     const bodyAutoTrig = await resAutoTrig.json();
     assert.strictEqual(bodyAutoTrig.data.triggered, true);
-    console.log('✅ GET/POST /api/automations & trigger passed.');
+
+    const resAutoDelete = await fetch(`${baseUrl}/automations/${createdAutoId}`, { method: 'DELETE' });
+    assert.strictEqual(resAutoDelete.status, 200);
+    const bodyAutoDelete = await resAutoDelete.json();
+    assert.strictEqual(bodyAutoDelete.data.deleted, true);
+    console.log('✅ GET/POST/PATCH/DELETE /api/automations & trigger passed.');
 
     // 34. Test Supabase Multi-Tenant RLS & Company Isolation Verification
     const resRlsCheck = await fetch(`${baseUrl}/tasks?workspaceId=other_workspace_999`);

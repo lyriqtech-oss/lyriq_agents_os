@@ -890,9 +890,34 @@ export default function App() {
     return data ? JSON.parse(data) : demoCronAutomations;
   });
 
+  const mapApiAutomationToCron = (automation: any): CronAutomation => ({
+    id: automation.id,
+    agentId: automation.steps?.[0]?.agentId || automation.agentId || 'agent-main',
+    agentName: automation.steps?.[0]?.agentName || automation.agentName || 'Agente Principal',
+    name: automation.name || 'Automação sem nome',
+    schedule: automation.trigger?.cron || automation.trigger?.schedule || automation.trigger?.type || 'manual',
+    instruction: automation.description || automation.steps?.[0]?.name || 'Executar automação',
+    enabled: automation.status !== 'paused' && automation.status !== 'disabled',
+    lastRun: automation.lastRun || automation.lastRunAt || 'Nunca executado',
+    nextRun: automation.nextRun || 'Agendado',
+    status: automation.status === 'failed' ? 'failure' : (automation.lastRun || automation.lastRunAt ? 'success' : 'never'),
+    logs: automation.logs || [`[SYSTEM] Automação carregada do backend (${automation.id}).`]
+  });
+
   useEffect(() => {
     localStorage.setItem('lyriq_cron_automations', JSON.stringify(cronAutomations));
   }, [cronAutomations]);
+
+  useEffect(() => {
+    fetch('/api/automations?workspaceId=workspace_123')
+      .then(res => res.ok ? res.json() : Promise.reject(new Error('AUTOMATIONS_API_FAILED')))
+      .then(body => {
+        if (body.ok && Array.isArray(body.data)) {
+          setCronAutomations(body.data.map(mapApiAutomationToCron));
+        }
+      })
+      .catch(err => console.warn('[Automations API] usando fallback local:', err.message));
+  }, []);
 
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
     const data = localStorage.getItem('lyriq_appointments');
@@ -1022,9 +1047,30 @@ export default function App() {
       { id: 'tsk-2', title: 'Triagem de Chamados Pendentes', description: 'Analisar e responder chamados marcados como insatisfeitos (SLA SLA).', priority: 'medium', status: 'in_progress', due_at: 'Hoje', assigned_agent_id: 'support', done_criteria: 'Tickets respondidos' }
     ];
   });
+  const mapApiTaskToTaskItem = (task: any): TaskItem => ({
+    id: task.id,
+    title: task.title || 'Tarefa sem título',
+    description: task.description || '',
+    priority: task.priority === 'urgent' ? 'high' : (task.priority || 'medium'),
+    status: task.status || 'todo',
+    due_at: task.due_at || task.dueDate || task.due_date || 'Sem prazo',
+    assigned_agent_id: task.assigned_agent_id || task.assignedAgentId || 'agent-main',
+    done_criteria: task.done_criteria || task.doneCriteria || task.description || ''
+  });
   useEffect(() => {
     localStorage.setItem('lyriq_tasks_list', JSON.stringify(tasks));
   }, [tasks]);
+
+  useEffect(() => {
+    fetch('/api/tasks?workspaceId=workspace_123')
+      .then(res => res.ok ? res.json() : Promise.reject(new Error('TASKS_API_FAILED')))
+      .then(body => {
+        if (body.ok && Array.isArray(body.data)) {
+          setTasks(body.data.map(mapApiTaskToTaskItem));
+        }
+      })
+      .catch(err => console.warn('[Tasks API] usando fallback local:', err.message));
+  }, []);
 
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -3121,73 +3167,110 @@ export default function App() {
     addToast(`Configurações de ${selectedAgent.name} salvas. Versão ${updatedAgent.versionNumber} gerada.`, 'success');
   };
 
-  const handleCreateTask = (e: React.FormEvent) => {
+  const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
 
-    const newTaskItem: TaskItem = {
-      id: `tsk-${Date.now()}`,
-      title: newTaskTitle,
-      description: newTaskDesc,
-      priority: newTaskPriority,
-      status: 'todo',
-      due_at: newTaskDue,
-      assigned_agent_id: newTaskAgentId,
-      done_criteria: newTaskCriteria
-    };
+    try {
+      const response = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: 'workspace_123',
+          title: newTaskTitle,
+          description: newTaskDesc || newTaskCriteria,
+          priority: newTaskPriority,
+          dueDate: newTaskDue,
+          assignedAgentId: newTaskAgentId
+        })
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error?.message || 'Falha ao criar tarefa no backend.');
+      }
 
-    setTasks(prev => [newTaskItem, ...prev]);
-    setIsNewTaskModalOpen(false);
-    setNewTaskTitle('');
-    setNewTaskDesc('');
-    setNewTaskCriteria('');
-    addToast('Nova tarefa operacional cadastrada!', 'success');
-    handleLogAuditEvent(
-      agents.find(a => a.id === newTaskAgentId)?.name || 'Sistema',
-      `Criou nova tarefa: "${newTaskTitle}" via painel de controle.`,
-      'low'
-    );
+      setTasks(prev => [mapApiTaskToTaskItem(body.data), ...prev]);
+      setIsNewTaskModalOpen(false);
+      setNewTaskTitle('');
+      setNewTaskDesc('');
+      setNewTaskCriteria('');
+      addToast('Nova tarefa operacional cadastrada no backend!', 'success');
+      handleLogAuditEvent(
+        agents.find(a => a.id === newTaskAgentId)?.name || 'Sistema',
+        `Criou nova tarefa: "${newTaskTitle}" via painel de controle.`,
+        'low'
+      );
+    } catch (err: any) {
+      addToast(err.message || 'Falha ao criar tarefa.', 'error');
+    }
   };
 
-  const handleUpdateTaskStatus = (id: string, newStatus: TaskItem['status']) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+  const handleUpdateTaskStatus = async (id: string, newStatus: TaskItem['status']) => {
     const task = tasks.find(t => t.id === id);
-    if (task) {
+    if (!task) return;
+
+    const previousTasks = tasks;
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+    try {
+      const response = await fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error?.message || 'Falha ao atualizar tarefa no backend.');
+      }
+      setTasks(prev => prev.map(t => t.id === id ? mapApiTaskToTaskItem(body.data) : t));
       addToast(`Status da tarefa "${task.title}" atualizado para ${newStatus}.`, 'info');
       handleLogAuditEvent(
         agents.find(a => a.id === task.assigned_agent_id)?.name || 'Sistema',
         `Alterou status da tarefa "${task.title}" para "${newStatus}".`,
         'low'
       );
+    } catch (err: any) {
+      setTasks(previousTasks);
+      addToast(err.message || 'Falha ao atualizar tarefa.', 'error');
     }
   };
 
-  const handleRunCron = (id: string) => {
+  const handleRunCron = async (id: string) => {
     const cron = cronAutomations.find(c => c.id === id);
     if (!cron) return;
     const timestamp = new Date().toLocaleTimeString('pt-BR');
-    addToast(`Cron "${cron.name}" executado manualmente com sucesso.`, 'success');
-    handleLogAuditEvent(cron.agentName, `Executou tarefa agendada (Cron Automation): "${cron.name}"`, 'low');
 
-    setCronAutomations(prev => prev.map(c => {
-      if (c.id === id) {
-        return {
-          ...c,
-          lastRun: `Hoje às ${timestamp}`,
-          status: 'success',
-          logs: [
-            `[${timestamp}] [INFO] Executando trigger manual...`,
-            `[${timestamp}] [INFO] Lendo parâmetros da instrução: "${cron.instruction}"`,
-            `[${timestamp}] [SUCCESS] Job concluído com sucesso.`,
-            ...c.logs
-          ]
-        };
+    try {
+      const response = await fetch(`/api/automations/${id}/trigger`, { method: 'POST' });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error?.message || 'Falha ao executar automação no backend.');
       }
-      return c;
-    }));
+
+      addToast(`Cron "${cron.name}" executado manualmente com sucesso.`, 'success');
+      handleLogAuditEvent(cron.agentName, `Executou tarefa agendada (Cron Automation): "${cron.name}"`, 'low');
+
+      setCronAutomations(prev => prev.map(c => {
+        if (c.id === id) {
+          return {
+            ...c,
+            lastRun: `Hoje às ${timestamp}`,
+            status: 'success',
+            logs: [
+              `[${timestamp}] [INFO] Executando trigger manual no backend...`,
+              `[${timestamp}] [INFO] Run criada: ${body.data.run?.id || 'autorun'}`,
+              `[${timestamp}] [SUCCESS] Job concluído com sucesso.`,
+              ...c.logs
+            ]
+          };
+        }
+        return c;
+      }));
+    } catch (err: any) {
+      addToast(err.message || 'Falha ao executar automação.', 'error');
+    }
   };
 
-  const handleCreateCron = () => {
+  const handleCreateCron = async () => {
     if (!newCronName.trim() || !newCronInstruction.trim()) {
       addToast('Preencha o nome e a instrução da automação.', 'error');
       return;
@@ -3195,34 +3278,75 @@ export default function App() {
     const targetAgentObj = agents.find(a => a.id === newCronAgent);
     const agentName = targetAgentObj ? targetAgentObj.name : 'Executive Orchestrator';
     
-    const newCron: CronAutomation = {
-      id: `cron-${Date.now()}`,
-      agentId: newCronAgent,
-      agentName,
-      name: newCronName,
-      schedule: newCronSchedule,
-      instruction: newCronInstruction,
-      enabled: true,
-      lastRun: 'Nunca executado',
-      nextRun: 'Agendado',
-      status: 'never',
-      logs: [`[${new Date().toLocaleTimeString('pt-BR')}] [SYSTEM] Automação criada e registrada no agendador.`]
-    };
+    try {
+      const response = await fetch('/api/automations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: 'workspace_123',
+          name: newCronName,
+          description: newCronInstruction,
+          trigger: { type: 'cron', cron: newCronSchedule, timezone: 'America/Sao_Paulo' },
+          steps: [{ id: 's1', order: 1, type: 'agent_task', agentId: newCronAgent, agentName, name: newCronInstruction }]
+        })
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error?.message || 'Falha ao criar automação no backend.');
+      }
 
-    setCronAutomations(prev => [...prev, newCron]);
-    setIsCronModalOpen(false);
-    setNewCronName('');
-    setNewCronInstruction('');
-    addToast(`Tarefa agendada "${newCronName}" registrada com sucesso.`, 'success');
-    handleLogAuditEvent('Lyriq Automation Manager', `Criou automação cron recorrente: "${newCronName}" para o agente ${agentName}`, 'low');
+      setCronAutomations(prev => [...prev, mapApiAutomationToCron(body.data)]);
+      setIsCronModalOpen(false);
+      setNewCronName('');
+      setNewCronInstruction('');
+      addToast(`Tarefa agendada "${newCronName}" registrada com sucesso no backend.`, 'success');
+      handleLogAuditEvent('Lyriq Automation Manager', `Criou automação cron recorrente: "${newCronName}" para o agente ${agentName}`, 'low');
+    } catch (err: any) {
+      addToast(err.message || 'Falha ao criar automação.', 'error');
+    }
   };
 
-  const handleDeleteCron = (id: string) => {
-    const target = cronAutomations.find(c => c.id !== id);
+  const handleToggleCron = async (id: string) => {
+    const cron = cronAutomations.find(c => c.id === id);
+    if (!cron) return;
+    const nextEnabled = !cron.enabled;
+    const previous = cronAutomations;
+    setCronAutomations(prev => prev.map(c => c.id === id ? { ...c, enabled: nextEnabled } : c));
+    try {
+      const response = await fetch(`/api/automations/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextEnabled ? 'active' : 'paused' })
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error?.message || 'Falha ao atualizar automação no backend.');
+      }
+      setCronAutomations(prev => prev.map(c => c.id === id ? mapApiAutomationToCron(body.data) : c));
+      addToast(`Automação ${nextEnabled ? 'ativada' : 'desativada'} no cron.`, nextEnabled ? 'success' : 'info');
+    } catch (err: any) {
+      setCronAutomations(previous);
+      addToast(err.message || 'Falha ao atualizar automação.', 'error');
+    }
+  };
+
+  const handleDeleteCron = async (id: string) => {
+    const target = cronAutomations.find(c => c.id === id);
     if (!target) return;
+    const previous = cronAutomations;
     setCronAutomations(prev => prev.filter(c => c.id !== id));
-    addToast(`Automação "${target.name}" removida.`, 'info');
-    handleLogAuditEvent('Lyriq Automation Manager', `Removeu automação cron recorrente: "${target.name}"`, 'medium');
+    try {
+      const response = await fetch(`/api/automations/${id}`, { method: 'DELETE' });
+      const body = await response.json();
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error?.message || 'Falha ao remover automação no backend.');
+      }
+      addToast(`Automação "${target.name}" removida.`, 'info');
+      handleLogAuditEvent('Lyriq Automation Manager', `Removeu automação cron recorrente: "${target.name}"`, 'medium');
+    } catch (err: any) {
+      setCronAutomations(previous);
+      addToast(err.message || 'Falha ao remover automação.', 'error');
+    }
   };
 
   // WORKFLOW STEP-BY-STEP SIMULATOR
@@ -10870,10 +10994,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                             </div>
 
                             <button
-                              onClick={() => {
-                                setCronAutomations(prev => prev.map(c => c.id === cron.id ? { ...c, enabled: !c.enabled } : c));
-                                addToast(`Automação ${!cron.enabled ? 'ativada' : 'desativada'} no cron.`, !cron.enabled ? 'success' : 'info');
-                              }}
+                              onClick={() => handleToggleCron(cron.id)}
                               className={`w-8 h-4 rounded-full p-0.5 transition-all ${cron.enabled ? 'bg-slate-950' : 'bg-slate-200'}`}
                             >
                               <div className={`w-3 h-3 rounded-full bg-white transition-all transform ${cron.enabled ? 'translate-x-4' : 'translate-x-0'}`}></div>
