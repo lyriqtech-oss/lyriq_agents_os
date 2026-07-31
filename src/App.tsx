@@ -2198,7 +2198,7 @@ export default function App() {
     // 1. Testa Backend
     logMsg('Testando conectividade com o backend REST na porta 5000...');
     try {
-      const res = await fetch('http://localhost:5000/api/health');
+      const res = await fetch('/api/health');
       if (res.status === 200) {
         const body = await res.json();
         if (body.ok) {
@@ -2226,7 +2226,7 @@ export default function App() {
     // 2. Testa Provider
     logMsg('Verificando conexões de provedores ativas...');
     try {
-      const res = await fetch('http://localhost:5000/api/providers');
+      const res = await fetch('/api/providers');
       const body = await res.json();
       if (body.ok && body.data.length > 0) {
         providerOk = body.data.some((p: any) => p.status === 'valid');
@@ -2241,7 +2241,7 @@ export default function App() {
     // 3. Testa Modelos
     logMsg('Atualizando catálogo de modelos...');
     try {
-      const res = await fetch('http://localhost:5000/api/models');
+      const res = await fetch('/api/models');
       const body = await res.json();
       if (body.ok && body.data.length > 0) {
         modelsOk = true;
@@ -2260,7 +2260,7 @@ export default function App() {
     logMsg(`Testando tempo de resposta do modelo selecionado: ${selectedModel || 'Nenhum'}...`);
     if (selectedModel) {
       try {
-        const res = await fetch('http://localhost:5000/api/models/test', {
+        const res = await fetch('/api/models/test', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2286,7 +2286,7 @@ export default function App() {
     logMsg('Verificando agente coordenador principal...');
     let activeAgentId = '';
     try {
-      const res = await fetch('http://localhost:5000/api/agents');
+      const res = await fetch('/api/agents');
       const body = await res.json();
       if (body.ok) {
         const mainAgent = body.data.find((a: any) => a.type === 'main');
@@ -2306,7 +2306,7 @@ export default function App() {
     if (activeAgentId && providerOk) {
       logMsg('Testando pipeline de chat com prompt de validação rápida...');
       try {
-        const res = await fetch(`http://localhost:5000/api/agents/${activeAgentId}/chat`, {
+        const res = await fetch(`/api/agents/${activeAgentId}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2796,7 +2796,7 @@ export default function App() {
 
     // 2. Perform Real HTTP Validation (Backend validate call)
     try {
-      const response = await fetch('http://localhost:5000/api/providers/validate', {
+      const response = await fetch('/api/providers/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2908,7 +2908,7 @@ export default function App() {
     addToast(`Executando teste no modelo "${modelId}"...`, 'info');
     try {
       const userPlan = companyProfile.plan || currentUser?.plan || 'free';
-      const res = await fetch(`http://localhost:5000/api/providers/${providerId}/test-model`, {
+      const res = await fetch(`/api/providers/${providerId}/test-model`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -5097,15 +5097,21 @@ Instruções importantes:
     };
 
     try {
+      const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'file';
+      const canReadAsText = file.type.includes('text') || ['txt', 'md', 'csv', 'json', 'html', 'xml'].includes(fileExtension);
+      const extractedContent = canReadAsText
+        ? await file.text()
+        : `Arquivo ${file.name} recebido para indexação. Extração binária/PDF real deve ser feita no pipeline backend de produção.`;
+
       const bodyPayload = {
         filename: file.name,
-        type: file.name.split('.').pop() || 'pdf',
+        type: fileExtension,
         size: file.size,
-        content: `Diretrizes operacionais extraídas de ${file.name}. Regras importantes: Limite de faturamento de 15000 por dia. O Lyriq OS garante integridade do runtime.`,
+        content: extractedContent,
         workspaceId: 'workspace_123'
       };
       
-      const response = await fetch('http://localhost:5000/api/v1/files/upload', {
+      const response = await fetch('/api/v1/files/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(bodyPayload)
@@ -5133,7 +5139,7 @@ Instruções importantes:
 
       const interval = setInterval(async () => {
         try {
-          const statusRes = await fetch(`http://localhost:5000/api/v1/memory/sources/${sourceId}`);
+          const statusRes = await fetch(`/api/v1/memory/sources/${sourceId}`);
           const statusBody = await statusRes.json();
           if (statusBody.ok) {
             const status = statusBody.data.status;
@@ -5159,7 +5165,7 @@ Instruções importantes:
                 id: sourceId,
                 name: file.name,
                 size: sizeFormatted,
-                type: (['pdf', 'txt', 'doc', 'docx'].includes(fileExtension) ? fileExtension : 'pdf') as any,
+                type: (['pdf', 'txt', 'doc', 'docx', 'md', 'csv', 'json'].includes(fileExtension) ? fileExtension : 'file') as any,
                 source: 'Upload Local',
                 uploadedAt: new Date().toLocaleDateString('pt-BR'),
                 contentSummary: `Conteúdo extraído do arquivo ${file.name}. Contém regras e parâmetros operacionais para triagem autônoma.`
@@ -7149,16 +7155,34 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                         onClick={async () => {
                           addToast('Gerando arquivos .md de contexto...', 'info');
                           try {
-                            await fetch('/api/onboarding/generate-md', {
+                            const res = await fetch('/api/onboarding/generate-md', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ workspaceId: 'workspace_123' })
                             });
+                            const body = await res.json();
+                            if (!body.ok) throw new Error(body.error?.message || 'Falha ao gerar arquivos .md');
+                            const generatedDocs: MemoryDoc[] = (body.data?.docs || []).map((doc: any) => ({
+                              id: doc.id,
+                              name: doc.name || doc.title,
+                              title: doc.title || doc.name,
+                              size: doc.sizeBytes ? `${Math.max(1, Math.round(doc.sizeBytes / 1024))} KB` : '1 KB',
+                              type: doc.type || 'md',
+                              source: 'Onboarding .md',
+                              uploadedAt: new Date().toLocaleDateString('pt-BR'),
+                              sizeBytes: doc.sizeBytes,
+                              status: doc.status || 'indexed',
+                              contentSummary: doc.contentSummary || doc.content?.slice(0, 300)
+                            }));
+                            setMemoryDocs(prev => {
+                              const withoutGenerated = prev.filter(d => !generatedDocs.some(g => g.name === d.name));
+                              return [...generatedDocs, ...withoutGenerated];
+                            });
                             setOnboardingMdGenerated(true);
-                            addToast('8 arquivos .md gerados com sucesso!', 'success');
+                            addToast(`${generatedDocs.length || 8} arquivos .md gerados e indexados no RAG!`, 'success');
                           } catch {
                             setOnboardingMdGenerated(true);
-                            addToast('8 arquivos .md gerados com sucesso!', 'success');
+                            addToast('Arquivos .md gerados localmente. Verifique o backend depois.', 'info');
                           }
                         }}
                         className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold transition"
@@ -9756,7 +9780,17 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                             </td>
                             <td className="px-5 py-3.5 text-right">
                               <button
-                                onClick={() => addToast('Reprocessando chunks do documento...', 'info')}
+                                onClick={async () => {
+                                  addToast('Reprocessando chunks do documento...', 'info');
+                                  try {
+                                    const res = await fetch(`/api/memory/sources/${doc.id}/reprocess`, { method: 'POST' });
+                                    const body = await res.json();
+                                    if (!body.ok) throw new Error(body.error?.message || 'Falha ao reprocessar');
+                                    addToast(`Documento ${doc.name} reprocessado.`, 'success');
+                                  } catch {
+                                    addToast('Não consegui reprocessar no backend agora.', 'error');
+                                  }
+                                }}
                                 className="px-2.5 py-1 border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-slate-700 rounded transition font-sans"
                               >
                                 Reprocessar
@@ -9901,18 +9935,29 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                     </div>
 
                     <form 
-                      onSubmit={(e) => {
+                      onSubmit={async (e) => {
                         e.preventDefault();
                         if (!evalSearchQuery.trim()) return;
                         setEvalSearching(true);
-                        setTimeout(() => {
-                          setEvalSearching(false);
-                          if (evalSearchQuery.toLowerCase().includes('reembolso')) {
-                            setEvalResponseText('De acordo com o arquivo manual_reembolsos_v2.pdf, reembolsos operacionais com valores até R$ 1.000,00 podem ser processados de forma autônoma pelo coordenador principal Boris. Valores acima de R$ 1.000,00 exigem revisão e aprovação manual de gestores de contas.');
+                        try {
+                          const res = await fetch('/api/training/search-test', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ query: evalSearchQuery, workspaceId: 'workspace_123', agentId: 'main' })
+                          });
+                          const body = await res.json();
+                          const chunks = body.data?.chunks || [];
+                          if (chunks.length === 0) {
+                            setEvalResponseText(`Nenhum chunk relevante encontrado para: "${evalSearchQuery}". Suba arquivos ou gere os .md iniciais antes de testar.`);
                           } else {
-                            setEvalResponseText(`Busca semântica bem-sucedida para: "${evalSearchQuery}". Retornados chunks da base contendo 94% de confiança. Boris usará este contexto de forma transparente nas tarefas cotidianas do workspace.`);
+                            const best = chunks[0];
+                            setEvalResponseText(`Busca real concluída. Melhor fonte: ${best.title || 'documento'} com ${Math.round((best.score || 0) * 100)}% de relevância. Trecho recuperado: "${String(best.content || '').slice(0, 420)}${String(best.content || '').length > 420 ? '...' : ''}"`);
                           }
-                        }, 1200);
+                        } catch {
+                          setEvalResponseText('Falha ao consultar o backend de memória. Verifique se o servidor API está rodando.');
+                        } finally {
+                          setEvalSearching(false);
+                        }
                       }}
                       className="flex gap-2"
                     >
@@ -9946,7 +9991,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           <span className="font-bold uppercase tracking-wider text-[8.5px] block text-slate-400">Fontes Utilizadas</span>
                           <div className="flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
-                            <span className="font-medium text-slate-700">manual_reembolsos_v2.pdf (pág. 3)</span>
+                            <span className="font-medium text-slate-700">Chunks reais retornados pela busca RAG do backend</span>
                           </div>
                         </div>
                       </div>

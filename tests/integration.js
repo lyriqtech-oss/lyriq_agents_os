@@ -174,11 +174,9 @@ setTimeout(async () => {
     assert.strictEqual(resUpload.status, 200);
     const bodyUpload = await resUpload.json();
     assert.strictEqual(bodyUpload.ok, true);
-    assert.strictEqual(bodyUpload.data.status, 'uploaded');
+    assert.strictEqual(bodyUpload.data.status, 'indexed');
+    assert.ok(bodyUpload.data.chunksGenerated > 0);
     console.log('✅ POST /api/v1/files/upload (RAG upload) passed.');
-
-    // Wait for the async chunking and embedding generation stages to complete
-    await new Promise(resolve => setTimeout(resolve, 400));
 
     // 12. Test GET /api/v1/memory/status (Training state)
     const resMemStatus = await fetch(`${baseUrl}/v1/memory/status`);
@@ -194,6 +192,34 @@ setTimeout(async () => {
     assert.ok(bodySearch.data.chunks.length > 0);
     assert.ok(bodySearch.data.chunks[0].content.includes('reembolsos'));
     console.log('✅ GET /api/v1/memory/search passed.');
+
+    // 13.1 Test POST /api/onboarding/generate-md indexes operational Markdown files into RAG
+    const resGenerateMd = await fetch(`${baseUrl}/onboarding/generate-md`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123' })
+    });
+    assert.strictEqual(resGenerateMd.status, 200);
+    const bodyGenerateMd = await resGenerateMd.json();
+    assert.strictEqual(bodyGenerateMd.ok, true);
+    assert.ok(bodyGenerateMd.data.files.length >= 8);
+    assert.ok(bodyGenerateMd.data.chunksGenerated >= 8);
+    assert.ok(bodyGenerateMd.data.docs.some(d => d.name === 'COMPANY.md'));
+
+    const resMdDocs = await fetch(`${baseUrl}/memory/docs?workspaceId=workspace_123`);
+    assert.strictEqual(resMdDocs.status, 200);
+    const bodyMdDocs = await resMdDocs.json();
+    assert.ok(bodyMdDocs.data.some(d => d.name === 'MEMORY.md' && d.status === 'indexed'));
+
+    const resMdSearch = await fetch(`${baseUrl}/training/search-test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: 'provedor configurado modelo', workspaceId: 'workspace_123' })
+    });
+    assert.strictEqual(resMdSearch.status, 200);
+    const bodyMdSearch = await resMdSearch.json();
+    assert.ok(bodyMdSearch.data.chunks.length > 0);
+    console.log('✅ Onboarding Markdown generation & RAG indexing passed.');
 
     // 14. Test GET /api/v1/costs (Usage Costs logs)
     const resCosts = await fetch(`${baseUrl}/costs`);

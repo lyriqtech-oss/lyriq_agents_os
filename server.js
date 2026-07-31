@@ -1070,6 +1070,93 @@ const searchChunks = (query, agentId) => {
   return results.slice(0, 5);
 };
 
+const splitKnowledgeIntoChunks = (text = '', chunkSize = 900, overlap = 120) => {
+  const clean = String(text || '').replace(/\r\n/g, '\n').trim();
+  if (!clean) return [];
+  const chunks = [];
+  let start = 0;
+  while (start < clean.length) {
+    const end = Math.min(clean.length, start + chunkSize);
+    const slice = clean.slice(start, end).trim();
+    if (slice.length > 0) chunks.push(slice);
+    if (end >= clean.length) break;
+    start = Math.max(0, end - overlap);
+  }
+  return chunks;
+};
+
+const upsertKnowledgeDocument = (db, { workspaceId = 'workspace_123', agentId = '', filename, title, type = 'md', content = '', source = 'generated_md', sizeBytes = null }) => {
+  if (!db.memorySources) db.memorySources = [];
+  if (!db.memoryChunks) db.memoryChunks = [];
+  if (!db.memoryDocs) db.memoryDocs = [];
+
+  const safeFilename = filename || title || `documento-${Date.now()}.${type}`;
+  const docTitle = title || safeFilename;
+  const now = new Date().toISOString();
+  const textContent = String(content || '').trim() || `Documento ${safeFilename} sem conteúdo textual extraído.`;
+  const chunks = splitKnowledgeIntoChunks(textContent);
+  const sourceId = `source-${crypto.createHash('sha1').update(`${workspaceId}:${safeFilename}`).digest('hex').slice(0, 16)}`;
+
+  let sourceRecord = db.memorySources.find(s => s.id === sourceId || (s.workspaceId === workspaceId && s.title === safeFilename));
+  if (!sourceRecord) {
+    sourceRecord = { id: sourceId, workspaceId, agentId, type, title: safeFilename, createdAt: now };
+    db.memorySources.push(sourceRecord);
+  }
+
+  Object.assign(sourceRecord, {
+    workspaceId,
+    agentId,
+    type,
+    title: safeFilename,
+    source,
+    sizeBytes: sizeBytes ?? Buffer.byteLength(textContent, 'utf8'),
+    chunkCount: chunks.length,
+    status: 'indexed',
+    updatedAt: now,
+    contentSummary: textContent.slice(0, 420)
+  });
+
+  db.memoryChunks = db.memoryChunks.filter(c => c.sourceId !== sourceRecord.id);
+  chunks.forEach((chunkText, idx) => {
+    db.memoryChunks.push({
+      id: `chunk-${sourceRecord.id}-${idx}`,
+      workspaceId,
+      agentId,
+      sourceId: sourceRecord.id,
+      chunkIndex: idx,
+      content: chunkText,
+      title: safeFilename,
+      page: idx + 1,
+      score: 0.95,
+      embedding: Array.from({ length: 32 }, (_, i) => Number((((chunkText.charCodeAt(i % chunkText.length) || 97) % 31) / 100).toFixed(4))),
+      createdAt: now
+    });
+  });
+
+  let docRecord = db.memoryDocs.find(d => d.id === sourceRecord.id || d.title === safeFilename || d.name === safeFilename);
+  if (!docRecord) {
+    docRecord = { id: sourceRecord.id, createdAt: now };
+    db.memoryDocs.push(docRecord);
+  }
+  Object.assign(docRecord, {
+    id: sourceRecord.id,
+    workspaceId,
+    name: safeFilename,
+    title: safeFilename,
+    displayTitle: docTitle,
+    type,
+    status: 'indexed',
+    source,
+    sizeBytes: sourceRecord.sizeBytes,
+    chunkCount: chunks.length,
+    content: textContent,
+    contentSummary: textContent.slice(0, 420),
+    updatedAt: now
+  });
+
+  return { source: sourceRecord, doc: docRecord, chunksGenerated: chunks.length };
+};
+
 // Native Tools Engine & Risk Level Handler (Document 2 & Document 6)
 const executeAgentTool = (workspaceId, agentId, toolName, params = {}) => {
   const db = readDb();
@@ -2011,75 +2098,24 @@ const server = http.createServer(async (req, res) => {
     if ((pathName === '/api/files/upload' || pathName === '/api/training/upload') && method === 'POST') {
       const body = await parseBody(req);
       const { filename, content, type, size, agentId, workspaceId } = body;
-      
       const db = readDb();
-      const sourceId = `source-${Date.now()}`;
-      
-      const newSource = {
-        id: sourceId,
+      const indexed = upsertKnowledgeDocument(db, {
         workspaceId: workspaceId || 'workspace_123',
         agentId: agentId || '',
-        type: type || 'file',
-        title: filename || 'documento.pdf',
-        sizeBytes: size || 12000,
-        chunkCount: 0,
-        status: 'uploaded',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      db.memorySources.push(newSource);
+        filename: filename || 'documento.md',
+        type: type || (filename?.split('.').pop() || 'file'),
+        content: content || `Diretrizes operacionais extraídas de ${filename || 'documento'}.`,
+        source: 'upload',
+        sizeBytes: size || null
+      });
       writeDb(db);
-      
-      // Asynchronously index chunks in background simulation
-      const textToChunk = content || `Diretrizes operacionais extraídas de ${filename || 'documento'}. O Lyriq OS garante integridade do runtime e custos estimados em 0.0003 por chamada.`;
-      
-      setTimeout(() => {
-        const db1 = readDb();
-        const s1 = db1.memorySources.find(s => s.id === sourceId);
-        if (s1) { s1.status = 'extracting'; writeDb(db1); }
-      }, 100);
-      
-      setTimeout(() => {
-        const db2 = readDb();
-        const s2 = db2.memorySources.find(s => s.id === sourceId);
-        if (s2) { s2.status = 'chunking'; writeDb(db2); }
-      }, 200);
 
-      setTimeout(() => {
-        const db3 = readDb();
-        const s3 = db3.memorySources.find(s => s.id === sourceId);
-        if (s3) {
-          s3.status = 'indexed';
-          
-          const paragraphs = textToChunk.split('\n').filter(p => p.trim().length > 0);
-          const chunks = paragraphs.length > 0 ? paragraphs : [textToChunk];
-          
-          s3.chunkCount = chunks.length;
-          
-          if (!db3.memoryChunks) db3.memoryChunks = [];
-          
-          chunks.forEach((chunkText, idx) => {
-            db3.memoryChunks.push({
-              id: `chunk-${Date.now()}-${idx}`,
-              workspaceId: s3.workspaceId,
-              agentId: s3.agentId,
-              sourceId: s3.id,
-              chunkIndex: idx,
-              content: chunkText,
-              title: s3.title,
-              page: idx + 1,
-              score: 0.95 - idx * 0.05,
-              embedding: Array.from({ length: 1536 }, () => parseFloat((Math.random() * 0.2 - 0.1).toFixed(4))),
-              createdAt: new Date().toISOString()
-            });
-          });
-          
-          writeDb(db3);
-        }
-      }, 300);
-
-      return sendSuccess(res, newSource, reqId);
+      return sendSuccess(res, {
+        ...indexed.source,
+        doc: indexed.doc,
+        chunksGenerated: indexed.chunksGenerated,
+        trainingStatus: 'trained'
+      }, reqId);
     }
 
     // POST /api/training/text
@@ -2087,34 +2123,16 @@ const server = http.createServer(async (req, res) => {
       const body = await parseBody(req);
       const { text, title, workspaceId } = body;
       const db = readDb();
-      const sourceId = `source-${Date.now()}`;
-      
-      const newSource = {
-        id: sourceId,
+      const indexed = upsertKnowledgeDocument(db, {
         workspaceId: workspaceId || 'workspace_123',
-        type: 'text',
+        filename: `${(title || 'Texto manual').replace(/[^a-z0-9_-]+/gi, '_')}.md`,
         title: title || 'Texto manual',
-        chunkCount: 1,
-        status: 'indexed',
-        createdAt: new Date().toISOString()
-      };
-      
-      db.memorySources.push(newSource);
-      if (!db.memoryChunks) db.memoryChunks = [];
-      db.memoryChunks.push({
-        id: `chunk-${Date.now()}`,
-        workspaceId: newSource.workspaceId,
-        sourceId,
-        chunkIndex: 0,
+        type: 'md',
         content: text || 'Texto manual sem conteúdo.',
-        title: newSource.title,
-        page: 1,
-        score: 0.95,
-        embedding: Array.from({ length: 1536 }, () => 0.1),
-        createdAt: new Date().toISOString()
+        source: 'manual_text'
       });
       writeDb(db);
-      return sendSuccess(res, newSource, reqId);
+      return sendSuccess(res, { ...indexed.source, doc: indexed.doc, chunksGenerated: indexed.chunksGenerated }, reqId);
     }
 
     // POST /api/training/url
@@ -2122,40 +2140,40 @@ const server = http.createServer(async (req, res) => {
       const body = await parseBody(req);
       const { url, workspaceId } = body;
       const db = readDb();
-      const sourceId = `source-${Date.now()}`;
-      
-      const newSource = {
-        id: sourceId,
+      const indexed = upsertKnowledgeDocument(db, {
         workspaceId: workspaceId || 'workspace_123',
+        filename: `${String(url || 'url').replace(/[^a-z0-9_-]+/gi, '_').slice(0, 80)}.md`,
+        title: url || 'URL importada',
         type: 'url',
-        title: url || 'http://example.com',
-        chunkCount: 1,
-        status: 'indexed',
-        createdAt: new Date().toISOString()
-      };
-      
-      db.memorySources.push(newSource);
-      if (!db.memoryChunks) db.memoryChunks = [];
-      db.memoryChunks.push({
-        id: `chunk-${Date.now()}`,
-        workspaceId: newSource.workspaceId,
-        sourceId,
-        chunkIndex: 0,
         content: `Dados extraídos do link ${url || 'http://example.com'}. Parâmetros de conformidade Lyriq.`,
-        title: newSource.title,
-        page: 1,
-        score: 0.95,
-        embedding: Array.from({ length: 1536 }, () => 0.1),
-        createdAt: new Date().toISOString()
+        source: 'url'
       });
       writeDb(db);
-      return sendSuccess(res, newSource, reqId);
+      return sendSuccess(res, { ...indexed.source, doc: indexed.doc, chunksGenerated: indexed.chunksGenerated }, reqId);
     }
 
     // GET /api/memory/sources or GET /api/training/sources
     if ((pathName === '/api/memory/sources' || pathName === '/api/training/sources') && method === 'GET') {
       const db = readDb();
       return sendSuccess(res, db.memorySources || [], reqId);
+    }
+
+    // GET /api/memory/docs
+    if (pathName === '/api/memory/docs' && method === 'GET') {
+      const db = readDb();
+      const workspaceId = parsedUrl.query?.workspaceId || 'workspace_123';
+      const docs = (db.memoryDocs || []).filter(d => !d.workspaceId || d.workspaceId === workspaceId || workspaceId === 'all');
+      return sendSuccess(res, docs, reqId);
+    }
+
+    // GET /api/memory/docs/:id
+    const memoryDocMatch = pathName.match(/^\/api\/memory\/docs\/([a-zA-Z0-9_\-\.]+)$/);
+    if (memoryDocMatch && method === 'GET') {
+      const db = readDb();
+      const docId = decodeURIComponent(memoryDocMatch[1]);
+      const doc = (db.memoryDocs || []).find(d => d.id === docId || d.title === docId || d.name === docId);
+      if (!doc) return sendError(res, 404, 'MEMORY_DOC_NOT_FOUND', 'Arquivo de memória não encontrado.', 'Verifique o ID do documento.', 'blocking', null, reqId);
+      return sendSuccess(res, doc, reqId);
     }
 
     // GET /api/memory/sources/:id
@@ -2172,7 +2190,24 @@ const server = http.createServer(async (req, res) => {
     // POST /api/memory/sources/:id/process or reprocess
     const reprocessMatch = pathName.match(/^\/api\/(memory|training)\/sources\/([a-zA-Z0-9_\-]+)\/(process|reprocess)$/);
     if (reprocessMatch && method === 'POST') {
-      return sendSuccess(res, { processed: true }, reqId);
+      const db = readDb();
+      const sourceId = reprocessMatch[2];
+      const source = (db.memorySources || []).find(s => s.id === sourceId);
+      const doc = (db.memoryDocs || []).find(d => d.id === sourceId || d.title === source?.title || d.name === source?.title);
+      if (!source && !doc) {
+        return sendError(res, 404, 'MEMORY_SOURCE_NOT_FOUND', 'Fonte de memória não encontrada.', 'Informe um ID válido.', 'blocking', null, reqId);
+      }
+      const indexed = upsertKnowledgeDocument(db, {
+        workspaceId: source?.workspaceId || doc?.workspaceId || 'workspace_123',
+        agentId: source?.agentId || '',
+        filename: source?.title || doc?.name || doc?.title,
+        title: doc?.displayTitle || doc?.title || source?.title,
+        type: source?.type || doc?.type || 'md',
+        content: doc?.content || source?.contentSummary || '',
+        source: source?.source || doc?.source || 'reprocess'
+      });
+      writeDb(db);
+      return sendSuccess(res, { processed: true, source: indexed.source, doc: indexed.doc, chunksGenerated: indexed.chunksGenerated }, reqId);
     }
 
     // DELETE /api/memory/sources/:id or DELETE /api/training/sources/:id
@@ -3414,7 +3449,9 @@ const server = http.createServer(async (req, res) => {
       const userId = parsedUrl.query.userId || 'user_123';
 
       if (!db.workspaceOnboarding) db.workspaceOnboarding = [];
-      let ob = db.workspaceOnboarding.find(o => o.workspaceId === workspaceId || o.userId === userId);
+      const userIdWasExplicit = Boolean(parsedUrl.query.userId);
+      let ob = db.workspaceOnboarding.find(o => o.workspaceId === workspaceId) ||
+        (userIdWasExplicit ? db.workspaceOnboarding.find(o => o.userId === userId && o.workspaceId === workspaceId) : null);
 
       if (!ob) {
         ob = {
@@ -3835,23 +3872,14 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
         }
       ];
 
-      if (!db.memoryDocs) db.memoryDocs = [];
-      generatedFiles.forEach(f => {
-        const existing = db.memoryDocs.find(d => d.title === f.filename);
-        if (existing) {
-          existing.content = f.content;
-          existing.updatedAt = new Date().toISOString();
-        } else {
-          db.memoryDocs.push({
-            id: `doc-md-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            title: f.filename,
-            type: 'md',
-            status: 'indexed',
-            content: f.content,
-            createdAt: new Date().toISOString()
-          });
-        }
-      });
+      const indexedFiles = generatedFiles.map(f => upsertKnowledgeDocument(db, {
+        workspaceId,
+        filename: f.filename,
+        title: f.title,
+        type: 'md',
+        content: f.content,
+        source: 'onboarding_generated_md'
+      }));
 
       if (!db.workspaceOnboarding) db.workspaceOnboarding = [];
       let ob = db.workspaceOnboarding.find(o => o.workspaceId === workspaceId);
@@ -3863,7 +3891,19 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
       ob.updatedAt = new Date().toISOString();
 
       writeDb(db);
-      return sendSuccess(res, { files: generatedFiles, onboarding: ob }, reqId);
+      return sendSuccess(res, {
+        files: generatedFiles.map((f, index) => ({
+          ...f,
+          id: indexedFiles[index].doc.id,
+          status: 'indexed',
+          chunkCount: indexedFiles[index].chunksGenerated,
+          sizeBytes: indexedFiles[index].doc.sizeBytes,
+          source: 'onboarding_generated_md'
+        })),
+        docs: indexedFiles.map(f => f.doc),
+        chunksGenerated: indexedFiles.reduce((sum, f) => sum + f.chunksGenerated, 0),
+        onboarding: ob
+      }, reqId);
     }
 
     // POST /api/onboarding/complete
