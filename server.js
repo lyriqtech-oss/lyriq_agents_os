@@ -782,11 +782,7 @@ const initDb = () => {
         { id: 'gpt-4o', provider: 'openai', type: 'chat', status: 'available' },
         { id: 'claude-3-5-sonnet-20241022', provider: 'anthropic', type: 'chat', status: 'available' },
         { id: 'gemini-1.5-flash', provider: 'gemini', type: 'chat', status: 'available' },
-        { id: 'gemini-1.5-pro', provider: 'gemini', type: 'chat', status: 'available' },
-        { id: 'mock-chat-fast', provider: 'openai', type: 'chat', status: 'available' },
-        { id: 'mock-chat-slow', provider: 'openai', type: 'chat', status: 'available' },
-        { id: 'mock-chat-timeout', provider: 'openai', type: 'chat', status: 'available' },
-        { id: 'mock-chat-error', provider: 'openai', type: 'chat', status: 'available' }
+        { id: 'gemini-1.5-pro', provider: 'gemini', type: 'chat', status: 'available' }
       ]
     }, null, 2));
   }
@@ -813,11 +809,7 @@ let dbCache = {
     { id: 'gpt-4o', provider: 'openai', type: 'chat', status: 'available' },
     { id: 'claude-3-5-sonnet-20241022', provider: 'anthropic', type: 'chat', status: 'available' },
     { id: 'gemini-1.5-flash', provider: 'gemini', type: 'chat', status: 'available' },
-    { id: 'gemini-1.5-pro', provider: 'gemini', type: 'chat', status: 'available' },
-    { id: 'mock-chat-fast', provider: 'openai', type: 'chat', status: 'available' },
-    { id: 'mock-chat-slow', provider: 'openai', type: 'chat', status: 'available' },
-    { id: 'mock-chat-timeout', provider: 'openai', type: 'chat', status: 'available' },
-    { id: 'mock-chat-error', provider: 'openai', type: 'chat', status: 'available' }
+    { id: 'gemini-1.5-pro', provider: 'gemini', type: 'chat', status: 'available' }
   ]
 };
 
@@ -1164,11 +1156,17 @@ const executeAgentTool = (workspaceId, agentId, toolName, params = {}) => {
   // Determine Tool Risk Level (Level 0: read-only, Level 1: reversible write, Level 2: external action, Level 3: sensitive/financial)
   const riskLevelMap = {
     'search_knowledge': 0,
+    'buscar_memoria': 0,
     'view_file': 0,
     'create_task': 1,
+    'criar_tarefa': 1,
+    'document_writer': 1,
+    'gerar_documento': 1,
     'update_task_status': 1,
     'web_search': 1,
     'generate_report': 1,
+    'report_generate': 1,
+    'gerar_relatorio': 1,
     'send_notification': 2,
     'dispatch_subagent': 2,
     'execute_payment': 3,
@@ -1209,7 +1207,7 @@ const executeAgentTool = (workspaceId, agentId, toolName, params = {}) => {
 
   // Real tool execution
   let result = null;
-  if (toolName === 'create_task') {
+  if (toolName === 'create_task' || toolName === 'criar_tarefa') {
     const newTask = {
       id: `task_${Date.now()}`,
       workspaceId: workspaceId || 'workspace_123',
@@ -1224,10 +1222,28 @@ const executeAgentTool = (workspaceId, agentId, toolName, params = {}) => {
     if (!db.tasks) db.tasks = [];
     db.tasks.push(newTask);
     result = newTask;
-  } else if (toolName === 'search_knowledge') {
+  } else if (toolName === 'search_knowledge' || toolName === 'buscar_memoria') {
     result = searchChunks(params.query || '', agentId);
+  } else if (toolName === 'document_writer' || toolName === 'gerar_documento') {
+    const filename = params.filename || `documento-${Date.now()}.md`;
+    const content = params.content || params.text || '# Documento gerado\n\nConteúdo criado por ferramenta interna do Lyriq Agents OS.';
+    const indexed = upsertKnowledgeDocument(db, {
+      workspaceId: workspaceId || 'workspace_123',
+      agentId,
+      filename,
+      title: params.title || filename,
+      type: filename.split('.').pop() || 'md',
+      content,
+      source: 'tool_document_writer'
+    });
+    result = { filename, doc: indexed.doc, chunksGenerated: indexed.chunksGenerated };
+  } else if (toolName === 'report_generate' || toolName === 'generate_report' || toolName === 'gerar_relatorio') {
+    result = {
+      title: params.title || 'Relatório operacional',
+      markdown: `# ${params.title || 'Relatório operacional'}\n\n- Workspace: ${workspaceId || 'workspace_123'}\n- Agente: ${agentId}\n- Memórias indexadas: ${(db.memoryChunks || []).length}\n- Tarefas registradas: ${(db.tasks || []).length}`
+    };
   } else {
-    result = { executed: true, toolName, params };
+    result = { executed: true, toolName, params, message: 'Ferramenta registrada, mas sem executor especializado ainda.' };
   }
 
   writeDb(db);
@@ -1709,12 +1725,18 @@ const server = http.createServer(async (req, res) => {
         return sendError(res, 402, 'PLAN_RESTRICTED', planCheck.reason, 'Faça upgrade do plano para utilizar este modelo.', 'blocking', null, reqId);
       }
 
+      const providerModels = await getModelsForProvider(providerId);
+      const modelExists = providerModels.some(m => m.id === modelId || m.name === modelId);
+      if (!modelId || !modelExists) {
+        return sendError(res, 400, 'MODEL_NOT_FOUND', 'Modelo não encontrado no catálogo do provider.', 'Sincronize os modelos e escolha uma opção disponível.', 'blocking', { provider: providerId, modelId }, reqId);
+      }
+
       return sendSuccess(res, {
         ok: true,
         provider: providerId,
         modelId,
         prompt,
-        response: 'ok',
+        response: 'model_available',
         latencyMs: 140,
         testedAt: new Date().toISOString()
       }, reqId);
@@ -2008,11 +2030,13 @@ const server = http.createServer(async (req, res) => {
             logRuntimeEvent(workspaceId, agent.id, sessionId, 'chat_failed', 'failed', duration, {}, 'PROVIDER_AUTH_FAILED');
             return sendError(res, 401, 'PROVIDER_AUTH_FAILED', 'API key inválida no provedor.', 'Insira chaves válidas.', 'blocking', null, reqId);
           }
-        }
-
-        reply = `Olá! Sou o agente ${agent.name} (${agent.role}). Recebi sua mensagem: "${message}".`;
-        if (message.toLowerCase().includes('meta')) {
-          reply = `Olá! Sou o agente ${agent.name} (${agent.role}). A meta operacional do workspace é atender aos objetivos configurados.`;
+          reply = `Olá! Sou o agente ${agent.name} (${agent.role}). Recebi sua mensagem: "${message}".`;
+          if (message.toLowerCase().includes('meta')) {
+            reply = `Olá! Sou o agente ${agent.name} (${agent.role}). A meta operacional do workspace é atender aos objetivos configurados.`;
+          }
+        } else {
+          logRuntimeEvent(workspaceId, agent.id, sessionId, 'chat_failed', 'failed', duration, {}, 'PROVIDER_EMPTY_RESPONSE');
+          return sendError(res, 502, 'PROVIDER_EMPTY_RESPONSE', 'O provider não retornou uma resposta válida.', 'Teste o modelo selecionado, verifique saldo/permissões da API key ou escolha outro modelo.', 'blocking', null, reqId);
         }
       }
 
@@ -2303,6 +2327,19 @@ const server = http.createServer(async (req, res) => {
     // ----------------------------------------------------
     // Approvals, Security & Risk Management Endpoints
     // ----------------------------------------------------
+
+    // GET /api/tools (single tool registry used by frontend and agents)
+    if (pathName === '/api/tools' && method === 'GET') {
+      const tools = [
+        { id: 'search_knowledge', name: 'Buscar memória/RAG', category: 'knowledge', riskLevel: 0, requiresApproval: false, enabled: true, description: 'Consulta chunks indexados de documentos, arquivos .md e memórias do workspace.' },
+        { id: 'create_task', name: 'Criar tarefa', category: 'operations', riskLevel: 1, requiresApproval: false, enabled: true, description: 'Cria tarefa operacional interna vinculada ao agente.' },
+        { id: 'document_writer', name: 'Gerar documento .md', category: 'documents', riskLevel: 1, requiresApproval: false, enabled: true, description: 'Gera documento Markdown e indexa automaticamente no RAG.' },
+        { id: 'report_generate', name: 'Gerar relatório', category: 'reports', riskLevel: 1, requiresApproval: false, enabled: true, description: 'Compila relatório operacional a partir dos dados internos disponíveis.' },
+        { id: 'send_notification', name: 'Enviar notificação', category: 'external', riskLevel: 2, requiresApproval: true, enabled: true, description: 'Ação externa que exige aprovação humana antes do envio.' },
+        { id: 'execute_payment', name: 'Executar pagamento', category: 'financial', riskLevel: 3, requiresApproval: true, enabled: false, description: 'Ferramenta sensível bloqueada por padrão.' }
+      ];
+      return sendSuccess(res, { tools }, reqId);
+    }
 
     // POST /api/tools/execute (Document 2 & Document 6 Tools Execution Engine)
     if (pathName === '/api/tools/execute' && method === 'POST') {
@@ -2847,61 +2884,6 @@ const server = http.createServer(async (req, res) => {
       return sendSuccess(res, Object.assign({}, target, { approval: target, message: 'Solicitação de aprovação rejeitada.' }), reqId);
     }
 
-    // POST /api/tools/execute (Tool Risk Gatekeeper & Credits Execution)
-    if (pathName === '/api/tools/execute' && method === 'POST') {
-      const body = await parseBody(req);
-      const { workspaceId = 'workspace_123', agentId, toolId, action, riskLevel = 'low', baseCredits = 5, payload = {} } = body;
-      const db = readDb();
-
-      // Tool Risk Level evaluation (Section 8)
-      if (riskLevel === 'high' || riskLevel === 'critical') {
-        const approvalId = `appr-${Date.now()}`;
-        const newApproval = {
-          approvalId,
-          workspaceId,
-          agentId: agentId || 'agent-main',
-          action: action || toolId || 'external.action',
-          riskLevel,
-          summary: `Execução da ferramenta ${toolId || action} com nível de risco ${riskLevel.toUpperCase()}`,
-          status: 'pending',
-          dataPreview: payload,
-          expiresAt: new Date(Date.now() + 24 * 3600 * 1000).toISOString(),
-          createdAt: new Date().toISOString()
-        };
-        if (!db.approvalRequests) db.approvalRequests = [];
-        db.approvalRequests.push(newApproval);
-        writeDb(db);
-
-        logRuntimeEvent(workspaceId, agentId || '', '', 'tool_approval_required', 'pending', 0, { toolId, riskLevel, approvalId });
-        return sendSuccess(res, {
-          requiresApproval: true,
-          approvalId,
-          status: 'pending',
-          message: 'Esta ação sensível exige confirmação humana antes de ser executada.'
-        }, reqId);
-      }
-
-      // Deduct credits for Low/Medium risk tools
-      let ledger = (db.usageLedgers || []).find(l => l.workspaceId === workspaceId);
-      if (!ledger) {
-        ledger = { id: `ledger-${Date.now()}`, workspaceId, monthlyCreditsUsed: 0, monthlyCreditsLimit: 3000 };
-        if (!db.usageLedgers) db.usageLedgers = [];
-        db.usageLedgers.push(ledger);
-      }
-
-      ledger.monthlyCreditsUsed += baseCredits;
-      writeDb(db);
-
-      logRuntimeEvent(workspaceId, agentId || '', '', 'tool_executed', 'completed', 0, { toolId, baseCredits, creditsUsedTotal: ledger.monthlyCreditsUsed });
-      return sendSuccess(res, {
-        executed: true,
-        toolId,
-        creditsDebited: baseCredits,
-        monthlyCreditsUsed: ledger.monthlyCreditsUsed,
-        result: `Execução bem-sucedida da ferramenta ${toolId}.`
-      }, reqId);
-    }
-
     // ----------------------------------------------------
     // Billing & Stripe Integration Endpoints
     // ----------------------------------------------------
@@ -3103,47 +3085,6 @@ const server = http.createServer(async (req, res) => {
     // ----------------------------------------------------
     // Tools & Human Approval Endpoints (Multi-Agent & Risk Engine)
     // ----------------------------------------------------
-
-    // POST /api/tools/execute (Execute Tool with Risk Engine)
-    if (pathName === '/api/tools/execute' && method === 'POST') {
-      const body = await parseBody(req);
-      const workspaceId = body.workspaceId || 'workspace_123';
-      const agentId = body.agentId || 'agent-main';
-      const toolName = body.toolName || body.toolId || 'search_knowledge';
-      const params = body.params || body.payload || {};
-
-      if (body.riskLevel === 'high' || body.riskLevel === 'critical' || body.riskLevel === 2 || body.riskLevel === 3) {
-        const approvalId = `approval-${Date.now()}`;
-        const approvalReq = {
-          id: approvalId,
-          approvalId,
-          workspaceId,
-          agentId,
-          action: toolName,
-          toolName,
-          riskLevel: body.riskLevel || 2,
-          params,
-          requiresApproval: true,
-          status: 'pending',
-          reason: `Ação ${toolName} requer aprovação do usuário.`
-        };
-        const db = readDb();
-        if (!db.approvalRequests) db.approvalRequests = [];
-        db.approvalRequests.push(approvalReq);
-        writeDb(db);
-
-        return sendSuccess(res, {
-          status: 'waiting_approval',
-          requiresApproval: true,
-          approvalId,
-          approvalRequestId: approvalId,
-          message: approvalReq.reason
-        }, reqId);
-      }
-
-      const toolResult = executeAgentTool(workspaceId, agentId, toolName, params);
-      return sendSuccess(res, toolResult, reqId);
-    }
 
     // POST /api/approvals/:id/resolve (Approve or Reject Human-in-the-Loop Request)
     const appResMatch = pathName.match(/^\/api\/approvals\/([a-zA-Z0-9_\-]+)\/resolve$/);

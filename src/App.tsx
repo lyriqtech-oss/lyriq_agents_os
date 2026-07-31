@@ -2125,27 +2125,25 @@ export default function App() {
 
   const handleTestSkillCode = (codeStr: string) => {
     setIsTestingSkill(true);
-    setSkillTestResult('🔄 Inicializando Sandbox virtual do Hermes...\n');
+    setSkillTestResult('🔄 Validando skill sem executar código no navegador...\n');
     setTimeout(() => {
-      try {
-        const logs: string[] = [];
-        const originalLog = console.log;
-        console.log = (...args) => {
-          logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
-        };
-        try {
-          // eslint-disable-next-line no-eval
-          eval(codeStr);
-        } finally {
-          console.log = originalLog;
-        }
-        setSkillTestResult(prev => prev + `✅ Execução Concluída com Sucesso!\n\n[LOGS OUTPUT]:\n` + (logs.length > 0 ? logs.join('\n') : '(Nenhum console.log disparado)'));
-      } catch (err: any) {
-        setSkillTestResult(prev => prev + `❌ Erro de Execução na Sandbox:\n${err.message}`);
-      } finally {
-        setIsTestingSkill(false);
+      const blockedPatterns = [/eval\s*\(/, /Function\s*\(/, /document\.cookie/, /localStorage/, /sessionStorage/, /fetch\s*\(/, /XMLHttpRequest/, /window\./, /process\./, /require\s*\(/];
+      const findings = blockedPatterns
+        .filter(pattern => pattern.test(codeStr))
+        .map(pattern => pattern.source.replace(/\\s\*/g, ''));
+
+      const hasExportedHandler = /export\s+(default\s+)?(async\s+)?function|module\.exports|async\s+function|function\s+\w+/.test(codeStr);
+      const hasReasonableLength = codeStr.trim().length >= 20;
+
+      if (findings.length > 0) {
+        setSkillTestResult(prev => prev + `❌ Skill bloqueada pela validação estática.\nPadrões perigosos encontrados: ${findings.join(', ')}\n\nNada foi executado.`);
+      } else if (!hasReasonableLength || !hasExportedHandler) {
+        setSkillTestResult(prev => prev + '⚠️ Skill incompleta. Adicione uma função/handler claro antes de publicar.\n\nNada foi executado.');
+      } else {
+        setSkillTestResult(prev => prev + '✅ Validação estática aprovada.\n\nA execução real deve acontecer apenas no backend sandbox com políticas de risco, logs e aprovação humana quando necessário.');
       }
-    }, 650);
+      setIsTestingSkill(false);
+    }, 350);
   };
 
   // Custom AI Model states
@@ -2260,18 +2258,18 @@ export default function App() {
     logMsg(`Testando tempo de resposta do modelo selecionado: ${selectedModel || 'Nenhum'}...`);
     if (selectedModel) {
       try {
-        const res = await fetch('/api/models/test', {
+        const res = await fetch(`/api/providers/${activeProvider}/test-model`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             workspaceId: 'workspace_123',
-            providerConnectionId: 'provider-mock',
-            modelId: selectedModel
+            modelId: selectedModel,
+            prompt: 'healthcheck'
           })
         });
         const body = await res.json();
         if (body.ok) {
-          logMsg(`✅ Modelo respondeu com sucesso. Latência: ${body.data.latencyMs}ms`);
+          logMsg(`✅ Modelo disponível no provider. Latência estimada: ${body.data.latencyMs}ms`);
         } else {
           logMsg(`❌ Teste de modelo falhou: ${body.error ? body.error.message : 'Sem resposta'}`);
         }
@@ -4430,6 +4428,83 @@ export default function App() {
 
     if (!customMessage) {
       setChatInput('');
+    }
+
+    // Backend runtime is the default path. The legacy local simulator only runs when explicitly enabled for sandbox demos.
+    if (typeof window === 'undefined' || window.name !== 'trigger_simulation_fallback') {
+      setIsThinkingAgent(true);
+      setThinkingLogs([
+        `[RUNTIME] Enviando mensagem para /api/agents/${agentId}/chat...`,
+        '[RAG] O backend vai buscar memória/documentos indexados antes da resposta.',
+        '[TOOLS] Ações sensíveis permanecem bloqueadas por aprovação humana.'
+      ]);
+
+      try {
+        const res = await fetch(`/api/agents/${agentId}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            workspaceId: 'workspace_123',
+            sessionId: `session_${agentId}`,
+            message: messageText
+          })
+        });
+        const body = await res.json();
+        setIsThinkingAgent(false);
+
+        if (!body.ok) {
+          const err = body.error || {};
+          const errorMsg = {
+            sender: 'agent' as const,
+            text: `⚠️ [${err.code || 'RUNTIME_ERROR'}]: ${err.message || 'Falha ao executar o agente.'}\n\nCorreção: ${err.fix || 'Revise provider, modelo e configuração do agente.'}`,
+            time: timeStr,
+            isError: true,
+            errorCode: err.code || 'RUNTIME_ERROR',
+            safeErrorMessage: err.message || 'Falha de runtime',
+            fix: err.fix || '',
+            logId: err.logId
+          };
+          setChatMessages(prev => ({
+            ...prev,
+            [agentId]: [...(prev[agentId] || []), errorMsg]
+          }));
+          addToast(err.message || 'Falha no runtime do agente.', 'error');
+          return;
+        }
+
+        const responseText = body.data?.content || 'Resposta vazia do runtime.';
+        const agentMsg = { sender: 'agent' as const, text: responseText, time: timeStr };
+        setChatMessages(prev => ({
+          ...prev,
+          [agentId]: [...(prev[agentId] || []), agentMsg]
+        }));
+        setAgents(prev => prev.map(a => a.id === agentId ? { ...a, tasksToday: a.tasksToday + 1 } : a));
+        setTimelineLogs(prev => [{
+          id: `log-${Date.now()}`,
+          agent: agents.find(a => a.id === agentId)?.name || 'Agente de IA',
+          action: `Resposta via backend runtime: "${messageText.slice(0, 30)}..."`,
+          time: 'Agora',
+          source: 'Lyriq Backend Runtime'
+        }, ...prev]);
+        return;
+      } catch (err: any) {
+        setIsThinkingAgent(false);
+        const errorMsg = {
+          sender: 'agent' as const,
+          text: `⚠️ [BACKEND_OFFLINE]: Não consegui conectar no backend de agentes.\n\nCorreção: rode o servidor API e tente novamente.`,
+          time: timeStr,
+          isError: true,
+          errorCode: 'BACKEND_OFFLINE',
+          safeErrorMessage: err?.message || 'Backend indisponível',
+          fix: 'Inicie o backend API do Lyriq Agents OS.'
+        };
+        setChatMessages(prev => ({
+          ...prev,
+          [agentId]: [...(prev[agentId] || []), errorMsg]
+        }));
+        addToast('Backend de agentes indisponível.', 'error');
+        return;
+      }
     }
 
     // Strict Provider Validation Guard (PDF V1 No-Fake Policy)
