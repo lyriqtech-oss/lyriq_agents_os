@@ -357,6 +357,30 @@ interface CompanyProfile {
   requireApprovalRule?: string;
 }
 
+
+interface ProviderModelOption {
+  id: string;
+  displayName?: string;
+  provider?: string;
+  status?: string;
+  source?: string;
+  isAvailable?: boolean;
+  requiresPlan?: string;
+  contextWindow?: number;
+  supportsTools?: boolean;
+  supportsJsonMode?: boolean;
+  supportsVision?: boolean;
+  unavailableReason?: string;
+}
+
+interface ValidatedProviderConnection {
+  id: string;
+  provider: string;
+  selected_chat_model: string;
+  key_fingerprint?: string;
+  status: string;
+}
+
 // --- INITIAL SEED DATA FOR DEMO ---
 const demoCompany: CompanyProfile = {
   name: 'Clínica Vitalis',
@@ -2396,6 +2420,10 @@ export default function App() {
   const [onboardingApiKeyVisible, setOnboardingApiKeyVisible] = useState(false);
   const [onboardingApiKeyValidated, setOnboardingApiKeyValidated] = useState(false);
   const [onboardingApiKeyStatusText, setOnboardingApiKeyStatusText] = useState('');
+  const [onboardingModels, setOnboardingModels] = useState<ProviderModelOption[]>([]);
+  const [onboardingModelsLoading, setOnboardingModelsLoading] = useState(false);
+  const [onboardingProviderValidating, setOnboardingProviderValidating] = useState(false);
+  const [onboardingValidatedConnection, setOnboardingValidatedConnection] = useState<ValidatedProviderConnection | null>(null);
   const [onboardingMainAgentName, setOnboardingMainAgentName] = useState('Agente Main');
   const [onboardingMainAgentRole, setOnboardingMainAgentRole] = useState('COO Operacional e Coordenador');
   const [onboardingMainAgentGoal, setOnboardingMainAgentGoal] = useState('Orquestrar operações e responder solicitações com contexto real da empresa');
@@ -2513,6 +2541,85 @@ export default function App() {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3500);
   };
+
+
+  const getProviderKeyUrl = (provider: string) => {
+    const urls: Record<string, string> = {
+      openai: 'https://platform.openai.com/api-keys',
+      anthropic: 'https://console.anthropic.com/settings/keys',
+      gemini: 'https://aistudio.google.com/app/apikey',
+      openrouter: 'https://openrouter.ai/settings/keys',
+      groq: 'https://console.groq.com/keys',
+      mistral: 'https://console.mistral.ai/api-keys',
+      deepseek: 'https://platform.deepseek.com/api_keys',
+      ollama: 'http://localhost:11434'
+    };
+    return urls[provider] || 'https://docs.lyriq.ai/providers';
+  };
+
+  const loadOnboardingProviderModels = async (provider: string) => {
+    setOnboardingModelsLoading(true);
+    setOnboardingModels([]);
+    try {
+      const res = await fetch(`/api/providers/${provider}/models`);
+      const body = await res.json();
+      const models: ProviderModelOption[] = Array.isArray(body.data) ? body.data : [];
+      setOnboardingModels(models);
+      const firstAvailable = models.find(m => m.isAvailable !== false) || models[0];
+      if (firstAvailable) setOnboardingSelectedModel(firstAvailable.id);
+    } catch (err: any) {
+      setOnboardingApiKeyStatusText(`Não consegui carregar modelos do provider: ${err.message}`);
+    } finally {
+      setOnboardingModelsLoading(false);
+    }
+  };
+
+  const handleValidateOnboardingProvider = async () => {
+    if (!onboardingApiKey.trim()) {
+      addToast('Insira sua chave de API para validar.', 'error');
+      return;
+    }
+    setOnboardingProviderValidating(true);
+    setOnboardingApiKeyValidated(false);
+    setOnboardingValidatedConnection(null);
+    setOnboardingApiKeyStatusText('Validando chave no provider e sincronizando modelos disponíveis...');
+    try {
+      const res = await fetch(`/api/providers/${onboardingSelectedProvider}/validate-key`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          workspaceId: 'workspace_123',
+          apiKey: onboardingApiKey,
+          modelId: onboardingSelectedModel
+        })
+      });
+      const body = await res.json();
+      if (!res.ok || !body.ok) {
+        throw new Error(body.error?.message || 'Falha ao validar chave.');
+      }
+      const models: ProviderModelOption[] = body.data?.models || [];
+      const connection = body.data?.connection;
+      setOnboardingModels(models.length ? models : onboardingModels);
+      if (connection?.selected_chat_model) setOnboardingSelectedModel(connection.selected_chat_model);
+      setOnboardingValidatedConnection(connection || null);
+      setOnboardingApiKeyValidated(true);
+      setOnboardingApiKeyStatusText(`API validada. Provider: ${onboardingSelectedProvider}. Modelo ativo: ${connection?.selected_chat_model || onboardingSelectedModel}. Chave: ${connection?.key_fingerprint || 'mascarada'}.`);
+      addToast('API Key validada e modelos sincronizados.', 'success');
+    } catch (err: any) {
+      setOnboardingApiKeyValidated(false);
+      setOnboardingApiKeyStatusText(err.message || 'Chave inválida ou sem permissão para listar modelos.');
+      addToast(err.message || 'Chave inválida.', 'error');
+    } finally {
+      setOnboardingProviderValidating(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOnboardingProviderModels(onboardingSelectedProvider);
+    setOnboardingApiKeyValidated(false);
+    setOnboardingValidatedConnection(null);
+    setOnboardingApiKeyStatusText('');
+  }, [onboardingSelectedProvider]);
 
   const handleInstallAgent = (e: React.FormEvent) => {
     e.preventDefault();
@@ -7258,22 +7365,18 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                       <select 
                         value={onboardingSelectedProvider}
                         onChange={(e) => {
-                          const p = e.target.value;
-                          setOnboardingSelectedProvider(p);
-                          if (p === 'openai') setOnboardingSelectedModel('gpt-4o-mini');
-                          else if (p === 'anthropic') setOnboardingSelectedModel('claude-3-5-sonnet');
-                          else if (p === 'gemini') setOnboardingSelectedModel('gemini-1.5-flash');
-                          else setOnboardingSelectedModel('default');
+                          setOnboardingSelectedProvider(e.target.value);
                         }}
                         className="w-full px-3 py-2 bg-[#182032] border border-slate-800 rounded-md text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       >
-                        <option value="openai">OpenAI (gpt-4o, gpt-4o-mini)</option>
-                        <option value="anthropic">Anthropic Claude (claude-3-5-sonnet, claude-3-7-sonnet)</option>
-                        <option value="gemini">Google Gemini (gemini-1.5-flash, gemini-1.5-pro)</option>
-                        <option value="openrouter">OpenRouter (Multi-model router)</option>
-                        <option value="groq">Groq (Ultra-fast inference)</option>
+                        <option value="openai">OpenAI</option>
+                        <option value="anthropic">Anthropic Claude</option>
+                        <option value="gemini">Google Gemini</option>
+                        <option value="openrouter">OpenRouter</option>
+                        <option value="groq">Groq</option>
                         <option value="mistral">Mistral AI</option>
-                        <option value="deepseek">DeepSeek (Open source reasoning)</option>
+                        <option value="deepseek">DeepSeek</option>
+                        <option value="ollama">Ollama Local</option>
                       </select>
                     </div>
 
@@ -7285,30 +7388,31 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                         onChange={(e) => setOnboardingSelectedModel(e.target.value)}
                         className="w-full px-3 py-2 bg-[#182032] border border-slate-800 rounded-md text-xs text-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                       >
-                        {onboardingSelectedProvider === 'openai' && (
-                          <>
-                            <option value="gpt-4o-mini">gpt-4o-mini (Recomendado: rápido e barato)</option>
-                            <option value="gpt-4o">gpt-4o (Modelo mais forte: melhor raciocínio)</option>
-                            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                          </>
+                        {onboardingModelsLoading && (
+                          <option value={onboardingSelectedModel}>Carregando modelos...</option>
                         )}
-                        {onboardingSelectedProvider === 'anthropic' && (
-                          <>
-                            <option value="claude-3-5-sonnet">claude-3-5-sonnet (Recomendado)</option>
-                            <option value="claude-3-7-sonnet">claude-3-7-sonnet</option>
-                          </>
+                        {!onboardingModelsLoading && onboardingModels.length === 0 && (
+                          <option value={onboardingSelectedModel || 'default'}>Nenhum modelo carregado</option>
                         )}
-                        {onboardingSelectedProvider === 'gemini' && (
-                          <>
-                            <option value="gemini-1.5-flash">gemini-1.5-flash (Recomendado: rápido)</option>
-                            <option value="gemini-1.5-pro">gemini-1.5-pro (Raciocínio avançado)</option>
-                            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-                          </>
-                        )}
-                        {!['openai', 'anthropic', 'gemini'].includes(onboardingSelectedProvider) && (
-                          <option value="default">Modelo padrão do provedor</option>
-                        )}
+                        {!onboardingModelsLoading && onboardingModels.map((model) => (
+                          <option
+                            key={model.id}
+                            value={model.id}
+                            disabled={model.isAvailable === false}
+                          >
+                            {(model.displayName || model.id)}{model.requiresPlan ? ` • ${model.requiresPlan.toUpperCase()}` : ''}{model.source === 'provider_api' ? ' • API' : ' • fallback'}{model.isAvailable === false ? ' • indisponível nesta chave' : ''}
+                          </option>
+                        ))}
                       </select>
+                      {onboardingSelectedModel && (
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          {(() => {
+                            const selected = onboardingModels.find(m => m.id === onboardingSelectedModel);
+                            if (!selected) return 'Modelo selecionado aguardando validação.';
+                            return `${selected.contextWindow ? `${selected.contextWindow.toLocaleString('pt-BR')} contexto` : 'Contexto não informado'} • Tools: ${selected.supportsTools ? 'sim' : 'não'} • JSON: ${selected.supportsJsonMode ? 'sim' : 'não'}`;
+                          })()}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -7317,17 +7421,11 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                     <div>
                       <span className="font-bold text-white block">Link oficial do provedor:</span>
                       <span className="text-[11px] text-slate-400">
-                        {onboardingSelectedProvider === 'openai' ? 'https://platform.openai.com/api-keys' :
-                         onboardingSelectedProvider === 'anthropic' ? 'https://console.anthropic.com/settings/keys' :
-                         onboardingSelectedProvider === 'gemini' ? 'https://aistudio.google.com/app/apikey' : 'Consulte a documentação do provedor.'}
+                        {getProviderKeyUrl(onboardingSelectedProvider)}
                       </span>
                     </div>
                     <a 
-                      href={
-                        onboardingSelectedProvider === 'openai' ? 'https://platform.openai.com/api-keys' :
-                        onboardingSelectedProvider === 'anthropic' ? 'https://console.anthropic.com/settings/keys' :
-                        'https://aistudio.google.com/app/apikey'
-                      } 
+                      href={getProviderKeyUrl(onboardingSelectedProvider)}
                       target="_blank" 
                       rel="noreferrer"
                       className="px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-indigo-400 text-[11px] font-semibold rounded transition"
@@ -7362,47 +7460,11 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                       </div>
 
                       <button 
-                        onClick={async () => {
-                          if (!onboardingApiKey.trim()) {
-                            addToast('Insira sua chave de API para validar.', 'error');
-                            return;
-                          }
-                          addToast('Validando chave de API no backend...', 'info');
-                          try {
-                            const res = await fetch('/api/onboarding/provider', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                workspaceId: 'workspace_123',
-                                provider: onboardingSelectedProvider,
-                                model: onboardingSelectedModel,
-                                apiKey: onboardingApiKey
-                              })
-                            });
-                            const data = await res.json();
-                            if (data.ok) {
-                              setOnboardingApiKeyValidated(true);
-                              setOnboardingApiKeyStatusText(data.data.message);
-                              addToast('API Key validada com sucesso!', 'success');
-                            } else {
-                              setOnboardingApiKeyValidated(false);
-                              setOnboardingApiKeyStatusText(data.error?.message || 'Falha ao validar chave.');
-                              addToast(data.error?.message || 'Chave inválida.', 'error');
-                            }
-                          } catch {
-                            // Fallback simulation for offline mode
-                            if (onboardingApiKey.length > 10) {
-                              setOnboardingApiKeyValidated(true);
-                              setOnboardingApiKeyStatusText('API validada. Seus agentes já podem usar este provedor com segurança.');
-                              addToast('API Key validada com sucesso!', 'success');
-                            } else {
-                              addToast('Formato de chave incompatível com o provedor.', 'error');
-                            }
-                          }
-                        }}
+                        onClick={handleValidateOnboardingProvider}
+                        disabled={onboardingProviderValidating || onboardingModelsLoading}
                         className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-xs font-semibold transition shrink-0"
                       >
-                        Validar API
+                        {onboardingProviderValidating ? 'Validando...' : 'Validar API'}
                       </button>
                     </div>
 
@@ -7563,22 +7625,61 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           addToast('Preencha o nome do Agente Main.', 'error');
                           return;
                         }
+                        if (!onboardingValidatedConnection?.id || !onboardingApiKeyValidated) {
+                          addToast('Valide um provider e selecione um modelo antes de criar o Agente Main.', 'error');
+                          setOnboardingStep(5);
+                          return;
+                        }
                         try {
-                          await fetch('/api/onboarding/agent', {
+                          const instructions = [
+                            `Objetivo principal: ${onboardingMainAgentGoal}`,
+                            `Tom de voz: ${onboardingMainAgentTone}`,
+                            `Autonomia: ${onboardingMainAgentAutonomy}`,
+                            `Empresa: ${companyProfile.name || 'Workspace sem nome'}`,
+                            `Regra: nunca execute ações sensíveis sem aprovação humana.`
+                          ].join('\n');
+
+                          const res = await fetch('/api/agents/main', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: {
+                              'Content-Type': 'application/json',
+                              'x-user-plan': companyProfile.plan || currentUser?.plan || onboardingPlan || 'free'
+                            },
                             body: JSON.stringify({
                               workspaceId: 'workspace_123',
+                              providerConnectionId: onboardingValidatedConnection.id,
+                              modelId: onboardingSelectedModel,
                               name: onboardingMainAgentName,
                               role: onboardingMainAgentRole,
-                              goal: onboardingMainAgentGoal,
-                              autonomyLevel: onboardingMainAgentAutonomy
+                              instructions
                             })
                           });
-                          addToast('Agente Main configurado.', 'success');
+                          const body = await res.json();
+                          if (!res.ok || !body.ok) {
+                            throw new Error(body.error?.message || 'Falha ao criar Agente Main.');
+                          }
+                          const created = body.data;
+                          setAgents(prev => {
+                            const mainAgent: Agent = {
+                              ...defaultAgentsList[0],
+                              id: 'main',
+                              name: created.name || onboardingMainAgentName,
+                              role: created.role || onboardingMainAgentRole,
+                              status: true,
+                              metric: 'Pronto para teste',
+                              metricLabel: 'Provider e modelo validados',
+                              tasksToday: 0,
+                              model: created.model_id || onboardingSelectedModel,
+                              systemPrompt: instructions,
+                              agentStatus: 'active'
+                            };
+                            return [mainAgent, ...prev.filter(a => a.id !== 'main')];
+                          });
+                          localStorage.setItem('lyriq_main_agent_tested', 'true');
+                          addToast('Agente Main criado com provider e modelo validados.', 'success');
                           setOnboardingStep(7);
-                        } catch {
-                          setOnboardingStep(7);
+                        } catch (err: any) {
+                          addToast(err.message || 'Falha ao criar Agente Main.', 'error');
                         }
                       }}
                       className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-md text-xs font-semibold flex items-center gap-2 transition"
@@ -7635,7 +7736,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                       </div>
                       <div className="flex items-center gap-2 text-emerald-400">
                         <Check className="w-4 h-4" />
-                        <span className="text-slate-200">8. Modelo escolhido ({onboardingSelectedModel})</span>
+                        <span className="text-slate-200">8. Provider/modelo validados ({onboardingSelectedProvider} / {onboardingSelectedModel})</span>
                       </div>
                       <div className="flex items-center gap-2 text-emerald-400">
                         <Check className="w-4 h-4" />

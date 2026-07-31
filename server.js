@@ -1573,6 +1573,7 @@ const server = http.createServer(async (req, res) => {
       }
       const db = readDb();
       if (!db.providers) db.providers = [];
+      const selectedChatModel = body.modelId && availableModels.includes(body.modelId) ? body.modelId : availableModels[0];
       const conn = {
         id: `provider-${Date.now()}`,
         workspace_id: body.workspaceId || 'workspace_123',
@@ -1580,14 +1581,31 @@ const server = http.createServer(async (req, res) => {
         encrypted_api_key: btoa(apiKey),
         status: 'valid',
         available_models: availableModels,
-        selected_chat_model: availableModels[0],
-        last_validated_at: new Date().toISOString()
+        selected_chat_model: selectedChatModel,
+        selected_embedding_model: body.embeddingModelId || 'text-embedding-3-small',
+        key_fingerprint: maskApiKey(apiKey),
+        last_validated_at: new Date().toISOString(),
+        created_at: new Date().toISOString()
       };
       db.providers = db.providers.filter(p => p.provider !== providerId);
       db.providers.push(conn);
       writeDb(db);
 
-      return sendSuccess(res, { ok: true, provider: providerId, models: modelsList }, reqId);
+      return sendSuccess(res, {
+        ok: true,
+        provider: providerId,
+        models: modelsList,
+        connection: {
+          id: conn.id,
+          workspace_id: conn.workspace_id,
+          provider: conn.provider,
+          status: conn.status,
+          available_models: conn.available_models,
+          selected_chat_model: conn.selected_chat_model,
+          key_fingerprint: conn.key_fingerprint,
+          last_validated_at: conn.last_validated_at
+        }
+      }, reqId);
     }
 
     // POST /api/providers/:provider/test-model
