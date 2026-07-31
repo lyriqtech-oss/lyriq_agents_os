@@ -31,21 +31,17 @@ import {
   Clock,
   Plug,
   Database,
-  Store,
   FileText,
   Eye,
   EyeOff,
   ShieldCheck,
-  Layers,
   Table,
   Menu,
   Play,
   Bot,
   Key,
-  CheckSquare,
   Activity,
-  Globe,
-  BarChart3,
+  Globe2,
   Layout
 } from 'lucide-react';
 
@@ -330,7 +326,7 @@ interface UserAccount {
   email: string;
   password?: string;
   name: string;
-  role: 'user' | 'admin' | 'super_admin';
+  role: 'user' | 'owner' | 'admin' | 'super_admin';
   plan: 'free' | 'pro' | 'max' | 'business';
 }
 
@@ -808,7 +804,8 @@ export default function App() {
     security_dashboard: 'business',
     security_checklist: 'business',
     consolidated_architecture: 'business',
-    internal_ops: 'business'
+    internal_ops: 'business',
+    admin_panel: 'business'
   };
 
   const hasPlanAccess = (userPlan: string = 'free', tabOrFeature: string): boolean => {
@@ -822,7 +819,7 @@ export default function App() {
   const [lockedFeatureName, setLockedFeatureName] = useState('');
 
   // Mandatory Onboarding Route Guard & Admin/Plan Guard
-  const isAdminUser = currentUser?.role === 'admin' || currentUser?.role === 'super_admin';
+  const isAdminUser = currentUser?.role === 'admin' || currentUser?.role === 'super_admin' || currentUser?.role === 'owner';
 
   useEffect(() => {
     if (currentUser) {
@@ -1012,12 +1009,14 @@ export default function App() {
 
   useEffect(() => {
     if (currentRoute === 'app') {
-      const adminTabs = ['admin', 'internal_ops', 'security_dashboard', 'security_checklist', 'consolidated_architecture'];
+      const adminTabs = ['admin', 'admin_panel', 'internal_ops', 'security_dashboard', 'security_checklist', 'consolidated_architecture'];
       const userPlan = companyProfile.plan || currentUser?.plan || 'free';
 
-      if (adminTabs.includes(currentTab) && !isAdminUser) {
-        setCurrentTab('dashboard');
-        addToast('Acesso Negado (403): O menu de Administração é exclusivo para administradores.', 'error');
+      if (adminTabs.includes(currentTab)) {
+        if (!isAdminUser) {
+          setCurrentTab('dashboard');
+          addToast('Acesso Negado (403): O menu de Administração é exclusivo para administradores.', 'error');
+        }
         return;
       }
 
@@ -7506,8 +7505,8 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
             {/* Sidebar main navigation */}
             <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-              <div className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-left">Central de Operação</div>
-              
+              <div className="px-3 mb-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider text-left">Operação</div>
+
               <button
                 onClick={() => setCurrentTab('dashboard')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
@@ -7523,33 +7522,24 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
 
               <button
-                onClick={() => {
-                  if (companyProfile.setupComplete) {
-                    setCurrentTab('chat');
-                  } else {
-                    addToast('Disponível depois de configurar a empresa e o provedor de IA.', 'info');
-                  }
-                }}
+                onClick={() => companyProfile.setupComplete ? setCurrentTab('chat') : addToast('Disponível depois de configurar a empresa e o provedor de IA.', 'info')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'chat'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 } ${!companyProfile.setupComplete ? 'opacity-75' : ''}`}
-                title={!companyProfile.setupComplete ? 'Disponível depois de configurar o provedor de IA' : ''}
               >
                 <div className="flex items-center gap-2.5">
                   <MessageSquare className="w-4 h-4 shrink-0 text-indigo-600" />
-                  <span>Chat do Agente</span>
+                  <span>Chat</span>
                 </div>
-                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                  IA
-                </span>
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">IA</span>
               </button>
 
               <button
                 onClick={() => setCurrentTab('agents')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'agents'
+                  currentTab === 'agents' || currentTab === 'agent_studio' || currentTab === 'main_agent'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
@@ -7558,9 +7548,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   <User className="w-4 h-4 shrink-0" />
                   <span>Agentes</span>
                 </div>
-                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">
-                  {agents.length}
-                </span>
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">{agents.length}</span>
               </button>
 
               <button
@@ -7597,564 +7585,84 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
 
               <button
-                onClick={() => setCurrentTab('marketplaces')}
+                onClick={() => setCurrentTab('connections')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'marketplaces'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Store className="w-4 h-4 shrink-0 text-emerald-600" />
-                  <span>Playbooks</span>
-                </div>
-                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                  Pro
-                </span>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('operational_map')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'operational_map'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Building2 className="w-4 h-4 shrink-0 text-blue-600" />
-                  <span>Mapa Operacional</span>
-                </div>
-                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-blue-50 text-blue-700">
-                  Novo
-                </span>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('reports')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'reports'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <TrendingUp className="w-4 h-4 shrink-0 text-emerald-600" />
-                  <span>ROI Tracker</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('logs')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'logs'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Database className="w-4 h-4 shrink-0 text-slate-600" />
-                  <span>Auditoria</span>
-                </div>
-                {auditLogs.filter(l => l.riskLevel === 'high').length > 0 && (
-                  <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                    Alerta
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('documents')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'documents'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <FolderOpen className="w-4 h-4 shrink-0" />
-                  <span>Arquivos</span>
-                </div>
-                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">
-                  {memoryDocs.length}
-                </span>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('memory')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'memory'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Sparkles className="w-4 h-4 shrink-0 text-purple-600" />
-                  <span>Memória RAG</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('skills')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'skills'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Cpu className="w-4 h-4 shrink-0" />
-                  <span>Skills</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('providers')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'providers'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <CreditCard className="w-4 h-4 shrink-0 text-amber-600" />
-                  <span>Uso e Orçamento</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('status')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'status'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Activity className="w-4 h-4 shrink-0 text-emerald-500" />
-                  <span>Status do Sistema</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('approvals')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'approvals'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <ShieldCheck className="w-4 h-4 shrink-0 text-indigo-500" />
-                  <span>Central de Aprovações</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('audit')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'audit'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <FileText className="w-4 h-4 shrink-0 text-blue-500" />
-                  <span>Auditoria do Workspace</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('bg_jobs')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'bg_jobs'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Clock className="w-4 h-4 shrink-0 text-amber-500" />
-                  <span>Execuções em Background</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('webhooks_outbound')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'webhooks_outbound' || currentTab === 'webhooks_inbound'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Globe className="w-4 h-4 shrink-0 text-cyan-500" />
-                  <span>Webhooks & Integrações</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('integrations')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'integrations'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Cpu className="w-4 h-4 shrink-0 text-purple-500" />
-                  <span>Conectores Nativos (OAuth)</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('mcps')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'mcps'
+                  ['connections', 'channels', 'channel_telegram', 'channel_whatsapp', 'whatsapp_inbox', 'channel_email', 'email_inbox', 'integrations', 'mcps', 'webhooks_outbound', 'webhooks_inbound'].includes(currentTab)
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <Plug className="w-4 h-4 shrink-0 text-emerald-500" />
-                  <span>Servidores MCP</span>
+                  <span>Conexões</span>
                 </div>
               </button>
 
               <button
-                onClick={() => setCurrentTab('channel_telegram')}
+                onClick={() => setCurrentTab('documents')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'channel_telegram'
+                  ['documents', 'memory', 'knowledge_bases', 'rag_sandbox', 'workspace_memories', 'memory_candidates', 'memory_debug'].includes(currentTab)
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Send className="w-4 h-4 shrink-0 text-sky-500" />
-                  <span>Canal Telegram (Bot)</span>
+                  <FolderOpen className="w-4 h-4 shrink-0" />
+                  <span>Arquivos & Memória</span>
                 </div>
+                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">{memoryDocs.length}</span>
               </button>
 
               <button
-                onClick={() => setCurrentTab('channel_whatsapp')}
+                onClick={() => setCurrentTab('reports')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'channel_whatsapp'
+                  currentTab === 'reports' || currentTab === 'executive_dashboard'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <MessageSquare className="w-4 h-4 shrink-0 text-emerald-500" />
-                  <span>Canal WhatsApp Business</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('whatsapp_inbox')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'whatsapp_inbox'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Bot className="w-4 h-4 shrink-0 text-teal-500" />
-                  <span>Caixa de Entrada WhatsApp</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('channel_email')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'channel_email'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Mail className="w-4 h-4 shrink-0 text-blue-500" />
-                  <span>Canal Email (SMTP/IMAP)</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('email_inbox')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'email_inbox'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <FolderOpen className="w-4 h-4 shrink-0 text-indigo-500" />
-                  <span>Caixa de Entrada Email</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('knowledge_bases')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'knowledge_bases'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <BookOpen className="w-4 h-4 shrink-0 text-purple-500" />
-                  <span>Bases de Conhecimento (RAG)</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('rag_sandbox')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'rag_sandbox'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Search className="w-4 h-4 shrink-0 text-violet-500" />
-                  <span>Sandbox de Teste RAG</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('workspace_memories')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'workspace_memories'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Cpu className="w-4 h-4 shrink-0 text-amber-500" />
-                  <span>Memória do Workspace</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('memory_candidates')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'memory_candidates'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Sparkles className="w-4 h-4 shrink-0 text-yellow-500" />
-                  <span>Candidatos de Memória</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('memory_debug')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'memory_debug'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Settings className="w-4 h-4 shrink-0 text-orange-500" />
-                  <span>Debug de Memória</span>
-                </div>
-              </button>
-
-              {isAdminUser && (
-                <>
-                  <div className="pt-3 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-rose-500 font-mono">
-                    Painel do Administrador
-                  </div>
-                  <button
-                    onClick={() => setCurrentTab('security_dashboard')}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                      currentTab === 'security_dashboard'
-                        ? 'bg-slate-950 text-white shadow-sm'
-                        : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Lock className="w-4 h-4 shrink-0 text-rose-500" />
-                      <span>Dashboard de Segurança</span>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => setCurrentTab('security_checklist')}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                      currentTab === 'security_checklist'
-                        ? 'bg-slate-950 text-white shadow-sm'
-                        : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500" />
-                      <span>Self-Check de Produção</span>
-                    </div>
-                  </button>
-                </>
-              )}
-
-              <button
-                onClick={() => setCurrentTab('agent_studio')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'agent_studio'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Cpu className="w-4 h-4 shrink-0 text-cyan-500" />
-                  <span>Agent Builder / Studio V1</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('main_chat_workspace')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'main_chat_workspace'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <MessageSquare className="w-4 h-4 shrink-0 text-indigo-500" />
-                  <span>Cockpit Chat Principal</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('executive_dashboard')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'executive_dashboard'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <BarChart3 className="w-4 h-4 shrink-0 text-emerald-500" />
-                  <span>Dashboard Executivo V1</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('pricing')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'pricing'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Zap className="w-4 h-4 shrink-0 text-amber-500" />
-                  <span>Planos & Pricing</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('qa_report_v1')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'qa_report_v1'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <CheckSquare className="w-4 h-4 shrink-0 text-emerald-500" />
-                  <span>Relatório QA Antigravity V1</span>
-                </div>
-              </button>
-
-              {isAdminUser && (
-                <>
-              <button
-                onClick={() => setCurrentTab('consolidated_architecture')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'consolidated_architecture'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Layers className="w-4 h-4 shrink-0 text-indigo-500" />
-                  <span>Arquitetura Consolidada V1</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('security_dashboard')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'security_dashboard'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <ShieldCheck className="w-4 h-4 shrink-0 text-rose-500" />
-                  <span>Cybersegurança V1</span>
-                </div>
-              </button>
-
-                </>
-              )}
-
-              <button
-                onClick={() => setCurrentTab('storage_dashboard')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'storage_dashboard'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Database className="w-4 h-4 shrink-0 text-amber-500" />
-                  <span>Storage & Add-ons V1</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('tools_settings')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'tools_settings'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Cpu className="w-4 h-4 shrink-0 text-emerald-500" />
-                  <span>Tools & Busca Web V1</span>
-                </div>
-              </button>
-
-              <button
-                onClick={() => setCurrentTab('workspace_settings')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'workspace_settings'
-                    ? 'bg-slate-950 text-white shadow-sm'
-                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Building2 className="w-4 h-4 shrink-0 text-blue-500" />
-                  <span>Workspace & Equipe V1</span>
+                  <TrendingUp className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>Relatórios</span>
                 </div>
               </button>
 
               <button
                 onClick={() => setCurrentTab('settings')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'settings'
-                    ? 'bg-[#0f172a] text-white shadow-sm'
+                  ['settings', 'providers', 'pricing', 'workspace_settings'].includes(currentTab)
+                    ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <Settings className="w-4 h-4 shrink-0" />
-                  <span>Configurações Gerais</span>
+                  <span>Configurações</span>
                 </div>
               </button>
-            </nav>
 
+              {isAdminUser && (
+                <>
+                  <div className="pt-4 pb-1 px-3 text-[10px] font-bold uppercase tracking-wider text-rose-500 font-mono text-left">
+                    Admin
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentTab('admin_panel')}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                      ['admin_panel', 'status', 'logs', 'audit', 'approvals', 'bg_jobs', 'tools_settings', 'storage_dashboard', 'qa_report_v1', 'security_dashboard', 'security_checklist', 'consolidated_architecture', 'operational_map', 'marketplaces'].includes(currentTab)
+                        ? 'bg-slate-950 text-white shadow-sm'
+                        : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <ShieldCheck className="w-4 h-4 shrink-0 text-rose-500" />
+                      <span>Painel Admin</span>
+                    </div>
+                  </button>
+                </>
+              )}
+            </nav>
 
             {/* Sidebar profile & Log out */}
             <div className="p-4 border-t border-slate-200/60 flex flex-col gap-2">
@@ -11043,7 +10551,61 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
-              {/* 7. APP: CHANNELS CONNECTED */}
+              {/* 7. APP: CONNECTIONS HUB */}
+              {currentTab === 'connections' && companyProfile.setupComplete && (
+                <div className="space-y-6 max-w-6xl text-left">
+                  <div>
+                    <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Conexões</h1>
+                    <p className="text-xs text-slate-400 mt-0.5">Apps, canais de atendimento, MCPs, OAuth e webhooks em um lugar só.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { title: 'Telegram', desc: 'Bot conectado para chat, grupos e notificações.', tab: 'channel_telegram', icon: Send, badge: 'Canal' },
+                      { title: 'WhatsApp', desc: 'WhatsApp Business, inbox e roteamento para agentes.', tab: 'channel_whatsapp', icon: MessageSquare, badge: 'Canal' },
+                      { title: 'Email', desc: 'SMTP/IMAP, caixa de entrada e triagem por agente.', tab: 'channel_email', icon: Mail, badge: 'Canal' },
+                      { title: 'Apps OAuth', desc: 'Google, CRM, calendário, storage e conectores nativos.', tab: 'integrations', icon: Cpu, badge: 'Apps' },
+                      { title: 'MCP Servers', desc: 'Ferramentas externas por Model Context Protocol.', tab: 'mcps', icon: Plug, badge: 'MCP' },
+                      { title: 'Webhooks', desc: 'Eventos inbound/outbound para automações externas.', tab: 'webhooks_outbound', icon: Globe2, badge: 'API' }
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.title}
+                          onClick={() => setCurrentTab(item.tab)}
+                          className="bg-white border border-slate-200/70 hover:border-slate-300 rounded-xl p-5 shadow-sm text-left transition group"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-slate-950 text-white flex items-center justify-center group-hover:scale-105 transition">
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600 uppercase tracking-wider">{item.badge}</span>
+                          </div>
+                          <h3 className="text-sm font-bold text-slate-900 mt-4">{item.title}</h3>
+                          <p className="text-xs text-slate-500 mt-1 leading-relaxed">{item.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="bg-slate-950 text-white rounded-2xl p-5 border border-slate-800 shadow-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <h2 className="text-sm font-bold">Regra de produto</h2>
+                        <p className="text-xs text-slate-300 mt-1">O usuário vê Conexões. Detalhe técnico, logs, chaves, webhooks avançados e segurança ficam no Admin.</p>
+                      </div>
+                      <button
+                        onClick={() => setCurrentTab('status')}
+                        className="px-3 py-1.5 rounded bg-white text-slate-950 text-xs font-bold hover:bg-slate-100 transition"
+                      >
+                        Abrir Admin
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 8. APP: CHANNELS CONNECTED */}
               {currentTab === 'channels' && companyProfile.setupComplete && (
                 <div className="space-y-6 max-w-6xl">
                   <div>
@@ -11668,6 +11230,44 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               )}
 
               {/* 1.12. APP: PÁGINA PÚBLICA DE STATUS DO SISTEMA (PDF Specification) */}
+              {currentTab === 'admin_panel' && isAdminUser && (
+                <div className="space-y-6 max-w-6xl text-left">
+                  <div>
+                    <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Painel Admin</h1>
+                    <p className="text-xs text-slate-400 mt-0.5">Área técnica para operação, segurança, billing, QA, logs e infraestrutura. Isso não precisa ficar no menu do usuário.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                      { title: 'Status do Sistema', desc: 'Saúde geral, uptime e serviços internos.', tab: 'status', icon: Activity },
+                      { title: 'Aprovações', desc: 'Ações sensíveis aguardando decisão humana.', tab: 'approvals', icon: ShieldCheck },
+                      { title: 'Auditoria', desc: 'Eventos, trilhas, logs e rastreabilidade.', tab: 'audit', icon: FileText },
+                      { title: 'Background Jobs', desc: 'Execuções longas, filas e tarefas em segundo plano.', tab: 'bg_jobs', icon: Clock },
+                      { title: 'Uso, Billing e Pricing', desc: 'Orçamento, planos, limites e custos de API.', tab: 'providers', icon: CreditCard },
+                      { title: 'Storage & Add-ons', desc: 'Limites de arquivos, RAG e pacotes extras.', tab: 'storage_dashboard', icon: Database },
+                      { title: 'Tools & Busca Web', desc: 'Ferramentas nativas, permissões e risco.', tab: 'tools_settings', icon: Cpu },
+                      { title: 'Segurança', desc: 'Cybersecurity, hardening e checklist de produção.', tab: 'security_dashboard', icon: Lock },
+                      { title: 'QA e Arquitetura', desc: 'Relatório QA, arquitetura consolidada e especificações.', tab: 'qa_report_v1', icon: CheckCircle2 }
+                    ].map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <button
+                          key={item.title}
+                          onClick={() => setCurrentTab(item.tab)}
+                          className="bg-white border border-slate-200/70 hover:border-slate-300 rounded-xl p-5 shadow-sm text-left transition group"
+                        >
+                          <div className="w-9 h-9 rounded-lg bg-slate-100 text-slate-800 flex items-center justify-center group-hover:bg-slate-950 group-hover:text-white transition">
+                            <Icon className="w-4 h-4" />
+                          </div>
+                          <h3 className="text-sm font-bold text-slate-900 mt-4">{item.title}</h3>
+                          <p className="text-xs text-slate-500 mt-1 leading-relaxed">{item.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {currentTab === 'status' && (
                 <div className="space-y-8 max-w-5xl mx-auto text-left animate-in fade-in duration-200 py-2 font-sans">
                   {/* Top Status Header Banner */}
