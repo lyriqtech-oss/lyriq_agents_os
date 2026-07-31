@@ -45,11 +45,8 @@ import {
   CheckSquare,
   Activity,
   Globe,
-  Shield,
-  Brain,
   BarChart3,
-  Layout,
-  ChevronDown
+  Layout
 } from 'lucide-react';
 
 // --- DATABASE TYPES ---
@@ -2435,10 +2432,7 @@ export default function App() {
   const [onboardingAnalysisLogs, setOnboardingAnalysisLogs] = useState<string[]>([]);
 
   // --- LANDING PAGE PREMIUM V1 STATES & TELEMETRY ---
-  const [landingDemoTab, setLandingDemoTab] = useState<'empresa' | 'documentos' | 'api' | 'agente' | 'tarefas' | 'logs'>('empresa');
-  const [landingFaqOpen, setLandingFaqOpen] = useState<number | null>(0);
   const [landingMobileMenuOpen, setLandingMobileMenuOpen] = useState(false);
-  const [landingDiagramHover, setLandingDiagramHover] = useState<string | null>(null);
 
   const logTrackingEvent = (eventName: string, payload?: any) => {
     console.log(`[Telemetry] Event: ${eventName}`, payload || {});
@@ -5717,936 +5711,331 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
         ))}
       </div>
 
-      {/* ROTA 1: LANDING PAGE PREMIUM V1 (PDF Specification) */}
+      {/* ROTA 1: LANDING PAGE PREMIUM V2 */}
       {currentRoute === 'landing' && (
-        <div className="flex-1 flex flex-col bg-[#0b0f19] text-slate-100 overflow-y-auto selection:bg-indigo-500 selection:text-white">
-          
-          {/* 1. HEADER FIXO (Sticky Glassmorphic Header) */}
-          <header className="sticky top-0 z-50 max-w-full w-full backdrop-blur-md bg-[#0b0f19]/90 border-b border-slate-800/80 transition-all duration-300">
-            <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-              <div 
-                onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                className="flex items-center gap-2.5 cursor-pointer group"
+        <div className="flex-1 flex flex-col bg-[#07080b] text-white overflow-y-auto selection:bg-[#7c3aed] selection:text-white">
+          <header className="sticky top-0 z-50 border-b border-white/10 bg-[#07080b]/85 backdrop-blur-xl">
+            <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+              <button
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className="flex items-center gap-2.5 text-left"
               >
-                <LyriqLogo className="w-8 h-8 group-hover:scale-105 transition-transform" />
-                <span className="font-bold text-white text-base tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-100 to-slate-400">
-                  Lyriq Agents OS
-                </span>
-              </div>
+                <LyriqLogo className="w-8 h-8" />
+                <span className="text-sm font-semibold tracking-tight">Lyriq Agents OS</span>
+              </button>
 
-              {/* Desktop Nav Links */}
-              <nav className="hidden md:flex items-center gap-8 text-xs font-semibold text-slate-300">
-                <a href="#produto" onClick={() => logTrackingEvent('nav_link_clicked', { link: 'produto' })} className="hover:text-indigo-400 transition-colors">Produto</a>
-                <a href="#como-funciona" onClick={() => logTrackingEvent('nav_link_clicked', { link: 'como-funciona' })} className="hover:text-indigo-400 transition-colors">Como Funciona</a>
-                <a href="#recursos" onClick={() => logTrackingEvent('nav_link_clicked', { link: 'recursos' })} className="hover:text-indigo-400 transition-colors">Recursos</a>
-                <a href="#demo" onClick={() => logTrackingEvent('nav_link_clicked', { link: 'demo' })} className="hover:text-indigo-400 transition-colors">Demo Interativa</a>
-                <a href="#planos" onClick={() => logTrackingEvent('nav_link_clicked', { link: 'planos' })} className="hover:text-indigo-400 transition-colors">Planos</a>
-                <a href="#faq" onClick={() => logTrackingEvent('nav_link_clicked', { link: 'faq' })} className="hover:text-indigo-400 transition-colors">FAQ</a>
+              <nav className="hidden md:flex items-center gap-7 text-[12px] text-zinc-400 font-medium">
+                <a href="#produto" className="hover:text-white transition">Produto</a>
+                <a href="#seguranca" className="hover:text-white transition">Segurança</a>
+                <a href="#como-funciona" className="hover:text-white transition">Como funciona</a>
+                <a href="#recursos" className="hover:text-white transition">Recursos</a>
+                <a href="#planos" className="hover:text-white transition">Planos</a>
               </nav>
 
-              {/* Action Buttons */}
-              <div className="hidden sm:flex items-center gap-3">
-                <button 
-                  onClick={handleStartDemoDirect}
-                  className="px-3 py-2 text-xs font-semibold text-indigo-400 hover:text-indigo-300 hover:bg-indigo-950/40 rounded-lg border border-indigo-800/40 transition"
-                >
-                  Testar Sandbox
-                </button>
-                <button 
-                  onClick={() => { 
-                    logTrackingEvent('login_clicked');
-                    setAuthMode('login'); 
-                    setCurrentRoute('auth'); 
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 rounded-lg transition"
+              <div className="hidden sm:flex items-center gap-2">
+                <button
+                  onClick={() => { setAuthMode('login'); setCurrentRoute('auth'); }}
+                  className="px-4 py-2 text-xs font-semibold text-zinc-300 hover:text-white transition"
                 >
                   Entrar
                 </button>
-                <button 
-                  onClick={() => { 
-                    logTrackingEvent('signup_clicked');
-                    setAuthMode('signup'); 
-                    setCurrentRoute('auth'); 
-                  }}
-                  className="px-4 py-2.5 bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold rounded-lg shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition min-h-[44px]"
+                <button
+                  onClick={() => { logTrackingEvent('landing_primary_signup'); setAuthMode('signup'); setCurrentRoute('auth'); }}
+                  className="px-4 py-2.5 rounded-full bg-white text-black hover:bg-zinc-200 text-xs font-bold transition"
                 >
-                  Criar conta
+                  Começar agora
                 </button>
               </div>
 
-              {/* Mobile Hamburger Toggle */}
-              <div className="flex md:hidden items-center gap-2">
-                <button 
-                  onClick={() => {
-                    logTrackingEvent('signup_clicked');
-                    setAuthMode('signup');
-                    setCurrentRoute('auth');
-                  }}
-                  className="px-3 py-1.5 bg-indigo-600 text-white text-[11px] font-bold rounded-md"
-                >
-                  Criar conta
-                </button>
-                <button 
-                  onClick={() => setLandingMobileMenuOpen(!landingMobileMenuOpen)}
-                  className="p-2 text-slate-400 hover:text-white"
-                >
-                  {landingMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                </button>
-              </div>
+              <button
+                onClick={() => setLandingMobileMenuOpen(!landingMobileMenuOpen)}
+                className="md:hidden p-2 text-zinc-300"
+              >
+                {landingMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
             </div>
 
-            {/* Mobile Drawer */}
             {landingMobileMenuOpen && (
-              <div className="md:hidden bg-[#0e1422] border-b border-slate-800 px-6 py-4 space-y-3 animate-fade-in text-xs font-medium text-slate-300">
-                <a href="#produto" onClick={() => setLandingMobileMenuOpen(false)} className="block py-1 hover:text-white">Produto</a>
-                <a href="#como-funciona" onClick={() => setLandingMobileMenuOpen(false)} className="block py-1 hover:text-white">Como Funciona</a>
-                <a href="#recursos" onClick={() => setLandingMobileMenuOpen(false)} className="block py-1 hover:text-white">Recursos</a>
-                <a href="#demo" onClick={() => setLandingMobileMenuOpen(false)} className="block py-1 hover:text-white">Demo Interativa</a>
-                <a href="#planos" onClick={() => setLandingMobileMenuOpen(false)} className="block py-1 hover:text-white">Planos</a>
-                <a href="#faq" onClick={() => setLandingMobileMenuOpen(false)} className="block py-1 hover:text-white">FAQ</a>
-                <div className="pt-2 flex flex-col gap-2">
-                  <button 
-                    onClick={() => { setLandingMobileMenuOpen(false); setAuthMode('login'); setCurrentRoute('auth'); }}
-                    className="w-full py-2 bg-slate-800 text-center text-white rounded font-bold"
-                  >
-                    Entrar
-                  </button>
-                </div>
+              <div className="md:hidden px-6 py-4 border-t border-white/10 bg-[#0c0d12] space-y-3 text-sm text-zinc-300">
+                {['produto', 'seguranca', 'como-funciona', 'recursos', 'planos'].map(item => (
+                  <a key={item} href={`#${item}`} onClick={() => setLandingMobileMenuOpen(false)} className="block capitalize hover:text-white">
+                    {item.replace('-', ' ')}
+                  </a>
+                ))}
+                <button
+                  onClick={() => { setLandingMobileMenuOpen(false); setAuthMode('signup'); setCurrentRoute('auth'); }}
+                  className="w-full py-2.5 rounded-full bg-white text-black text-xs font-bold"
+                >
+                  Começar agora
+                </button>
               </div>
             )}
           </header>
 
-          {/* 2. HERO SECTION (PDF Section 4) */}
-          <section className="relative overflow-hidden pt-12 pb-20 px-6">
-            {/* Background Glow */}
-            <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-indigo-600/15 blur-[120px] rounded-full pointer-events-none" />
-
-            <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-              
-              {/* Left Copy */}
-              <div className="lg:col-span-7 space-y-6 text-left">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-950/60 border border-indigo-500/30 rounded-full text-[10px] font-bold text-indigo-400 uppercase tracking-widest shadow-inner">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Sistema Operacional para Agentes de IA</span>
-                </div>
-
-                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-[1.15]">
-                  Crie agentes de IA com <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-300 to-cyan-400">memória, documentos</span> e controle operacional.
-                </h1>
-
-                <p className="text-sm sm:text-base text-slate-300 leading-relaxed font-normal">
-                  O Lyriq Agents OS ajuda sua empresa a configurar agentes com contexto real, arquivos internos, API própria, tarefas, automações e regras de aprovação.
-                </p>
-
-                <div className="flex flex-col sm:flex-row gap-4 pt-2">
-                  <button 
-                    onClick={() => { 
-                      logTrackingEvent('hero_cta_clicked');
-                      setAuthMode('signup'); 
-                      setCurrentRoute('auth'); 
-                    }}
-                    className="px-7 py-3.5 bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-xl shadow-indigo-500/25 flex items-center justify-center gap-2 transition hover:-translate-y-0.5 min-h-[44px]"
-                  >
-                    <span>Criar conta</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-
-                  <a 
-                    href="#demo"
-                    onClick={() => logTrackingEvent('hero_demo_clicked')}
-                    className="px-6 py-3.5 bg-[#121826] border border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 text-slate-200 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition min-h-[44px]"
-                  >
-                    <Play className="w-4 h-4 text-indigo-400 fill-indigo-400/20" />
-                    <span>Ver demo interativa</span>
-                  </a>
-                </div>
-
-                <div className="pt-2 flex items-center gap-2 text-[11px] text-slate-400 font-medium">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Comece com <strong>BYOK</strong>. Você conecta sua própria API key e controla o uso desde o primeiro dia.</span>
-                </div>
+          <main>
+            <section className="relative overflow-hidden px-6 pt-20 pb-24">
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[920px] h-[520px] rounded-full bg-[radial-gradient(circle,rgba(124,58,237,0.28),rgba(14,165,233,0.08),transparent_68%)] blur-2xl" />
+                <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent,rgba(7,8,11,0.72)_74%,#07080b)]" />
               </div>
 
-              {/* Right Hero Product Animated Mockup (PDF Section 4.3) */}
-              <div className="lg:col-span-5 relative">
-                <div className="relative rounded-2xl border border-slate-800 bg-[#121826]/90 p-4 shadow-2xl shadow-indigo-950/40 backdrop-blur-sm space-y-4">
-                  {/* Top Window Bar */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-800 text-[10px] text-slate-400 font-mono">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-                      <span className="ml-2 text-slate-300 font-sans font-semibold">Lyriq Agents OS - Workspace</span>
-                    </div>
-                    <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/50">Online</span>
+              <div className="relative max-w-7xl mx-auto grid lg:grid-cols-12 gap-12 items-center">
+                <div className="lg:col-span-6 text-left space-y-7">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/10 bg-white/[0.04] text-[11px] text-zinc-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <span>AI operations platform para empresas que querem controle, não improviso.</span>
                   </div>
 
-                  {/* Mock Content */}
-                  <div className="space-y-3">
-                    {/* Card Agente Main */}
-                    <div className="p-3 bg-[#182032] rounded-xl border border-indigo-500/30 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
-                          <Bot className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <span className="text-xs font-bold text-white block">Agente Main</span>
-                          <span className="text-[10px] text-slate-400">COO Operacional & Coordenador</span>
-                        </div>
-                      </div>
-                      <span className="text-[9px] bg-indigo-950 text-indigo-300 px-2 py-0.5 rounded font-mono font-bold">Preset: Operacional</span>
-                    </div>
-
-                    {/* Document Indexing Bar */}
-                    <div className="p-3 bg-[#182032] rounded-xl border border-slate-800 space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-semibold text-slate-200 flex items-center gap-1.5">
-                          <FileText className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>manual_reembolso.pdf</span>
-                        </span>
-                        <span className="text-[9px] text-indigo-400 font-mono font-bold">Indexando RAG...</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 w-[78%] animate-pulse" />
-                      </div>
-                    </div>
-
-                    {/* Provider Status */}
-                    <div className="p-3 bg-[#182032] rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <Key className="w-4 h-4 text-emerald-400" />
-                        <div>
-                          <span className="font-semibold text-white block text-[11px]">OpenAI (BYOK)</span>
-                          <span className="text-[9px] text-slate-400 font-mono">sk-...9a2f</span>
-                        </div>
-                      </div>
-                      <span className="text-[9px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded font-mono font-bold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Validada
-                      </span>
-                    </div>
-
-                    {/* Task Created */}
-                    <div className="p-3 bg-[#182032] rounded-xl border border-slate-800 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2">
-                        <CheckSquare className="w-4 h-4 text-amber-400" />
-                        <span className="text-[11px] text-slate-200">Revisão de contrato B2B</span>
-                      </div>
-                      <span className="text-[9px] bg-amber-950 text-amber-400 px-2 py-0.5 rounded font-mono">Pendente Aprovação</span>
-                    </div>
+                  <div className="space-y-5">
+                    <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-[-0.055em] leading-[0.98] text-white">
+                      Coloque agentes de IA para trabalhar com o contexto real da sua empresa.
+                    </h1>
+                    <p className="text-base sm:text-lg text-zinc-400 leading-relaxed max-w-xl">
+                      Crie agentes com memória, arquivos, ferramentas, aprovação humana, logs e modelos de IA configuráveis. Sem depender de prompt solto em chat genérico.
+                    </p>
                   </div>
-                </div>
-              </div>
 
-            </div>
-          </section>
-
-          {/* 3. BARRA DE LOGOS / PROVEDORES COMPATÍVEIS */}
-          <section className="py-8 bg-[#080b13] border-y border-slate-900 px-6">
-            <div className="max-w-7xl mx-auto text-center space-y-4">
-              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-                Compatível com os principais provedores de IA e modelos do mercado (BYOK)
-              </p>
-              <div className="flex flex-wrap justify-center items-center gap-6 sm:gap-10 text-xs font-bold text-slate-400">
-                <span className="flex items-center gap-1.5 hover:text-white transition"><Cpu className="w-4 h-4 text-emerald-400" /> OpenAI</span>
-                <span className="flex items-center gap-1.5 hover:text-white transition"><Zap className="w-4 h-4 text-amber-400" /> Anthropic Claude</span>
-                <span className="flex items-center gap-1.5 hover:text-white transition"><Sparkles className="w-4 h-4 text-blue-400" /> Google Gemini</span>
-                <span className="flex items-center gap-1.5 hover:text-white transition"><Activity className="w-4 h-4 text-purple-400" /> Groq</span>
-                <span className="flex items-center gap-1.5 hover:text-white transition"><Globe className="w-4 h-4 text-indigo-400" /> OpenRouter</span>
-                <span className="flex items-center gap-1.5 hover:text-white transition"><Database className="w-4 h-4 text-cyan-400" /> Mistral AI</span>
-                <span className="flex items-center gap-1.5 hover:text-white transition"><Shield className="w-4 h-4 text-red-400" /> DeepSeek</span>
-              </div>
-            </div>
-          </section>
-
-          {/* 4. SEÇÃO PROBLEMA (PDF Section 6) */}
-          <section id="produto" className="py-20 px-6 max-w-7xl mx-auto w-full text-center space-y-12">
-            <div className="space-y-3 max-w-3xl mx-auto">
-              <span className="text-xs font-bold text-red-400 uppercase tracking-widest">O Problema Real</span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white leading-snug">
-                Empresas não precisam de mais uma janela de chat. Precisam de agentes que entendam processos, documentos, regras e limites.
-              </h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 text-left">
-              <div className="p-5 bg-[#121826] border border-slate-800 rounded-xl space-y-3 hover:border-red-900/50 transition">
-                <div className="w-8 h-8 rounded-lg bg-red-950/60 border border-red-800/40 text-red-400 flex items-center justify-center font-bold">1</div>
-                <h3 className="text-xs font-bold text-white">IA responde genérico</h3>
-                <p className="text-[11px] text-slate-400 leading-relaxed">Modelos padrão não conhecem a história, clientes e regras internas da sua empresa.</p>
-              </div>
-
-              <div className="p-5 bg-[#121826] border border-slate-800 rounded-xl space-y-3 hover:border-red-900/50 transition">
-                <div className="w-8 h-8 rounded-lg bg-red-950/60 border border-red-800/40 text-red-400 flex items-center justify-center font-bold">2</div>
-                <h3 className="text-xs font-bold text-white">Documentos espalhados</h3>
-                <p className="text-[11px] text-slate-400 leading-relaxed">PDFs e planilhas ficam perdidos em pastas sem indexação RAG centralizada.</p>
-              </div>
-
-              <div className="p-5 bg-[#121826] border border-slate-800 rounded-xl space-y-3 hover:border-red-900/50 transition">
-                <div className="w-8 h-8 rounded-lg bg-red-950/60 border border-red-800/40 text-red-400 flex items-center justify-center font-bold">3</div>
-                <h3 className="text-xs font-bold text-white">Tarefas se perdem</h3>
-                <p className="text-[11px] text-slate-400 leading-relaxed">Solicitações são feitas em grupos e chats sem acompanhamento de estado ou SLA.</p>
-              </div>
-
-              <div className="p-5 bg-[#121826] border border-slate-800 rounded-xl space-y-3 hover:border-red-900/50 transition">
-                <div className="w-8 h-8 rounded-lg bg-red-950/60 border border-red-800/40 text-red-400 flex items-center justify-center font-bold">4</div>
-                <h3 className="text-xs font-bold text-white">Automações sem trava</h3>
-                <p className="text-[11px] text-slate-400 leading-relaxed">Execução de pagamentos e envios sem alçadas humanas de aprovação viram risco.</p>
-              </div>
-
-              <div className="p-5 bg-[#121826] border border-slate-800 rounded-xl space-y-3 hover:border-red-900/50 transition">
-                <div className="w-8 h-8 rounded-lg bg-red-950/60 border border-red-800/40 text-red-400 flex items-center justify-center font-bold">5</div>
-                <h3 className="text-xs font-bold text-white">API e Custo sem controle</h3>
-                <p className="text-[11px] text-slate-400 leading-relaxed">Gasto com tokens dispara sem auditoria de consumo e relatórios de ROI.</p>
-              </div>
-            </div>
-          </section>
-
-          {/* 5. SEÇÃO SOLUÇÃO & DIAGRAMA INTERATIVO (PDF Section 7) */}
-          <section className="py-16 bg-[#080b13] border-y border-slate-900 px-6">
-            <div className="max-w-7xl mx-auto text-center space-y-10">
-              <div className="space-y-3 max-w-3xl mx-auto">
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">A Solução Lyriq</span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-                  O Lyriq Agents OS junta agentes, memória, arquivos, API, ferramentas e tarefas em uma operação única.
-                </h2>
-              </div>
-
-              {/* Diagram Container */}
-              <div className="max-w-4xl mx-auto p-6 bg-[#121826] border border-slate-800 rounded-2xl relative space-y-6">
-                <p className="text-xs text-slate-400">Passe o mouse ou toque nos nós do diagrama para ver como o Agente Main conecta toda a operação:</p>
-
-                {/* Central Node & Satellites Grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {[
-                    { id: 'empresa', label: 'Empresa', desc: 'Perfil institucional, segmento e regras de negócio' },
-                    { id: 'documentos', label: 'Documentos', desc: 'PDFs, DOCX e planilhas XLSX com RAG' },
-                    { id: 'provider', label: 'Provedor de IA', desc: 'Chaves API BYOK (OpenAI, Claude, Gemini)' },
-                    { id: 'memoria', label: 'Memória', desc: 'Arquivos markdown e contexto de longo prazo' },
-                    { id: 'tarefas', label: 'Tarefas', desc: 'Quadro Kanban e execuções automáticas' },
-                    { id: 'automacoes', label: 'Automações', desc: 'Workflows configurados por função' },
-                    { id: 'logs', label: 'Logs', desc: 'Trilha de auditoria completa de tokens' },
-                    { id: 'aprovacoes', label: 'Aprovações', desc: 'Guardrails humanos para ações críticas' }
-                  ].map((item) => (
-                    <div 
-                      key={item.id}
-                      onMouseEnter={() => setLandingDiagramHover(item.id)}
-                      onMouseLeave={() => setLandingDiagramHover(null)}
-                      className={`p-4 rounded-xl border text-left cursor-pointer transition-all duration-200 ${
-                        landingDiagramHover === item.id 
-                          ? 'bg-indigo-950/60 border-indigo-500 shadow-lg shadow-indigo-500/20 scale-[1.02]' 
-                          : 'bg-[#182032] border-slate-800'
-                      }`}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => { logTrackingEvent('landing_hero_signup'); setAuthMode('signup'); setCurrentRoute('auth'); }}
+                      className="px-6 py-3.5 rounded-full bg-white text-black hover:bg-zinc-200 text-sm font-bold transition flex items-center justify-center gap-2"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-white">{item.label}</span>
-                        <span className="w-2 h-2 rounded-full bg-indigo-400" />
+                      Criar workspace
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={handleStartDemoDirect}
+                      className="px-6 py-3.5 rounded-full border border-white/12 bg-white/[0.04] hover:bg-white/[0.08] text-white text-sm font-bold transition flex items-center justify-center gap-2"
+                    >
+                      <Play className="w-4 h-4" />
+                      Ver sandbox
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-5 pt-5 max-w-xl">
+                    {[
+                      ['BYOK', 'use sua API key'],
+                      ['RAG', 'arquivos com contexto'],
+                      ['Logs', 'controle e auditoria']
+                    ].map(([title, desc]) => (
+                      <div key={title} className="border-l border-white/10 pl-4">
+                        <p className="text-sm font-semibold text-white">{title}</p>
+                        <p className="text-[11px] text-zinc-500 mt-1">{desc}</p>
                       </div>
-                      <p className="text-[10px] text-slate-400 leading-tight">{item.desc}</p>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="lg:col-span-6">
+                  <div className="relative rounded-[2rem] border border-white/10 bg-[#101116]/80 shadow-2xl shadow-purple-950/30 backdrop-blur-xl p-3">
+                    <div className="rounded-[1.5rem] overflow-hidden border border-white/10 bg-[#0b0c10]">
+                      <div className="h-12 flex items-center justify-between px-4 border-b border-white/10 bg-white/[0.03]">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-400/80" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-400/80" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400/80" />
+                        </div>
+                        <span className="text-[11px] text-zinc-500 font-mono">workspace.lyriq.ai</span>
+                      </div>
+
+                      <div className="grid md:grid-cols-[180px_1fr] min-h-[440px]">
+                        <aside className="hidden md:block border-r border-white/10 p-4 space-y-2 bg-white/[0.02]">
+                          {[
+                            ['Dashboard', LayoutDashboard],
+                            ['Agentes', Bot],
+                            ['Arquivos', FolderOpen],
+                            ['Providers', Key],
+                            ['Aprovações', ShieldCheck]
+                          ].map(([label, Icon]: any, idx) => (
+                            <div key={label} className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] ${idx === 1 ? 'bg-white text-black font-bold' : 'text-zinc-400'}`}>
+                              <Icon className="w-3.5 h-3.5" />
+                              <span>{label}</span>
+                            </div>
+                          ))}
+                        </aside>
+
+                        <div className="p-5 space-y-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div>
+                              <p className="text-[11px] text-zinc-500 uppercase tracking-widest font-bold">Agente Main</p>
+                              <h3 className="text-xl font-semibold tracking-tight mt-1">Operação conectada</h3>
+                            </div>
+                            <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-400/20 text-emerald-300 text-[11px] font-semibold">Online</span>
+                          </div>
+
+                          <div className="grid sm:grid-cols-3 gap-3">
+                            {[
+                              ['OpenAI', 'gpt-4o-mini', Key],
+                              ['Arquivos', '38 indexados', FileText],
+                              ['Aprovações', '2 pendentes', ShieldCheck]
+                            ].map(([title, value, Icon]: any) => (
+                              <div key={title} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                                <Icon className="w-4 h-4 text-violet-300" />
+                                <p className="text-[11px] text-zinc-500 mt-3">{title}</p>
+                                <p className="text-sm font-semibold mt-1">{value}</p>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-semibold">Execução recente</p>
+                              <span className="text-[11px] text-zinc-500">há 2 min</span>
+                            </div>
+                            <div className="space-y-2 text-[12px]">
+                              <div className="flex items-center gap-2 text-zinc-300"><CheckCircle2 className="w-4 h-4 text-emerald-300" /> Provider validado e modelo selecionado.</div>
+                              <div className="flex items-center gap-2 text-zinc-300"><CheckCircle2 className="w-4 h-4 text-emerald-300" /> Manual comercial indexado na memória.</div>
+                              <div className="flex items-center gap-2 text-zinc-300"><AlertCircle className="w-4 h-4 text-amber-300" /> Desconto acima da alçada enviado para aprovação.</div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-violet-400/20 bg-violet-500/10 p-4">
+                            <p className="text-[11px] text-violet-200 font-semibold">Resposta do agente</p>
+                            <p className="text-sm text-zinc-200 leading-relaxed mt-2">
+                              “Encontrei a regra no documento comercial. Posso preparar a proposta, mas o desconto solicitado exige aprovação do responsável.”
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="px-6 py-8 border-y border-white/10 bg-white/[0.02]">
+              <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-5">
+                <p className="text-[11px] uppercase tracking-[0.28em] text-zinc-500 font-bold">Conecte os modelos que sua empresa já usa</p>
+                <div className="flex flex-wrap justify-center gap-x-8 gap-y-3 text-sm text-zinc-300 font-semibold">
+                  {['OpenAI', 'Claude', 'Gemini', 'Groq', 'OpenRouter', 'Mistral', 'Ollama'].map(provider => (
+                    <span key={provider} className="hover:text-white transition">{provider}</span>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section id="produto" className="px-6 py-24">
+              <div className="max-w-7xl mx-auto grid lg:grid-cols-12 gap-12 items-start">
+                <div className="lg:col-span-5 text-left sticky top-24">
+                  <p className="text-sm font-semibold text-violet-300">O que é</p>
+                  <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-3">Uma camada operacional para agentes de IA.</h2>
+                  <p className="text-zinc-400 leading-relaxed mt-4">
+                    O Lyriq Agents OS fica entre seus modelos de IA, seus documentos e a rotina da empresa. Ele organiza contexto, permissões, tarefas e auditoria para a IA trabalhar sem virar bagunça.
+                  </p>
+                </div>
+
+                <div className="lg:col-span-7 grid sm:grid-cols-2 gap-4">
+                  {[
+                    ['Agentes com função clara', 'Crie agentes por papel, objetivo, tom, ferramentas e limites de decisão.', Bot],
+                    ['Memória e documentos', 'Suba arquivos e transforme conhecimento interno em contexto pesquisável.', FolderOpen],
+                    ['Provider e modelo configuráveis', 'Valide API keys e selecione modelos por provider, sem lista hardcoded.', Cpu],
+                    ['Aprovação humana', 'Ações sensíveis param antes de executar. O operador decide.', ShieldCheck],
+                    ['Logs e custo', 'Veja execução, consumo, chamadas e eventos críticos em um só lugar.', Activity],
+                    ['Templates por operação', 'Comece por vendas, suporte, financeiro, RH ou operação.', Layout]
+                  ].map(([title, desc, Icon]: any) => (
+                    <div key={title} className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 hover:bg-white/[0.055] transition">
+                      <Icon className="w-5 h-5 text-violet-300" />
+                      <h3 className="text-lg font-semibold mt-5 tracking-tight">{title}</h3>
+                      <p className="text-sm text-zinc-400 leading-relaxed mt-2">{desc}</p>
                     </div>
                   ))}
                 </div>
+              </div>
+            </section>
 
-                {/* Center Main Agent Node */}
-                <div className="p-4 bg-gradient-to-r from-indigo-900/60 to-purple-900/60 border border-indigo-500 rounded-xl flex items-center justify-between text-left">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-indigo-500 text-white flex items-center justify-center font-bold shadow-md">
-                      <Bot className="w-6 h-6" />
+            <section id="seguranca" className="px-6 py-24 bg-[#f4f0e8] text-black">
+              <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+                <div className="text-left space-y-5">
+                  <p className="text-sm font-bold text-violet-700">Segurança e governança</p>
+                  <h2 className="text-3xl sm:text-5xl font-semibold tracking-[-0.045em] leading-tight">IA útil precisa de limite, trilha e permissão.</h2>
+                  <p className="text-zinc-700 leading-relaxed">
+                    Não basta conectar um modelo e torcer. O Lyriq foi pensado com BYOK, chaves mascaradas, validação de provider, RAG com contexto não confiável, aprovação para ações críticas e logs de auditoria.
+                  </p>
+                </div>
+                <div className="grid gap-3">
+                  {[
+                    ['API key mascarada', 'A chave não volta completa para o frontend.'],
+                    ['Modelo validado', 'O agente só executa se houver provider e modelo válidos.'],
+                    ['Aprovação obrigatória', 'Financeiro, exclusão e ações críticas exigem decisão humana.'],
+                    ['Auditoria operacional', 'Eventos, custos e execuções ficam rastreáveis.']
+                  ].map(([title, desc]) => (
+                    <div key={title} className="rounded-2xl bg-white border border-black/10 p-5 flex gap-4">
+                      <CheckCircle2 className="w-5 h-5 text-violet-700 shrink-0 mt-0.5" />
+                      <div>
+                        <h3 className="font-semibold">{title}</h3>
+                        <p className="text-sm text-zinc-600 mt-1">{desc}</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-sm font-bold text-white block">Agente Main (COO Operacional)</span>
-                      <span className="text-xs text-indigo-200">Orquestrador central conectado a todos os módulos ativados</span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] bg-emerald-950 text-emerald-400 font-bold px-3 py-1 rounded-full border border-emerald-800/50">Ativo</span>
+                  ))}
                 </div>
               </div>
-            </div>
-          </section>
+            </section>
 
-          {/* 6. COMO FUNCIONA (5 PASSO) (PDF Section 8) */}
-          <section id="como-funciona" className="py-20 px-6 max-w-7xl mx-auto w-full text-center space-y-12">
-            <div className="space-y-3 max-w-3xl mx-auto">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Sequência Comercial</span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Como Funciona em 5 Passos</h2>
-              <p className="text-xs text-slate-400">Preparamos você para um onboarding completo e estruturado desde o primeiro minuto.</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4 text-left">
-              {[
-                { step: '1', title: 'Crie sua conta', desc: 'Cadastro rápido com e-mail, senha e aceite dos termos.' },
-                { step: '2', title: 'Configure sua empresa', desc: 'Preencha segmento, regras internas e objetivo principal.' },
-                { step: '3', title: 'Envie documentos', desc: 'Upload de PDFs, manuais e planilhas com seleção de abas.' },
-                { step: '4', title: 'Conecte sua API Key', desc: 'Insira sua chave (BYOK) com validação e criptografia backend.' },
-                { step: '5', title: 'Crie o Agente Main', desc: 'Defina a autonomia do orquestrador e acesse seu dashboard.' }
-              ].map((item) => (
-                <div key={item.step} className="bg-[#121826] border border-slate-800 rounded-xl p-5 space-y-3 relative hover:border-indigo-500/50 transition">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-600/20 text-indigo-400 font-mono font-bold flex items-center justify-center text-sm border border-indigo-500/30">
-                    {item.step}
-                  </div>
-                  <h3 className="text-xs font-bold text-white">{item.title}</h3>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">{item.desc}</p>
+            <section id="como-funciona" className="px-6 py-24">
+              <div className="max-w-7xl mx-auto text-center">
+                <p className="text-sm font-semibold text-violet-300">Como funciona</p>
+                <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-3">Do zero ao primeiro agente em minutos.</h2>
+                <div className="grid md:grid-cols-4 gap-4 mt-12 text-left">
+                  {[
+                    ['1', 'Configure a empresa', 'Segmento, objetivo, tom de voz e regras operacionais.'],
+                    ['2', 'Conecte o provider', 'Valide API key e selecione o modelo disponível.'],
+                    ['3', 'Adicione conhecimento', 'Documentos viram memória pesquisável para os agentes.'],
+                    ['4', 'Crie o Agente Main', 'O orquestrador passa a responder e coordenar tarefas.']
+                  ].map(([step, title, desc]) => (
+                    <div key={step} className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
+                      <span className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center text-sm font-bold">{step}</span>
+                      <h3 className="text-lg font-semibold mt-6">{title}</h3>
+                      <p className="text-sm text-zinc-400 mt-2 leading-relaxed">{desc}</p>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </section>
-
-          {/* 7. DEMO VISUAL INTERATIVA ("Veja o Lyriq Agents OS em ação") (PDF Section 9) */}
-          <section id="demo" className="py-16 bg-[#080b13] border-y border-slate-900 px-6">
-            <div className="max-w-7xl mx-auto text-center space-y-8">
-              <div className="space-y-3 max-w-3xl mx-auto">
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Demonstração Interativa</span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Veja o Lyriq Agents OS em Ação</h2>
-                <p className="text-xs text-slate-400">Clique nas abas abaixo para alternar a simulação do produto em tempo real:</p>
               </div>
+            </section>
 
-              {/* Tabs Bar */}
-              <div className="flex flex-wrap justify-center gap-2">
-                {[
-                  { id: 'empresa', label: '1. Configurar Empresa' },
-                  { id: 'documentos', label: '2. Subir Documentos' },
-                  { id: 'api', label: '3. Conectar API' },
-                  { id: 'agente', label: '4. Criar Agente Main' },
-                  { id: 'tarefas', label: '5. Acompanhar Tarefas' },
-                  { id: 'logs', label: '6. Logs & Aprovações' }
-                ].map((tab) => (
-                  <button 
-                    key={tab.id}
-                    onClick={() => {
-                      logTrackingEvent('demo_tab_clicked', { tab: tab.id });
-                      setLandingDemoTab(tab.id as any);
-                    }}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition ${
-                      landingDemoTab === tab.id 
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30' 
-                        : 'bg-[#121826] text-slate-400 hover:text-white border border-slate-800'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Central Interactive View Content */}
-              <div className="max-w-4xl mx-auto bg-[#121826] border border-slate-800 rounded-2xl p-6 text-left shadow-2xl space-y-4">
-                {landingDemoTab === 'empresa' && (
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <span className="text-xs font-bold text-white flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-indigo-400" />
-                        <span>Perfil Institucional da Empresa</span>
-                      </span>
-                      <span className="text-[10px] bg-indigo-950 text-indigo-400 px-2 py-0.5 rounded font-mono">Status: Configurado</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-xs">
-                      <div className="bg-[#182032] p-3 rounded-lg border border-slate-800">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Nome</span>
-                        <span className="text-white font-semibold">TechCorp Soluções Ltda</span>
-                      </div>
-                      <div className="bg-[#182032] p-3 rounded-lg border border-slate-800">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Segmento</span>
-                        <span className="text-white font-semibold">Tecnologia & B2B SaaS</span>
-                      </div>
-                    </div>
-                    <div className="bg-[#182032] p-3 rounded-lg border border-slate-800 text-xs">
-                      <span className="text-[10px] text-slate-400 font-bold uppercase block mb-1">Objetivo Principal</span>
-                      <p className="text-slate-300">Automatizar o suporte técnico N1 e triagem de leads integrando documentos e CRM.</p>
-                    </div>
-                  </div>
-                )}
-
-                {landingDemoTab === 'documentos' && (
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <span className="text-xs font-bold text-white flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-emerald-400" />
-                        <span>Bases de Conhecimento & Planilhas XLSX</span>
-                      </span>
-                      <span className="text-[10px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded font-mono">12 Arquivos Indexados</span>
-                    </div>
-                    <div className="space-y-2 text-xs">
-                      <div className="p-3 bg-[#182032] rounded-lg border border-slate-800 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Table className="w-4 h-4 text-emerald-400" />
-                          <div>
-                            <span className="font-semibold text-white block">vendas_2025.xlsx</span>
-                            <span className="text-[10px] text-slate-400">Abas: Leads, Clientes, Vendas, Churn</span>
-                          </div>
-                        </div>
-                        <span className="text-[9px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded">Processado</span>
-                      </div>
-                      <div className="p-3 bg-[#182032] rounded-lg border border-slate-800 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-indigo-400" />
-                          <div>
-                            <span className="font-semibold text-white block">politica_reembolso.pdf</span>
-                            <span className="text-[10px] text-slate-400">RAG Chunks: 48 vetores</span>
-                          </div>
-                        </div>
-                        <span className="text-[9px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded">Processado</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {landingDemoTab === 'api' && (
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <span className="text-xs font-bold text-white flex items-center gap-2">
-                        <Key className="w-4 h-4 text-amber-400" />
-                        <span>Conexão BYOK (Bring Your Own Key)</span>
-                      </span>
-                      <span className="text-[10px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded font-mono">Status: VÁLIDA</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3 text-xs">
-                      <div className="bg-[#182032] p-3 rounded-lg border border-slate-800">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Provedor</span>
-                        <span className="text-white font-semibold">OpenAI</span>
-                      </div>
-                      <div className="bg-[#182032] p-3 rounded-lg border border-slate-800">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase block">Modelo</span>
-                        <span className="text-white font-semibold">gpt-4o-mini</span>
-                      </div>
-                      <div className="bg-[#182032] p-3 rounded-lg border border-slate-800">
-                        <span className="text-[10px] text-slate-400 font-bold uppercase block">API Key</span>
-                        <span className="text-emerald-400 font-mono font-semibold">sk-...9a2f</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {landingDemoTab === 'agente' && (
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <span className="text-xs font-bold text-white flex items-center gap-2">
-                        <Bot className="w-4 h-4 text-purple-400" />
-                        <span>Configuração do Agente Main</span>
-                      </span>
-                      <span className="text-[10px] bg-purple-950 text-purple-300 px-2 py-0.5 rounded font-mono">Preset: Operacional</span>
-                    </div>
-                    <div className="bg-[#182032] p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-white">Nome: Agente Main</span>
-                        <span className="text-[10px] text-slate-400">Cargo: COO Operacional</span>
-                      </div>
-                      <p className="text-slate-300 text-[11px]">Objetivo: Orquestrar solicitações da equipe, responder com contexto RAG e abrir tarefas operacionais.</p>
-                      <div className="pt-2 flex gap-2">
-                        <span className="text-[9px] bg-slate-900 text-slate-300 px-2 py-0.5 rounded border border-slate-700">Auto-executa tarefas normais</span>
-                        <span className="text-[9px] bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-800/50">Exige aprovação em financeiro</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {landingDemoTab === 'tarefas' && (
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <span className="text-xs font-bold text-white flex items-center gap-2">
-                        <CheckSquare className="w-4 h-4 text-amber-400" />
-                        <span>Acompanhamento de Tarefas do Agente</span>
-                      </span>
-                      <span className="text-[10px] bg-amber-950 text-amber-400 px-2 py-0.5 rounded font-mono">3 Tarefas Em Andamento</span>
-                    </div>
-                    <div className="space-y-2 text-xs">
-                      <div className="p-3 bg-[#182032] rounded-lg border border-slate-800 flex items-center justify-between">
-                        <span className="font-semibold text-white">Triagem de lead qualificado B2B</span>
-                        <span className="text-[9px] bg-blue-950 text-blue-400 px-2 py-0.5 rounded">Em Execução</span>
-                      </div>
-                      <div className="p-3 bg-[#182032] rounded-lg border border-slate-800 flex items-center justify-between">
-                        <span className="font-semibold text-white">Relatório semanal de reembolso</span>
-                        <span className="text-[9px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded">Concluída</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {landingDemoTab === 'logs' && (
-                  <div className="space-y-4 animate-fade-in">
-                    <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                      <span className="text-xs font-bold text-white flex items-center gap-2">
-                        <Activity className="w-4 h-4 text-cyan-400" />
-                        <span>Trilha de Auditoria & Aprovações</span>
-                      </span>
-                      <span className="text-[10px] bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded font-mono">Logs Gravados</span>
-                    </div>
-                    <div className="font-mono text-[10px] bg-[#0e1422] p-3 rounded-lg border border-slate-800 space-y-1 text-slate-300">
-                      <p className="text-emerald-400">[20:30:12] [SYSTEM] Provider OpenAI validado com sucesso.</p>
-                      <p className="text-indigo-400">[20:30:45] [RAG] Documento vendas_2025.xlsx indexado em 4 tabelas.</p>
-                      <p className="text-amber-400">[20:31:02] [APPROVAL] Solicitada aprovação humana para pagamento R$ 450,00.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* 8. RECURSOS PRINCIPAIS (Grid 3x3) (PDF Section 10) */}
-          <section id="recursos" className="py-20 px-6 max-w-7xl mx-auto w-full text-center space-y-12">
-            <div className="space-y-3 max-w-3xl mx-auto">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Recursos Principais</span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Desenvolvido para Operações Reais</h2>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-              {[
-                { icon: Brain, title: '1. Agentes com memória', desc: 'Contexto de longo prazo persistido em arquivos markdown organizados.' },
-                { icon: FileText, title: '2. Upload de documentos', desc: 'Suporte a PDFs, manuais e planilhas Excel com detecção automática de abas.' },
-                { icon: Key, title: '3. BYOK (Sua API Key)', desc: 'Conecte sua chave sem intermediários nem marcação abusiva no valor por token.' },
-                { icon: Cpu, title: '4. Escolha de provider e modelo', desc: 'Alternância livre entre OpenAI, Anthropic, Gemini, Groq e OpenRouter.' },
-                { icon: ListTodo, title: '5. Tarefas e automações', desc: 'Execução de rotinas com gerenciamento de estado e progresso.' },
-                { icon: ShieldCheck, title: '6. Alçadas de aprovação', desc: 'Ações sensíveis e financeiras exigem confirmação de um operador humano.' },
-                { icon: Activity, title: '7. Logs e auditoria', desc: 'Trilha completa de chamadas de API, execução de ferramentas e custos.' },
-                { icon: BarChart3, title: '8. Controle de uso e créditos', desc: 'Visibilidade total do consumo de tokens com alertas de limite.' },
-                { icon: Layout, title: '9. Templates por função', desc: 'Playbooks operacionais prontos para Vendas, Suporte, RH e Financeiro.' }
-              ].map((item, idx) => (
-                <div 
-                  key={idx} 
-                  className="bg-[#121826] border border-slate-800 hover:border-indigo-500/50 rounded-2xl p-6 space-y-3 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-950/40"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30">
-                    <item.icon className="w-5 h-5" />
-                  </div>
-                  <h3 className="text-sm font-bold text-white">{item.title}</h3>
-                  <p className="text-xs text-slate-400 leading-relaxed">{item.desc}</p>
+            <section id="recursos" className="px-6 py-24 border-y border-white/10 bg-white/[0.02]">
+              <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 items-center">
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-violet-300">Por que não é só mais um chat</p>
+                  <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-3">Chat responde. Operação executa.</h2>
                 </div>
-              ))}
-            </div>
-          </section>
-
-          {/* 9. DIFERENCIAIS PREMIUM (PDF Section 11) */}
-          <section className="py-16 bg-[#080b13] border-y border-slate-900 px-6">
-            <div className="max-w-7xl mx-auto text-center space-y-10">
-              <div className="space-y-3 max-w-3xl mx-auto">
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Diferenciais de Mercado</span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Mais que criar agentes. Organizar uma operação.</h2>
-                <p className="text-xs text-slate-400">Ferramentas genéricas entregam uma caixa vazia. A Lyriq entrega estrutura para transformar processos da empresa em operação com agentes.</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-left">
-                {[
-                  { title: 'Mapa Operacional da Empresa', desc: 'Visão clara dos papéis, responsabilidades e conexões de cada agente.' },
-                  { title: 'ROI Tracker', desc: 'Cálculo estimado do tempo economizado e custos por tarefa automatizada.' },
-                  { title: 'Playbooks Prontos', desc: 'Fluxos pré-configurados para onboarding, atendimento e compras.' },
-                  { title: 'Agente Auditor', desc: 'Agente nativo focado em conferir conformidade de respostas e regras.' },
-                  { title: 'Guardrails e Aprovações', desc: 'Barreira física de segurança impedindo execuções não autorizadas.' },
-                  { title: 'Memória com Arquivos Reais', desc: 'RAG alimentado diretamente com os documentos internos da empresa.' }
-                ].map((diff, i) => (
-                  <div key={i} className="p-5 bg-[#121826] border border-slate-800 rounded-xl space-y-2">
-                    <h3 className="text-xs font-bold text-indigo-400 flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>{diff.title}</span>
-                    </h3>
-                    <p className="text-[11px] text-slate-300 leading-relaxed">{diff.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          {/* 10. BYOK E SEGURANÇA (PDF Section 12) */}
-          <section className="py-20 px-6 max-w-7xl mx-auto w-full text-center space-y-12">
-            <div className="space-y-3 max-w-3xl mx-auto">
-              <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Privacidade & Controle</span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
-                Você escolhe o provedor, escolhe o modelo e conecta sua própria API key.
-              </h2>
-              <p className="text-xs text-slate-400">A Lyriq cuida da camada operacional: memória, documentos, ferramentas, logs, limites e segurança.</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-              <div className="bg-[#121826] border border-slate-800 rounded-2xl p-6 space-y-3">
-                <Cpu className="w-6 h-6 text-indigo-400" />
-                <h3 className="text-xs font-bold text-white">1. Provedor Aberto</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">Conecte OpenAI, Claude, Gemini, OpenRouter, Groq, Mistral ou DeepSeek.</p>
-              </div>
-
-              <div className="bg-[#121826] border border-slate-800 rounded-2xl p-6 space-y-3">
-                <Settings className="w-6 h-6 text-purple-400" />
-                <h3 className="text-xs font-bold text-white">2. Seleção de Modelos</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">Escolha entre modelos rápidos (gpt-4o-mini) ou raciocínio avançado (claude-3-5-sonnet).</p>
-              </div>
-
-              <div className="bg-[#121826] border border-slate-800 rounded-2xl p-6 space-y-3">
-                <Lock className="w-6 h-6 text-emerald-400" />
-                <h3 className="text-xs font-bold text-white">3. API Key Criptografada</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">Validação direto no backend. A chave nunca é retornada inteira no frontend.</p>
-              </div>
-            </div>
-
-            {/* Warning Box */}
-            <div className="max-w-3xl mx-auto p-4 bg-emerald-950/30 border border-emerald-800/50 rounded-xl text-xs text-emerald-300 text-center flex items-center justify-center gap-2">
-              <ShieldCheck className="w-5 h-5 shrink-0 text-emerald-400" />
-              <span>Sua chave nunca é exibida em texto claro. Ela é validada no backend, criptografada em repouso e usada estritamente para executar os agentes do seu workspace.</span>
-            </div>
-          </section>
-
-          {/* 11. PLANOS & PREÇOS (PDF Section 13) */}
-          <section id="planos" className="py-20 bg-[#080b13] border-y border-slate-900 px-6">
-            <div className="max-w-7xl mx-auto text-center space-y-12">
-              <div className="space-y-3 max-w-3xl mx-auto">
-                <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Planos & Preços</span>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Escolha o Plano Ideal para Sua Operação</h2>
-                <p className="text-xs text-slate-400">Traga sua própria chave API (BYOK) em qualquer plano com controle de créditos e limites.</p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 text-left">
-                
-                {/* Free Card */}
-                <div className="bg-[#121826] border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6">
-                  <div className="space-y-4">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Free / Teste</span>
-                    <div>
-                      <h3 className="text-2xl font-extrabold text-white">R$ 0</h3>
-                      <span className="text-xs text-slate-400">/mês para sempre</span>
+                <div className="rounded-3xl border border-white/10 overflow-hidden">
+                  {[
+                    ['Chat genérico', 'Não conhece seus arquivos, não respeita alçadas, não vira processo.'],
+                    ['Lyriq Agents OS', 'Conecta IA, documentos, tarefas, ferramentas, logs e aprovação humana.']
+                  ].map(([title, desc], idx) => (
+                    <div key={title} className={`p-6 ${idx === 0 ? 'bg-white/[0.03] border-b border-white/10' : 'bg-violet-500/10'}`}>
+                      <h3 className="font-semibold">{title}</h3>
+                      <p className="text-sm text-zinc-400 mt-2">{desc}</p>
                     </div>
-                    <p className="text-xs text-slate-400">Para testar o sistema operacional com limites básicos.</p>
-                    <ul className="space-y-2 text-xs text-slate-300">
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> 1 Agente Ativo</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> Conexão BYOK</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> 5 Documentos RAG</li>
-                    </ul>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      logTrackingEvent('plan_selected', { plan: 'free' });
-                      setAuthMode('signup');
-                      setCurrentRoute('auth');
-                    }}
-                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition min-h-[44px]"
-                  >
-                    Começar Grátis
-                  </button>
+                  ))}
                 </div>
-
-                {/* Flash Card */}
-                <div className="bg-[#121826] border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6">
-                  <div className="space-y-4">
-                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Flash (Entrada Fácil)</span>
-                    <div>
-                      <h3 className="text-2xl font-extrabold text-white">R$ 49,90</h3>
-                      <span className="text-xs text-slate-400">/mês</span>
-                    </div>
-                    <p className="text-xs text-slate-400">Entrada acessível para pequenos negócios.</p>
-                    <ul className="space-y-2 text-xs text-slate-300">
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> Até 3 Agentes</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> BYOK Liberado</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> 20 Documentos RAG</li>
-                    </ul>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      logTrackingEvent('plan_selected', { plan: 'flash' });
-                      setAuthMode('signup');
-                      setCurrentRoute('auth');
-                    }}
-                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition min-h-[44px]"
-                  >
-                    Escolher Flash
-                  </button>
-                </div>
-
-                {/* Pro Card (RECOMENDADO) */}
-                <div className="bg-[#121826] border-2 border-indigo-500 rounded-2xl p-6 flex flex-col justify-between space-y-6 relative shadow-xl shadow-indigo-950/50">
-                  <span className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-indigo-500 to-purple-600 text-white text-[9px] font-extrabold tracking-wider uppercase rounded-full shadow-md">
-                    RECOMENDADO
-                  </span>
-                  <div className="space-y-4">
-                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Pro (Principal)</span>
-                    <div>
-                      <h3 className="text-2xl font-extrabold text-white">R$ 199,90</h3>
-                      <span className="text-xs text-slate-400">/mês</span>
-                    </div>
-                    <p className="text-xs text-slate-400">Uso sério para operações e equipes em crescimento.</p>
-                    <ul className="space-y-2 text-xs text-slate-300">
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> Agentes Ilimitados</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> 100 Documentos & XLSX</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> Alçadas de Aprovação</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> Relatório de ROI</li>
-                    </ul>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      logTrackingEvent('plan_selected', { plan: 'pro' });
-                      setAuthMode('signup');
-                      setCurrentRoute('auth');
-                    }}
-                    className="w-full py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-xs font-bold shadow-lg transition min-h-[44px]"
-                  >
-                    Escolher Plano Pro
-                  </button>
-                </div>
-
-                {/* Max 5X / Business Card */}
-                <div className="bg-[#121826] border border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-6">
-                  <div className="space-y-4">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Max 5X / Business</span>
-                    <div>
-                      <h3 className="text-2xl font-extrabold text-white">R$ 499,90</h3>
-                      <span className="text-xs text-slate-400">/mês em diante</span>
-                    </div>
-                    <p className="text-xs text-slate-400">Bases extensas, alta concorrência e SLA dedicado.</p>
-                    <ul className="space-y-2 text-xs text-slate-300">
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> Múltiplos Workspaces</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> Suporte Prioritário</li>
-                      <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> Auditoria Avançada</li>
-                    </ul>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      logTrackingEvent('plan_selected', { plan: 'max_5x' });
-                      setAuthMode('signup');
-                      setCurrentRoute('auth');
-                    }}
-                    className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition min-h-[44px]"
-                  >
-                    Escolher Max 5X
-                  </button>
-                </div>
-
               </div>
-            </div>
-          </section>
+            </section>
 
-          {/* 12. FAQ ACCORDION (PDF Section 14) */}
-          <section id="faq" className="py-20 px-6 max-w-4xl mx-auto w-full space-y-8">
-            <div className="text-center space-y-3">
-              <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Dúvidas Frequentes</span>
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-white">Perguntas Recomendadas</h2>
-            </div>
-
-            <div className="space-y-3">
-              {[
-                { q: '1. O que é o Lyriq Agents OS?', a: 'É um sistema operacional para empresas criarem e gerenciarem agentes de IA com memória, documentos, ferramentas, tarefas e controle operacional.' },
-                { q: '2. Preciso saber programar?', a: 'Não. Toda a interface foi desenhada sem código, com assistente visual em passos.' },
-                { q: '3. Preciso ter API key?', a: 'Sim. Utilizamos a estratégia BYOK (Bring Your Own Key), onde você traz sua chave da OpenAI, Anthropic, Gemini, etc.' },
-                { q: '4. Quais provedores posso usar?', a: 'OpenAI, Anthropic Claude, Google Gemini, Groq, OpenRouter, Mistral e DeepSeek.' },
-                { q: '5. Meus documentos ficam seguros?', a: 'Sim. Os arquivos são criptografados no banco e utilizados apenas para indexação de busca RAG do seu workspace.' },
-                { q: '6. Posso enviar PDF e planilhas?', a: 'Sim. O sistema aceita PDF, DOCX, TXT, MD e planilhas XLSX com detecção de abas (Leads, Vendas, etc).' },
-                { q: '7. O que acontece depois que crio conta?', a: 'Você será direcionado para o onboarding guiado em 7 etapas para configurar empresa, documentos, API key e Agente Main.' },
-                { q: '8. Posso trocar de plano depois?', a: 'Sim, você pode migrar entre os planos Free, Flash, Pro e Max a qualquer momento.' },
-                { q: '9. Posso usar para minha empresa pequena?', a: 'Com certeza. O sistema atende desde empreendedores individuais até grandes operações.' },
-                { q: '10. A Lyriq substitui minha equipe?', a: 'Não. O Lyriq Agents OS ajuda sua equipe a operar melhor, automatizar tarefas repetitivas e organizar conhecimento. Decisões sensíveis continuam exigindo controle humano.' }
-              ].map((faq, idx) => (
-                <div 
-                  key={idx}
-                  className="bg-[#121826] border border-slate-800 rounded-xl overflow-hidden text-left transition"
-                >
-                  <button 
-                    onClick={() => {
-                      logTrackingEvent('faq_opened', { index: idx });
-                      setLandingFaqOpen(landingFaqOpen === idx ? null : idx);
-                    }}
-                    className="w-full px-5 py-4 flex items-center justify-between text-xs font-bold text-white hover:bg-slate-800/50 transition text-left"
-                  >
-                    <span>{faq.q}</span>
-                    <ChevronDown className={`w-4 h-4 text-indigo-400 transition-transform ${landingFaqOpen === idx ? 'rotate-180' : ''}`} />
-                  </button>
-                  {landingFaqOpen === idx && (
-                    <div className="px-5 pb-4 text-xs text-slate-300 leading-relaxed border-t border-slate-800/60 pt-3 bg-[#0e1422]">
-                      {faq.a}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-
-          {/* 13. CTA FINAL (PDF Section 15) */}
-          <section className="py-20 bg-gradient-to-b from-[#080b13] to-[#0d1322] border-t border-slate-900 px-6 text-center">
-            <div className="max-w-4xl mx-auto space-y-6">
-              <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
-                Configure sua primeira operação com agentes de IA.
-              </h2>
-              <p className="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto leading-relaxed">
-                Crie sua conta, cadastre sua empresa, conecte sua API key e comece com um Agente Main pronto para trabalhar com contexto real.
-              </p>
-              <div className="flex flex-col sm:flex-row justify-center gap-4 pt-4">
-                <button 
-                  onClick={() => {
-                    logTrackingEvent('signup_clicked');
-                    setAuthMode('signup');
-                    setCurrentRoute('auth');
-                  }}
-                  className="px-8 py-3.5 bg-gradient-to-r from-indigo-500 via-indigo-600 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-extrabold rounded-xl shadow-xl shadow-indigo-500/30 transition hover:-translate-y-0.5 min-h-[44px]"
-                >
-                  Criar conta agora
-                </button>
-                <a 
-                  href="#planos"
-                  className="px-8 py-3.5 bg-[#121826] border border-slate-800 hover:border-slate-700 text-slate-200 text-xs font-bold rounded-xl transition min-h-[44px] flex items-center justify-center"
-                >
-                  Ver planos
-                </a>
-              </div>
-            </div>
-          </section>
-
-          {/* 14. RODAPÉ COMPLETO (PDF Section 16) */}
-          <footer className="bg-[#0F172A] border-t border-slate-800 text-slate-400 py-16 px-6 text-xs">
-            <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-10 text-left">
-              
-              {/* Brand Column */}
-              <div className="lg:col-span-2 space-y-4">
-                <div className="flex items-center gap-2.5">
-                  <LyriqLogo className="w-7 h-7 text-indigo-400" />
-                  <span className="font-bold text-white text-sm">Lyriq Agents OS</span>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed max-w-sm">
-                  Sistema operacional para empresas criarem e gerenciarem agentes de IA com memória, documentos, ferramentas e controle de execução.
+            <section id="planos" className="px-6 py-24">
+              <div className="max-w-5xl mx-auto rounded-[2rem] border border-white/10 bg-[linear-gradient(135deg,rgba(124,58,237,0.22),rgba(255,255,255,0.04))] p-8 sm:p-12 text-center shadow-2xl shadow-violet-950/30">
+                <p className="text-sm font-semibold text-violet-200">Comece enxuto. Cresça com controle.</p>
+                <h2 className="text-3xl sm:text-5xl font-semibold tracking-[-0.045em] mt-4">Monte seu primeiro workspace de agentes com BYOK.</h2>
+                <p className="text-zinc-300 max-w-2xl mx-auto mt-5 leading-relaxed">
+                  Ideal para validar operação interna, testar agentes por função e preparar a base para automações mais avançadas.
                 </p>
+                <div className="flex flex-col sm:flex-row justify-center gap-3 mt-8">
+                  <button
+                    onClick={() => { setAuthMode('signup'); setCurrentRoute('auth'); }}
+                    className="px-6 py-3.5 rounded-full bg-white text-black hover:bg-zinc-200 text-sm font-bold transition"
+                  >
+                    Criar conta
+                  </button>
+                  <button
+                    onClick={handleStartDemoDirect}
+                    className="px-6 py-3.5 rounded-full border border-white/15 bg-white/[0.05] hover:bg-white/[0.09] text-sm font-bold transition"
+                  >
+                    Abrir sandbox
+                  </button>
+                </div>
               </div>
-
-              {/* Col 1: Produto */}
-              <div className="space-y-3">
-                <h4 className="font-bold text-white uppercase text-[10px] tracking-wider">Produto</h4>
-                <ul className="space-y-2 text-[11px]">
-                  <li><a href="#produto" className="hover:text-white transition">Lyriq Agents OS</a></li>
-                  <li><a href="#como-funciona" className="hover:text-white transition">Como Funciona</a></li>
-                  <li><a href="#planos" className="hover:text-white transition">Planos & Preços</a></li>
-                  <li><span className="text-slate-500">Roadmap (Futuro)</span></li>
-                </ul>
-              </div>
-
-              {/* Col 2: Recursos */}
-              <div className="space-y-3">
-                <h4 className="font-bold text-white uppercase text-[10px] tracking-wider">Recursos</h4>
-                <ul className="space-y-2 text-[11px]">
-                  <li><a href="#recursos" className="hover:text-white transition">Agentes de IA</a></li>
-                  <li><a href="#demo" className="hover:text-white transition">Memória & RAG</a></li>
-                  <li><a href="#recursos" className="hover:text-white transition">API Keys BYOK</a></li>
-                  <li><a href="#demo" className="hover:text-white transition">Tarefas & Logs</a></li>
-                </ul>
-              </div>
-
-              {/* Col 3: Empresa */}
-              <div className="space-y-3">
-                <h4 className="font-bold text-white uppercase text-[10px] tracking-wider">Empresa</h4>
-                <ul className="space-y-2 text-[11px]">
-                  <li><span className="text-slate-300">Sobre a Lyriq</span></li>
-                  <li><span className="text-slate-300">Contato</span></li>
-                  <li><span className="text-slate-500">Blog (Futuro)</span></li>
-                  <li><span className="text-slate-500">Carreiras (Futuro)</span></li>
-                </ul>
-              </div>
-
-              {/* Col 4: Legal & Contato */}
-              <div className="space-y-3">
-                <h4 className="font-bold text-white uppercase text-[10px] tracking-wider">Legal & Contato</h4>
-                <ul className="space-y-2 text-[11px]">
-                  <li><button onClick={() => setCurrentRoute('terms')} className="hover:text-white transition text-left">Termos de Uso</button></li>
-                  <li><button onClick={() => setCurrentRoute('privacy')} className="hover:text-white transition text-left">Política de Privacidade</button></li>
-                  <li><span className="text-slate-300">Segurança BYOK</span></li>
-                  <li><span className="text-slate-300">suporte@lyriq.app</span></li>
-                </ul>
-              </div>
-
-            </div>
-
-            {/* Bottom Line */}
-            <div className="max-w-7xl mx-auto pt-12 mt-12 border-t border-slate-800/60 flex flex-col sm:flex-row items-center justify-between text-[11px] text-slate-500 gap-4">
-              <p>© 2026 Lyriq. Todos os direitos reservados.</p>
-              <p>Lyriq Agents OS é um produto oficial da Lyriq.</p>
-            </div>
-          </footer>
-
+            </section>
+          </main>
         </div>
       )}
 
