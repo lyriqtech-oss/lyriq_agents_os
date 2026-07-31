@@ -2601,6 +2601,40 @@ export default function App() {
     }, 3500);
   };
 
+  const openStripeCheckout = async (planCode: string) => {
+    try {
+      const response = await fetch('/api/billing/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: 'workspace_123', planId: planCode, planCode })
+      });
+      const body = await response.json();
+      const checkoutUrl = body?.data?.checkoutUrl || body?.data?.url;
+      if (!response.ok || !body.ok || !checkoutUrl) throw new Error(body?.error?.message || 'Checkout Stripe indisponível.');
+      window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+      addToast('Checkout Stripe aberto em nova aba.', 'success');
+    } catch (err: any) {
+      addToast(err.message || 'Falha ao abrir checkout Stripe.', 'error');
+    }
+  };
+
+  const openStripeBillingPortal = async () => {
+    try {
+      const response = await fetch('/api/billing/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: 'workspace_123', customerId: 'cus_workspace_123' })
+      });
+      const body = await response.json();
+      const portalUrl = body?.data?.portalUrl || body?.data?.url;
+      if (!response.ok || !body.ok || !portalUrl) throw new Error(body?.error?.message || 'Portal Stripe indisponível.');
+      window.open(portalUrl, '_blank', 'noopener,noreferrer');
+      addToast('Portal Stripe aberto em nova aba.', 'success');
+    } catch (err: any) {
+      addToast(err.message || 'Falha ao abrir portal Stripe.', 'error');
+    }
+  };
+
 
   const getProviderKeyUrl = (provider: string) => {
     const urls: Record<string, string> = {
@@ -11064,7 +11098,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           <li className="flex items-center gap-2 text-slate-400 opacity-60"><X className="w-3.5 h-3.5 text-slate-300" /> Sem templates avançados</li>
                         </ul>
                       </div>
-                      <button className="w-full py-2 bg-slate-950 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition">Assinar Flash</button>
+                      <button onClick={() => openStripeCheckout('flash')} className="w-full py-2 bg-slate-950 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition">Assinar Flash</button>
                     </div>
 
                     {/* 3. Pro */}
@@ -11084,7 +11118,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Skills básicas inclusas</li>
                         </ul>
                       </div>
-                      <button className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition">Assinar Pro</button>
+                      <button onClick={() => openStripeCheckout('pro')} className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition">Assinar Pro</button>
                     </div>
 
                     {/* 4. Max 5X */}
@@ -11104,7 +11138,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-amber-400" /> Múltiplos Agentes Coordenados</li>
                         </ul>
                       </div>
-                      <button className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition">Fazer Upgrade Max 5X</button>
+                      <button onClick={() => openStripeCheckout('max_5x')} className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition">Fazer Upgrade Max 5X</button>
                     </div>
 
                     {/* 5. Max 20X */}
@@ -11123,7 +11157,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Execuções pesadas ilimitadas</li>
                         </ul>
                       </div>
-                      <button className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition">Assinar Max 20X</button>
+                      <button onClick={() => openStripeCheckout('max_20x')} className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition">Assinar Max 20X</button>
                     </div>
 
                     {/* 6. Business */}
@@ -11142,7 +11176,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-emerald-500" /> Suporte Prioritário</li>
                         </ul>
                       </div>
-                      <button className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition">Assinar Business</button>
+                      <button onClick={() => openStripeCheckout('business')} className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition">Assinar Business</button>
                     </div>
 
                     {/* 7. Enterprise */}
@@ -11215,7 +11249,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                         <p className="text-xs text-slate-500 mt-0.5">Recibos auditáveis emitidos com link direto para o Stripe Billing Portal.</p>
                       </div>
                       <button
-                        onClick={() => addToast('Redirecionando para o Stripe Billing Portal...', 'info')}
+                        onClick={openStripeBillingPortal}
                         className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded text-xs transition font-mono"
                       >
                         Acessar Portal de Cobrança
@@ -16287,6 +16321,24 @@ Regras duras:
                       className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${settingsSubTab === 'general' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
                     >
                       Configurações Gerais
+                    </button>
+                    <button
+                      onClick={() => setCurrentTab('pricing')}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-500 hover:bg-slate-50"
+                    >
+                      Planos e Pagamento
+                    </button>
+                    <button
+                      onClick={() => setCurrentTab('providers')}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-500 hover:bg-slate-50"
+                    >
+                      Uso e Orçamento
+                    </button>
+                    <button
+                      onClick={() => setCurrentTab('workspace_settings')}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-500 hover:bg-slate-50"
+                    >
+                      Workspace e Equipe
                     </button>
                     <button
                       onClick={() => setSettingsSubTab('diagnostics')}
