@@ -2128,7 +2128,23 @@ setTimeout(async () => {
     assert.strictEqual(resOrchestrationDetail.status, 200);
     const bodyOrchestrationDetail = await resOrchestrationDetail.json();
     assert.strictEqual(bodyOrchestrationDetail.data.orchestrationRun.status, 'completed');
+    assert.ok(bodyOrchestrationDetail.data.childRuns.length >= 1);
     assert.ok(bodyOrchestrationDetail.data.events.some(e => e.type === 'orchestration_approved'));
+    assert.ok(bodyOrchestrationDetail.data.events.some(e => e.type === 'orchestration_dispatch_completed'));
+
+    const resSafeOrchestrate = await fetch(`${baseUrl}/conversations/${createdConvId}/orchestrate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: 'Organizar backlog interno e criar plano técnico de validação local.',
+        maxAgents: 3
+      })
+    });
+    assert.strictEqual(resSafeOrchestrate.status, 200);
+    const bodySafeOrchestrate = await resSafeOrchestrate.json();
+    assert.strictEqual(bodySafeOrchestrate.data.orchestrationRun.status, 'completed');
+    assert.ok(bodySafeOrchestrate.data.dispatchExecutions.length >= 1);
+    assert.strictEqual(bodySafeOrchestrate.data.dispatchExecutions[0].execution.status, 'completed');
 
     // 6. GET /api/agent-runs/:id/events (Timeline de Eventos do AgentRun)
     const resRunEvtsList = await fetch(`${baseUrl}/agent-runs/${runIdCreated}/events`);

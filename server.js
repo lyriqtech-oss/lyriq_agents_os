@@ -1242,12 +1242,118 @@ const executeAgentTool = (workspaceId, agentId, toolName, params = {}) => {
       title: params.title || 'Relatório operacional',
       markdown: `# ${params.title || 'Relatório operacional'}\n\n- Workspace: ${workspaceId || 'workspace_123'}\n- Agente: ${agentId}\n- Memórias indexadas: ${(db.memoryChunks || []).length}\n- Tarefas registradas: ${(db.tasks || []).length}`
     };
+  } else if (toolName === 'dispatch_subagent') {
+    const targetAgent = (db.agents || []).find(a => a.id === (params.targetAgentId || params.agentId)) || {
+      id: params.targetAgentId || agentId || 'agent-subagent',
+      name: params.targetAgentName || 'Subagente',
+      role: params.targetAgentRole || 'Especialista operacional'
+    };
+    const childRunId = `run-sub-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+    const prompt = params.prompt || params.task || params.message || 'Executar análise especializada.';
+    const matchedChunks = searchChunks(prompt, targetAgent.id);
+    const finding = params.expectedFinding || `Subagente ${targetAgent.name} analisou a tarefa e retornou plano executável com validação mínima.`;
+    const childRun = {
+      id: childRunId,
+      workspaceId: workspaceId || 'workspace_123',
+      conversationId: params.conversationId || null,
+      orchestrationRunId: params.orchestrationRunId || null,
+      parentAgentId: agentId,
+      agentId: targetAgent.id,
+      agentName: targetAgent.name,
+      type: 'dispatched_subagent',
+      status: 'completed',
+      input: prompt,
+      finalOutput: finding,
+      creditEstimate: 2,
+      creditUsed: 2,
+      startedAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString()
+    };
+    const childEvents = [
+      {
+        id: `runevt-${Date.now()}-sub-start`,
+        workspaceId: workspaceId || 'workspace_123',
+        runId: childRunId,
+        agentRunId: childRunId,
+        orchestrationRunId: params.orchestrationRunId || null,
+        conversationId: params.conversationId || null,
+        type: 'subagent_dispatched',
+        status: 'info',
+        title: `${targetAgent.name} acionado`,
+        message: prompt,
+        visibleToUser: true,
+        createdAt: new Date().toISOString()
+      },
+      {
+        id: `runevt-${Date.now()}-sub-final`,
+        workspaceId: workspaceId || 'workspace_123',
+        runId: childRunId,
+        agentRunId: childRunId,
+        orchestrationRunId: params.orchestrationRunId || null,
+        conversationId: params.conversationId || null,
+        type: 'subagent_completed',
+        status: 'success',
+        title: `${targetAgent.name} concluiu execução`,
+        message: matchedChunks.length > 0 ? `${finding} Fonte consultada: ${matchedChunks[0].title}.` : finding,
+        visibleToUser: true,
+        createdAt: new Date().toISOString()
+      }
+    ];
+
+    if (!db.agentRuns) db.agentRuns = [];
+    if (!db.agentRunEvents) db.agentRunEvents = [];
+    db.agentRuns.push(childRun);
+    db.agentRunEvents.push(...childEvents);
+    result = { childRun, events: childEvents, matchedChunksCount: matchedChunks.length };
   } else {
     result = { executed: true, toolName, params, message: 'Ferramenta registrada, mas sem executor especializado ainda.' };
   }
 
   writeDb(db);
   return { status: 'completed', result };
+};
+
+const dispatchOrchestrationSubagents = ({ workspaceId, conversationId, orchestrationRunId, agents = [], userText = '', reason = 'Execução multiagente liberada.' }) => {
+  const executions = [];
+  for (const agent of agents) {
+    const execution = executeAgentTool(workspaceId, agent.id || 'agent-main', 'dispatch_subagent', {
+      userApproved: true,
+      targetAgentId: agent.id,
+      targetAgentName: agent.name,
+      targetAgentRole: agent.role,
+      conversationId,
+      orchestrationRunId,
+      prompt: userText,
+      expectedFinding: agent.finding || `Execução especializada concluída por ${agent.name || agent.id}.`,
+      reason
+    });
+    executions.push({ agentId: agent.id, agentName: agent.name, execution });
+  }
+
+  const db = readDb();
+  const orchestrationRun = (db.agentRuns || []).find(r => r.id === orchestrationRunId && r.type === 'multi_agent_orchestration');
+  if (orchestrationRun) {
+    orchestrationRun.childRunIds = executions.map(item => item.execution?.result?.childRun?.id).filter(Boolean);
+    orchestrationRun.dispatchStatus = 'completed';
+    orchestrationRun.dispatchedAt = new Date().toISOString();
+  }
+  if (!db.agentRunEvents) db.agentRunEvents = [];
+  db.agentRunEvents.push({
+    id: `runevt-${Date.now()}-dispatch-complete`,
+    workspaceId: workspaceId || 'workspace_123',
+    runId: orchestrationRunId,
+    agentRunId: orchestrationRunId,
+    conversationId,
+    type: 'orchestration_dispatch_completed',
+    status: 'success',
+    title: 'Subagentes executados',
+    message: `${executions.length} subagente(s) executados pelo dispatch_subagent.`,
+    visibleToUser: true,
+    createdAt: new Date().toISOString()
+  });
+  writeDb(db);
+  return executions;
 };
 
 // Request parser helper
@@ -2845,6 +2951,8 @@ const server = http.createServer(async (req, res) => {
       };
       db.approvedActionExecutions.push(execObj);
 
+      let orchestrationDispatchExecutions = [];
+
       if (target.sourceType === 'orchestration' && target.sourceId) {
         const orchestrationRun = (db.agentRuns || []).find(r => r.id === target.sourceId && r.type === 'multi_agent_orchestration');
         if (orchestrationRun) {
@@ -2883,6 +2991,22 @@ const server = http.createServer(async (req, res) => {
             createdAt: new Date().toISOString()
           });
         }
+
+        writeDb(db);
+        const dispatchAgents = (orchestrationRun?.selectedAgentIds || []).map(agentId => {
+          const agent = (db.agents || []).find(a => a.id === agentId) || { id: agentId, name: agentId, role: 'Especialista' };
+          const participant = (db.agentRuns || []).find(r => r.orchestrationRunId === target.sourceId && r.agentId === agentId && r.finding);
+          return { ...agent, finding: participant?.finding };
+        });
+        orchestrationDispatchExecutions = dispatchOrchestrationSubagents({
+          workspaceId: target.workspaceId || 'workspace_123',
+          conversationId: orchestrationRun?.conversationId || target.conversationId || null,
+          orchestrationRunId: target.sourceId,
+          agents: dispatchAgents,
+          userText: target.actionPayload || target.params?.prompt || '',
+          reason
+        });
+        return sendSuccess(res, Object.assign({}, target, { approval: target, execution: execObj, orchestrationDispatchExecutions, message: 'Ação aprovada e subagentes executados com sucesso.' }), reqId);
       }
 
       writeDb(db);
@@ -9563,13 +9687,14 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
         return sendError(res, 404, 'ORCHESTRATION_NOT_FOUND', 'Orquestração não encontrada.', 'Verifique o ID do run.', 'blocking', null, reqId);
       }
 
-      const participantRuns = (db.agentRuns || []).filter(r => r.orchestrationRunId === orchestrationRunId);
+      const participantRuns = (db.agentRuns || []).filter(r => r.orchestrationRunId === orchestrationRunId && r.type !== 'dispatched_subagent');
+      const childRuns = (db.agentRuns || []).filter(r => r.orchestrationRunId === orchestrationRunId && r.type === 'dispatched_subagent');
       const events = (db.agentRunEvents || []).filter(e => e.orchestrationRunId === orchestrationRunId || e.agentRunId === orchestrationRunId || e.runId === orchestrationRunId);
       const tasks = (db.tasks || []).filter(t => t.sourceType === 'orchestration' && t.sourceId === orchestrationRunId);
       const approvalRequest = (db.approvalRequests || []).find(a => a.sourceType === 'orchestration' && a.sourceId === orchestrationRunId) || null;
       const messages = (db.conversationMessages || []).filter(m => m.conversationId === orchestrationRun.conversationId && m.metadata?.orchestrationRunId === orchestrationRunId);
 
-      return sendSuccess(res, { orchestrationRun, participantRuns, events, tasks, approvalRequest, messages }, reqId);
+      return sendSuccess(res, { orchestrationRun, participantRuns, childRuns, events, tasks, approvalRequest, messages }, reqId);
     }
 
     // 5.2 POST /api/conversations/:id/orchestrate (Disparar orquestração multiagente real no backend)
@@ -9632,7 +9757,25 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
       conv.updatedAt = new Date().toISOString();
       writeDb(db);
 
-      return sendSuccess(res, orchestration, reqId);
+      let dispatchExecutions = [];
+      if (!orchestration.approvalRequest) {
+        const dispatchAgents = orchestration.participantRuns.map(run => ({
+          id: run.agentId,
+          name: run.agentName,
+          role: run.role,
+          finding: run.finding
+        }));
+        dispatchExecutions = dispatchOrchestrationSubagents({
+          workspaceId: conv.workspaceId,
+          conversationId: convId,
+          orchestrationRunId: orchestration.orchestrationRun.id,
+          agents: dispatchAgents,
+          userText: text,
+          reason: 'Tarefa interna sem aprovação humana obrigatória.'
+        });
+      }
+
+      return sendSuccess(res, { ...orchestration, dispatchExecutions }, reqId);
     }
 
     // 6. POST /api/agent-runs/:id/cancel (Cancelar AgentRun)
