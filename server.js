@@ -123,13 +123,16 @@ const callRealLlmProvider = async (provider, model, key, messages, systemPrompt)
         if (content) return content;
       }
     } else if (provider === 'gemini' || provider === 'google-gemini') {
-      const targetModel = model || 'gemini-1.5-flash';
-      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${key}`;
+      const targetModel = String(model || 'gemini-2.5-flash').replace(/^models\//, '');
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(key)}`;
+      const safeSystemPrompt = systemPrompt || 'Você é um assistente atencioso.';
+      const normalizedMessages = (messages || []).map(m => ({
+        role: m.role === 'assistant' || m.role === 'model' ? 'model' : 'user',
+        parts: [{ text: m.content || m.text || '' }]
+      }));
       const payload = {
-        contents: (messages || []).map(m => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content || '' }]
-        }))
+        systemInstruction: { parts: [{ text: safeSystemPrompt }] },
+        contents: normalizedMessages.length > 0 ? normalizedMessages : [{ role: 'user', parts: [{ text: 'Olá' }] }]
       };
 
       const res = await fetch(endpoint, {
@@ -781,8 +784,8 @@ const initDb = () => {
         { id: 'gpt-4o-mini', provider: 'openai', type: 'chat', status: 'available' },
         { id: 'gpt-4o', provider: 'openai', type: 'chat', status: 'available' },
         { id: 'claude-3-5-sonnet-20241022', provider: 'anthropic', type: 'chat', status: 'available' },
-        { id: 'gemini-1.5-flash', provider: 'gemini', type: 'chat', status: 'available' },
-        { id: 'gemini-1.5-pro', provider: 'gemini', type: 'chat', status: 'available' }
+        { id: 'gemini-2.5-flash', provider: 'gemini', type: 'chat', status: 'available' },
+        { id: 'gemini-2.5-pro', provider: 'gemini', type: 'chat', status: 'available' }
       ]
     }, null, 2));
   }
@@ -808,8 +811,8 @@ let dbCache = {
     { id: 'gpt-4o-mini', provider: 'openai', type: 'chat', status: 'available' },
     { id: 'gpt-4o', provider: 'openai', type: 'chat', status: 'available' },
     { id: 'claude-3-5-sonnet-20241022', provider: 'anthropic', type: 'chat', status: 'available' },
-    { id: 'gemini-1.5-flash', provider: 'gemini', type: 'chat', status: 'available' },
-    { id: 'gemini-1.5-pro', provider: 'gemini', type: 'chat', status: 'available' }
+    { id: 'gemini-2.5-flash', provider: 'gemini', type: 'chat', status: 'available' },
+    { id: 'gemini-2.5-pro', provider: 'gemini', type: 'chat', status: 'available' }
   ]
 };
 
@@ -1607,7 +1610,7 @@ const server = http.createServer(async (req, res) => {
 
         const db = readDb();
         const availableModels = key === 'mock-model-missing-key' ? [] : (provider === 'gemini' 
-          ? ['gemini-1.5-flash', 'gemini-1.5-pro']
+          ? ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']
           : (provider === 'nvidia' || provider === 'nvidia-build')
           ? ['deepseek-ai/deepseek-v4-flash', 'deepseek-ai/deepseek-v4-pro', 'meta/llama-3.3-70b-instruct']
           : ['gpt-4o-mini', 'gpt-4o', 'text-embedding-3-small', 'mock-chat-fast', 'mock-chat-slow', 'mock-chat-timeout', 'mock-chat-error']);
@@ -1831,10 +1834,24 @@ const server = http.createServer(async (req, res) => {
         return sendError(res, 402, 'PLAN_RESTRICTED', planCheck.reason, 'Faça upgrade do plano para utilizar este modelo.', 'blocking', null, reqId);
       }
 
-      const providerModels = await getModelsForProvider(providerId);
+      const db = readDb();
+      const providerConn = body.providerConnectionId
+        ? (db.providers || []).find(p => p.id === body.providerConnectionId)
+        : (db.providers || []).find(p => p.provider === providerId && p.status === 'valid');
+      const providerKey = body.apiKey || decodeStoredKey(providerConn?.encrypted_api_key || '');
+      const providerModels = await getModelsForProvider(providerId, providerKey);
       const modelExists = providerModels.some(m => m.id === modelId || m.name === modelId);
       if (!modelId || !modelExists) {
         return sendError(res, 400, 'MODEL_NOT_FOUND', 'Modelo não encontrado no catálogo do provider.', 'Sincronize os modelos e escolha uma opção disponível.', 'blocking', { provider: providerId, modelId }, reqId);
+      }
+
+      let response = 'model_available';
+      if (providerKey && !providerKey.startsWith('mock-')) {
+        const realResponse = await callRealLlmProvider(providerId, modelId, providerKey, [{ role: 'user', content: prompt }], 'Responda ao teste de disponibilidade do modelo de forma curta.');
+        if (!realResponse) {
+          return sendError(res, 502, 'MODEL_TEST_FAILED', 'O modelo foi encontrado, mas não respondeu ao teste real.', 'Verifique quota/permissão da API key ou escolha outro modelo.', 'blocking', { provider: providerId, modelId }, reqId);
+        }
+        response = realResponse;
       }
 
       return sendSuccess(res, {
@@ -1842,7 +1859,7 @@ const server = http.createServer(async (req, res) => {
         provider: providerId,
         modelId,
         prompt,
-        response: 'model_available',
+        response,
         latencyMs: 140,
         testedAt: new Date().toISOString()
       }, reqId);
@@ -2146,7 +2163,8 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      if (citationStr && !reply.includes(citationStr)) {
+      const alreadyCited = matchedChunks.length > 0 && reply.includes(matchedChunks[0].title) && reply.toLowerCase().includes('fonte');
+      if (citationStr && !reply.includes(citationStr) && !alreadyCited) {
         reply += citationStr;
       }
 
@@ -2519,7 +2537,7 @@ const server = http.createServer(async (req, res) => {
           apiKeyUrl: 'https://aistudio.google.com/',
           docsUrl: 'https://ai.google.dev/gemini-api/docs/get-started',
           billingNote: 'Obtenha sua chave no Google AI Studio. Cota inicial gratuita sujeita a limites do Google.',
-          recommendedModels: ['gemini-1.5-flash', 'gemini-1.5-pro']
+          recommendedModels: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']
         },
         {
           id: 'openrouter',
@@ -4151,9 +4169,9 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
         prefix: 'AIza',
         docUrl: 'https://aistudio.google.com/app/apikey',
         models: [
-          { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (Recomendado)', supportsText: true, supportsVision: true, supportsAudio: true, supportsTools: true, supportsJson: true, contextWindow: 1000000 },
-          { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (Contexto 2M)', supportsText: true, supportsVision: true, supportsAudio: true, supportsTools: true, supportsJson: true, contextWindow: 2000000 },
-          { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash', supportsText: true, supportsVision: true, supportsTools: true, supportsJson: true, contextWindow: 1000000 }
+          { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash (Recomendado)', supportsText: true, supportsVision: true, supportsAudio: true, supportsTools: true, supportsJson: true, contextWindow: 1000000 },
+          { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Contexto 2M)', supportsText: true, supportsVision: true, supportsAudio: true, supportsTools: true, supportsJson: true, contextWindow: 2000000 },
+          { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', supportsText: true, supportsVision: true, supportsAudio: true, supportsTools: true, supportsJson: true, contextWindow: 1000000 }
         ]
       },
       groq: {
@@ -4902,7 +4920,7 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
       } else {
         // Lyriq API: includes raw model cost + margin & infrastructure multiplier
         if (modelId.includes('gpt-4o') || modelId.includes('claude-3-5-sonnet')) multiplier = 2.5;
-        else if (modelId.includes('gemini-1.5-pro') || modelId.includes('mistral-large')) multiplier = 2.0;
+        else if (modelId.includes('gemini-2.5-pro') || modelId.includes('mistral-large')) multiplier = 2.0;
         else multiplier = 1.2;
       }
 

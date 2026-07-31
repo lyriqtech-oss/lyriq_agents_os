@@ -957,14 +957,21 @@ async function getModelsForProvider(provider, apiKey = '') {
         const data = await response.json();
         let rawList = data.data || data.models || data.models_list || [];
         if (data.models && Array.isArray(data.models)) rawList = data.models;
+        if (provider === 'gemini' && Array.isArray(rawList)) {
+          rawList = rawList.filter(item => {
+            const methods = item.supportedGenerationMethods || [];
+            return methods.length === 0 || methods.includes('generateContent');
+          });
+        }
 
         if (Array.isArray(rawList) && rawList.length > 0) {
-          const keyAvailableIds = new Set(rawList.map(item => item.id || item.name || String(item)));
+          const normalizeProviderModelId = (value) => String(value || '').replace(/^models\//, '');
+          const keyAvailableIds = new Set(rawList.map(item => normalizeProviderModelId(item.id || item.name || String(item))));
           const fallbackList = FALLBACK_CATALOG[provider] || [];
 
           // Normalize API models
           const apiModels = rawList.slice(0, 40).map(item => {
-            const id = item.id || item.name || String(item);
+            const id = normalizeProviderModelId(item.id || item.name || String(item));
             const known = fallbackList.find(f => f.id === id);
 
             return {
@@ -1010,8 +1017,14 @@ async function getModelsForProvider(provider, apiKey = '') {
           });
 
           // Sort models: Available first, then current/preview, then legacy
+          const preferredModelOrder = provider === 'gemini'
+            ? ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-lite']
+            : [];
           const sorted = Array.from(combinedMap.values()).sort((a, b) => {
             if (a.isAvailable !== b.isAvailable) return a.isAvailable ? -1 : 1;
+            const prefA = preferredModelOrder.indexOf(a.id);
+            const prefB = preferredModelOrder.indexOf(b.id);
+            if (prefA !== prefB) return (prefA === -1 ? 999 : prefA) - (prefB === -1 ? 999 : prefB);
             const statusOrder = { current: 1, preview: 2, stable: 3, experimental: 4, legacy: 5, deprecated: 6, retired: 7 };
             return (statusOrder[a.status] || 9) - (statusOrder[b.status] || 9);
           });
