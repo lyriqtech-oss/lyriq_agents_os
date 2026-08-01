@@ -270,6 +270,20 @@ interface Workflow {
   runsCount: number;
 }
 
+type CanvasNodeType = 'trigger' | 'agent' | 'memory' | 'skill' | 'api' | 'filter';
+
+interface CanvasNode {
+  id: string;
+  type: CanvasNodeType;
+  name: string;
+  x: number;
+  y: number;
+  connectedTo?: string;
+  apiProvider?: string;
+  apiKeyRef?: string;
+  config?: Record<string, any>;
+}
+
 interface CronAutomation {
   id: string;
   agentId: string;
@@ -2154,15 +2168,28 @@ export default function App() {
   const [workflowsActiveSub, setWorkflowsActiveSub] = useState<'canvas' | 'cron'>('canvas');
 
   // Workflow Canvas Nodes State
-  const [canvasNodes, setCanvasNodes] = useState<Array<{ id: string; type: 'trigger' | 'agent' | 'memory' | 'skill'; name: string; x: number; y: number; connectedTo?: string }>>([
-    { id: 'node-1', type: 'trigger', name: '⚡ Webhook Whatsapp', x: 40, y: 120, connectedTo: 'node-2' },
-    { id: 'node-2', type: 'agent', name: '🤖 Eva Executive', x: 230, y: 120, connectedTo: 'node-3' },
-    { id: 'node-3', type: 'skill', name: '🛠️ CRM Lead Writer', x: 420, y: 120, connectedTo: 'node-4' },
-    { id: 'node-4', type: 'memory', name: '📂 RAG Corporate Db', x: 610, y: 120 }
+  const [canvasNodes, setCanvasNodes] = useState<CanvasNode[]>([
+    { id: 'node-1', type: 'trigger', name: '⚡ Webhook Whatsapp', x: 40, y: 120, connectedTo: 'node-2', config: { method: 'POST', path: '/webhooks/whatsapp-leads' } },
+    { id: 'node-2', type: 'agent', name: '🤖 Eva Executive', x: 230, y: 120, connectedTo: 'node-3', config: { agentId: 'executive', instruction: 'Qualificar lead e decidir próximo passo.' } },
+    { id: 'node-3', type: 'skill', name: '🛠️ CRM Lead Writer', x: 420, y: 120, connectedTo: 'node-4', apiProvider: 'HubSpot', apiKeyRef: 'HUBSPOT_API_KEY', config: { action: 'create_deal' } },
+    { id: 'node-4', type: 'memory', name: '📂 RAG Corporate Db', x: 610, y: 120, config: { collection: 'leads', mode: 'append_summary' } }
   ]);
   const [isExecutingWorkflowCanvas, setIsExecutingWorkflowCanvas] = useState(false);
   const [activeWorkflowCanvasNode, setActiveWorkflowCanvasNode] = useState<string | null>(null);
   const [selectedCanvasNodeId, setSelectedCanvasNodeId] = useState<string | null>(null);
+  const [workflowJsonInput, setWorkflowJsonInput] = useState(`{
+  "name": "Qualificação automática de lead",
+  "nodes": [
+    { "id": "webhook", "type": "trigger", "name": "Webhook WhatsApp", "config": { "method": "POST", "path": "/lead" } },
+    { "id": "qualificar", "type": "agent", "name": "Agente SDR", "config": { "agentId": "sales", "prompt": "Qualifique o lead" } },
+    { "id": "crm", "type": "api", "name": "Criar negócio no CRM", "apiProvider": "HubSpot", "apiKeyRef": "HUBSPOT_API_KEY", "config": { "endpoint": "/crm/v3/objects/deals", "method": "POST" } }
+  ],
+  "edges": [
+    { "source": "webhook", "target": "qualificar" },
+    { "source": "qualificar", "target": "crm" }
+  ]
+}`);
+  const [workflowJsonError, setWorkflowJsonError] = useState('');
   const [sandboxTool, setSandboxTool] = useState<'read_file' | 'write_file' | 'delete_file' | 'execute_bash' | 'eval_javascript' | 'google_search'>('eval_javascript');
   const [sandboxReadFileId, setSandboxReadFileId] = useState('');
   const [sandboxWriteFileName, setSandboxWriteFileName] = useState('');
@@ -4078,12 +4105,14 @@ export default function App() {
     }, 1200);
   };
 
-  const handleAddCanvasNode = (type: 'trigger' | 'agent' | 'memory' | 'skill') => {
-    const names = {
+  const handleAddCanvasNode = (type: CanvasNodeType) => {
+    const names: Record<CanvasNodeType, string> = {
       trigger: '⚡ Webhook Personalizado',
       agent: '🤖 Agente Customizado',
       memory: '📂 Gravar na Memória',
-      skill: '🛠️ Executar Script Skill'
+      skill: '🛠️ Executar Script Skill',
+      api: '🔌 Chamada de API',
+      filter: '🔎 Filtro Condicional'
     };
     const newId = `node-${Date.now()}`;
     const xPos = 40 + (canvasNodes.length * 150) % 650;
@@ -4106,6 +4135,81 @@ export default function App() {
     setCanvasNodes(prev => prev.filter(n => n.id !== id).map(n => n.connectedTo === id ? { ...n, connectedTo: undefined } : n));
     if (selectedCanvasNodeId === id) setSelectedCanvasNodeId(null);
     addToast('Nó removido do Canvas.', 'info');
+  };
+
+  const normalizeCanvasNodeType = (rawType?: string): CanvasNodeType => {
+    const type = (rawType || '').toLowerCase();
+    if (type.includes('webhook') || type.includes('trigger') || type.includes('cron')) return 'trigger';
+    if (type.includes('agent') || type.includes('ai') || type.includes('llm')) return 'agent';
+    if (type.includes('memory') || type.includes('rag') || type.includes('database') || type.includes('vector')) return 'memory';
+    if (type.includes('http') || type.includes('api') || type.includes('request')) return 'api';
+    if (type.includes('filter') || type.includes('if') || type.includes('condition')) return 'filter';
+    return 'skill';
+  };
+
+  const inferNodeEmoji = (type: CanvasNodeType) => ({
+    trigger: '⚡',
+    agent: '🤖',
+    memory: '📂',
+    skill: '🛠️',
+    api: '🔌',
+    filter: '🔎'
+  }[type]);
+
+  const extractN8nEdges = (connections: any): Array<{ source: string; target: string }> => {
+    if (!connections || typeof connections !== 'object') return [];
+    return Object.entries(connections).flatMap(([source, value]: [string, any]) => {
+      const main = value?.main || [];
+      return main.flatMap((group: any[]) => (Array.isArray(group) ? group : []).map((item: any) => ({
+        source,
+        target: item.node || item.target || item.id
+      })).filter(edge => edge.target));
+    });
+  };
+
+  const handleImportWorkflowJson = () => {
+    try {
+      const parsed = JSON.parse(workflowJsonInput);
+      const rawNodes = Array.isArray(parsed.nodes) ? parsed.nodes : Array.isArray(parsed.steps) ? parsed.steps : [];
+      if (rawNodes.length === 0) {
+        throw new Error('JSON precisa ter um array nodes ou steps.');
+      }
+
+      const edges = Array.isArray(parsed.edges)
+        ? parsed.edges
+        : Array.isArray(parsed.connections)
+          ? parsed.connections
+          : extractN8nEdges(parsed.connections);
+
+      const importedNodes: CanvasNode[] = rawNodes.map((raw: any, index: number) => {
+        const rawObj = typeof raw === 'string' ? { name: raw, type: index === 0 ? 'trigger' : 'skill' } : raw;
+        const id = String(rawObj.id || rawObj.name || `json-node-${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, '-');
+        const type = normalizeCanvasNodeType(rawObj.type || rawObj.nodeType || rawObj.kind);
+        const position = Array.isArray(rawObj.position) ? rawObj.position : [40 + index * 190, 120 + (index % 3) * 72];
+        const outgoing = edges.find((edge: any) => (edge.source || edge.from || edge.sourceNode) === (rawObj.id || rawObj.name || id));
+        const connectedTo = rawObj.connectedTo || rawObj.next || outgoing?.target || outgoing?.to || outgoing?.targetNode;
+
+        return {
+          id,
+          type,
+          name: `${inferNodeEmoji(type)} ${rawObj.name || rawObj.label || `Nó ${index + 1}`}`,
+          x: Number(rawObj.x ?? position[0] ?? 40 + index * 190),
+          y: Number(rawObj.y ?? position[1] ?? 120),
+          connectedTo: connectedTo ? String(connectedTo).replace(/[^a-zA-Z0-9_-]/g, '-') : undefined,
+          apiProvider: rawObj.apiProvider || rawObj.provider || rawObj.credentials?.name || '',
+          apiKeyRef: rawObj.apiKeyRef || rawObj.credentialKey || rawObj.credentials?.id || '',
+          config: rawObj.config || rawObj.parameters || rawObj.options || {}
+        };
+      });
+
+      setCanvasNodes(importedNodes);
+      setSelectedCanvasNodeId(importedNodes[0]?.id || null);
+      setWorkflowJsonError('');
+      addToast(`JSON importado: ${importedNodes.length} nós renderizados no canvas visual.`, 'success');
+    } catch (err: any) {
+      setWorkflowJsonError(err.message || 'JSON inválido.');
+      addToast('Não consegui importar o JSON da automação.', 'error');
+    }
   };
 
   // SWARM ORCHESTRATION ACTIONS
@@ -10480,6 +10584,127 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
                   {workflowsActiveSub === 'canvas' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="md:col-span-2 grid grid-cols-1 xl:grid-cols-3 gap-4 text-left">
+                        <div className="xl:col-span-2 bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
+                          <div className="flex items-start justify-between gap-3 mb-4">
+                            <div>
+                              <h2 className="text-sm font-bold text-slate-900">Editor Visual de Automação</h2>
+                              <p className="text-[11px] text-slate-500 mt-1">Cole um JSON genérico ou n8n básico, importe e edite o fluxo em blocos visuais.</p>
+                            </div>
+                            <button
+                              onClick={handleRunWorkflowCanvas}
+                              disabled={isExecutingWorkflowCanvas}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-bold text-white transition ${isExecutingWorkflowCanvas ? 'bg-emerald-600 animate-pulse' : 'bg-slate-950 hover:bg-slate-800'}`}
+                            >
+                              {isExecutingWorkflowCanvas ? 'Executando...' : 'Rodar simulação'}
+                            </button>
+                          </div>
+
+                          <div className="bg-slate-50 border border-slate-200/80 rounded-xl relative overflow-hidden bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:18px_18px] h-[360px] select-none">
+                            <svg className="absolute inset-0 pointer-events-none w-full h-full">
+                              {canvasNodes.map((node) => {
+                                if (!node.connectedTo) return null;
+                                const target = canvasNodes.find(n => n.id === node.connectedTo);
+                                if (!target) return null;
+                                const startX = node.x + 80;
+                                const startY = node.y + 24;
+                                const endX = target.x + 80;
+                                const endY = target.y + 24;
+                                const isExecutionLink = isExecutingWorkflowCanvas && (activeWorkflowCanvasNode === node.id || activeWorkflowCanvasNode === target.id);
+                                return (
+                                  <g key={node.id}>
+                                    <line x1={startX} y1={startY} x2={endX} y2={endY} className={`stroke-2 transition-all ${isExecutionLink ? 'stroke-indigo-600 stroke-dashed' : 'stroke-slate-350'}`} style={isExecutionLink ? { strokeDasharray: '4,4' } : undefined} />
+                                    <polygon points={`${endX-4},${endY} ${endX+4},${endY} ${endX},${endY-6}`} transform={`rotate(${Math.atan2(endY - startY, endX - startX) * 180 / Math.PI + 90}, ${endX}, ${endY})`} fill={isExecutionLink ? '#4f46e5' : '#cbd5e1'} />
+                                  </g>
+                                );
+                              })}
+                            </svg>
+                            {canvasNodes.map((node) => {
+                              const isSelected = selectedCanvasNodeId === node.id;
+                              const isActive = activeWorkflowCanvasNode === node.id;
+                              return (
+                                <button
+                                  key={node.id}
+                                  type="button"
+                                  onClick={() => setSelectedCanvasNodeId(node.id)}
+                                  style={{ left: `${node.x}px`, top: `${node.y}px` }}
+                                  className={`absolute w-40 px-3 py-2 border rounded-lg shadow-sm text-left transition-all ${isActive ? 'bg-indigo-50 border-indigo-500 scale-105 node-pulse-green' : isSelected ? 'bg-white border-slate-800 ring-2 ring-slate-800/10' : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                                >
+                                  <span className="text-[7.5px] uppercase font-bold tracking-wider text-slate-400 font-mono block">{node.type} node</span>
+                                  <span className="text-[10px] font-bold text-slate-800 truncate block">{node.name}</span>
+                                  {(node.apiProvider || node.apiKeyRef) && <span className="text-[8px] text-indigo-600 font-mono truncate block mt-0.5">{node.apiProvider || 'API'} · {node.apiKeyRef || 'sem key ref'}</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm space-y-4">
+                          <div>
+                            <h2 className="text-sm font-bold text-slate-900">JSON para Automação Visual</h2>
+                            <p className="text-[10px] text-slate-500 mt-1">Aceita nodes + edges, steps simples ou export n8n com connections.</p>
+                          </div>
+                          <textarea
+                            value={workflowJsonInput}
+                            onChange={(e) => setWorkflowJsonInput(e.target.value)}
+                            className="w-full h-40 px-3 py-2 bg-slate-950 text-emerald-300 border border-slate-800 rounded-lg text-[10px] font-mono resize-none focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                            spellCheck="false"
+                          />
+                          {workflowJsonError && <div className="text-[10px] text-red-600 bg-red-50 border border-red-100 rounded p-2">{workflowJsonError}</div>}
+                          <div className="grid grid-cols-2 gap-2">
+                            <button onClick={handleImportWorkflowJson} className="py-2 bg-slate-950 hover:bg-slate-800 text-white rounded text-xs font-bold transition">Importar JSON</button>
+                            <button onClick={() => setWorkflowJsonInput(JSON.stringify({ name: 'Export Lyriq', nodes: canvasNodes, edges: canvasNodes.filter(n => n.connectedTo).map(n => ({ source: n.id, target: n.connectedTo })) }, null, 2))} className="py-2 border border-slate-200 hover:bg-slate-50 rounded text-xs font-bold text-slate-700 transition">Exportar JSON</button>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-1.5 text-[9px] font-bold">
+                            {(['trigger', 'agent', 'api', 'filter', 'skill', 'memory'] as CanvasNodeType[]).map(type => (
+                              <button key={type} onClick={() => handleAddCanvasNode(type)} className="py-1.5 border border-slate-200 hover:bg-slate-50 rounded text-slate-600 transition">+ {type}</button>
+                            ))}
+                          </div>
+
+                          {selectedCanvasNodeId && (() => {
+                            const nodeObj = canvasNodes.find(n => n.id === selectedCanvasNodeId);
+                            if (!nodeObj) return null;
+                            return (
+                              <div className="pt-3 border-t border-slate-100 space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[10px] font-bold text-slate-900">Editar nó selecionado</span>
+                                  <button onClick={() => handleDeleteCanvasNode(nodeObj.id)} className="text-[9px] text-red-600 font-bold hover:underline">remover</button>
+                                </div>
+                                <input value={nodeObj.name} onChange={(e) => setCanvasNodes(prev => prev.map(n => n.id === nodeObj.id ? { ...n, name: e.target.value } : n))} className="w-full px-2 py-1.5 border border-slate-200 rounded text-[10px]" />
+                                <div className="grid grid-cols-3 gap-2">
+                                  <select value={nodeObj.type} onChange={(e) => setCanvasNodes(prev => prev.map(n => n.id === nodeObj.id ? { ...n, type: e.target.value as CanvasNodeType } : n))} className="px-2 py-1.5 border border-slate-200 rounded text-[10px] bg-white">
+                                    {(['trigger', 'agent', 'api', 'filter', 'skill', 'memory'] as CanvasNodeType[]).map(type => <option key={type} value={type}>{type}</option>)}
+                                  </select>
+                                  <input type="number" placeholder="X" value={nodeObj.x} onChange={(e) => setCanvasNodes(prev => prev.map(n => n.id === nodeObj.id ? { ...n, x: Number(e.target.value) || 0 } : n))} className="px-2 py-1.5 border border-slate-200 rounded text-[10px]" />
+                                  <input type="number" placeholder="Y" value={nodeObj.y} onChange={(e) => setCanvasNodes(prev => prev.map(n => n.id === nodeObj.id ? { ...n, y: Number(e.target.value) || 0 } : n))} className="px-2 py-1.5 border border-slate-200 rounded text-[10px]" />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input placeholder="API provider, ex: HubSpot" value={nodeObj.apiProvider || ''} onChange={(e) => setCanvasNodes(prev => prev.map(n => n.id === nodeObj.id ? { ...n, apiProvider: e.target.value } : n))} className="px-2 py-1.5 border border-slate-200 rounded text-[10px]" />
+                                  <input placeholder="API key ref, ex: HUBSPOT_API_KEY" value={nodeObj.apiKeyRef || ''} onChange={(e) => setCanvasNodes(prev => prev.map(n => n.id === nodeObj.id ? { ...n, apiKeyRef: e.target.value } : n))} className="px-2 py-1.5 border border-slate-200 rounded text-[10px]" />
+                                </div>
+                                <select value={nodeObj.connectedTo || ''} onChange={(e) => setCanvasNodes(prev => prev.map(n => n.id === nodeObj.id ? { ...n, connectedTo: e.target.value || undefined } : n))} className="w-full px-2 py-1.5 border border-slate-200 rounded text-[10px] bg-white">
+                                  <option value="">Sem próxima conexão</option>
+                                  {canvasNodes.filter(n => n.id !== nodeObj.id).map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                                </select>
+                                <textarea
+                                  value={JSON.stringify(nodeObj.config || {}, null, 2)}
+                                  onChange={(e) => {
+                                    try {
+                                      const parsedConfig = JSON.parse(e.target.value || '{}');
+                                      setCanvasNodes(prev => prev.map(n => n.id === nodeObj.id ? { ...n, config: parsedConfig } : n));
+                                    } catch {
+                                      // mantém digitação livre até virar JSON válido
+                                    }
+                                  }}
+                                  className="w-full h-20 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-[10px] font-mono resize-none"
+                                />
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
                       {workflows.map((wf) => {
                         const isRunningThis = runningWorkflowId === wf.id;
                         return (
