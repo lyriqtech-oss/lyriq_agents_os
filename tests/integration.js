@@ -10,8 +10,9 @@ if (fs.existsSync('./database.json')) {
 }
 
 // Start backend server
+const testPort = process.env.TEST_PORT || '5002';
 const serverProcess = spawn('node', ['server.js'], {
-  env: { ...process.env, PORT: '5001' }
+  env: { ...process.env, PORT: testPort }
 });
 
 serverProcess.stdout.on('data', (data) => {
@@ -25,7 +26,7 @@ serverProcess.stderr.on('data', (data) => {
 // Wait 1.5 seconds for server boot
 setTimeout(async () => {
   try {
-    const baseUrl = 'http://localhost:5001/api';
+    const baseUrl = `http://localhost:${testPort}/api`;
 
     // 1. Test POST /api/providers/validate (Invalid Key format check)
     const resValInvalid = await fetch(`${baseUrl}/providers/validate`, {
