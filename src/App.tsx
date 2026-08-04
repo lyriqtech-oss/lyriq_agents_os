@@ -2628,6 +2628,18 @@ export default function App() {
     }, 3500);
   };
 
+  const readJsonResponse = async (response: Response) => {
+    const text = await response.text();
+    if (!text.trim()) {
+      throw new Error(`Resposta vazia do servidor de validação (HTTP ${response.status}). Verifique se o backend está rodando na porta 5001.`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Resposta inválida do servidor de validação (HTTP ${response.status}).`);
+    }
+  };
+
   const openStripeCheckout = async (planCode: string) => {
     try {
       const response = await fetch('/api/billing/checkout', {
@@ -2682,7 +2694,7 @@ export default function App() {
     setOnboardingModels([]);
     try {
       const res = await fetch(`/api/providers/${provider}/models`);
-      const body = await res.json();
+      const body = await readJsonResponse(res);
       const models: ProviderModelOption[] = Array.isArray(body.data) ? body.data : [];
       setOnboardingModels(models);
       const firstAvailable = models.find(m => m.isAvailable !== false) || models[0];
@@ -2713,7 +2725,7 @@ export default function App() {
           modelId: onboardingSelectedModel
         })
       });
-      const body = await res.json();
+      const body = await readJsonResponse(res);
       if (!res.ok || !body.ok) {
         throw new Error(body.error?.message || 'Falha ao validar chave.');
       }
@@ -2943,7 +2955,7 @@ export default function App() {
           apiKey: rawKey
         })
       });
-      const resData = await response.json();
+      const resData = await readJsonResponse(response);
       
       if (!resData.ok) {
         const errorDetail = resData.error || {};
