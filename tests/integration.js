@@ -44,6 +44,36 @@ setTimeout(async () => {
     assert.strictEqual(bodyValInvalid.error.code, 'PROVIDER_AUTH_FAILED');
     console.log('✅ POST /api/providers/validate (Invalid Key) passed.');
 
+    // 1.1 Test POST /api/providers/validate (Empty Key)
+    const resValEmpty = await fetch(`${baseUrl}/providers/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId: 'workspace_123',
+        provider: 'openai',
+        apiKey: ''
+      })
+    });
+    assert.strictEqual(resValEmpty.status, 400);
+    const bodyValEmpty = await resValEmpty.json();
+    assert.strictEqual(bodyValEmpty.error.code, 'PROVIDER_NOT_CONFIGURED');
+    console.log('✅ POST /api/providers/validate (Empty Key) passed.');
+
+    // 1.2 Test provider mismatch detection before network calls
+    const resValMismatch = await fetch(`${baseUrl}/providers/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId: 'workspace_123',
+        provider: 'openai',
+        apiKey: 'gsk_this_is_a_groq_key_not_openai'
+      })
+    });
+    assert.strictEqual(resValMismatch.status, 400);
+    const bodyValMismatch = await resValMismatch.json();
+    assert.strictEqual(bodyValMismatch.error.code, 'PROVIDER_MISMATCH');
+    console.log('✅ POST /api/providers/validate (Provider Mismatch) passed.');
+
     // 2. Test POST /api/providers/validate (Mock quota error connection check)
     const resValQuota = await fetch(`${baseUrl}/providers/validate`, {
       method: 'POST',
@@ -73,8 +103,25 @@ setTimeout(async () => {
     const bodyValOk = await resValOk.json();
     assert.strictEqual(bodyValOk.ok, true);
     assert.strictEqual(bodyValOk.data.status, 'valid');
+    assert.strictEqual(bodyValOk.data.encrypted_api_key, undefined);
     const providerConnectionId = bodyValOk.data.id;
     console.log('✅ POST /api/providers/validate (Mock Valid Key) passed.');
+
+    // 3.1 Test POST /api/providers/:provider/validate-key (Mock valid, safe response)
+    const resValKeyOk = await fetch(`${baseUrl}/providers/gemini/validate-key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workspaceId: 'workspace_123',
+        apiKey: 'mock-valid-key'
+      })
+    });
+    assert.strictEqual(resValKeyOk.status, 200);
+    const bodyValKeyOk = await resValKeyOk.json();
+    assert.strictEqual(bodyValKeyOk.ok, true);
+    assert.ok(bodyValKeyOk.data.models.length > 0);
+    assert.strictEqual(bodyValKeyOk.data.connection.encrypted_api_key, undefined);
+    console.log('✅ POST /api/providers/:provider/validate-key (Mock Valid Key) passed.');
 
     // 4. Test POST /api/agents/main (Invalid - Empty instructions)
     const resAgentEmpty = await fetch(`${baseUrl}/agents/main`, {

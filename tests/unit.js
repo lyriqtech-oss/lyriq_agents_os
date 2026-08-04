@@ -1,5 +1,6 @@
 import assert from 'assert';
 import { selectOrchestrationAgents, orchestrateMultiAgentTask } from '../src/services/main_chat_service.js';
+import { getModelsForProvider } from '../providersCatalog.js';
 
 console.log('=== RUNNING UNIT TESTS ===');
 
@@ -28,6 +29,52 @@ assert.strictEqual(validateKeyFormat('openai', 'gsk_123'), false); // Mismatch
 assert.strictEqual(validateKeyFormat('groq', 'gsk_abcd'), true);
 assert.strictEqual(validateKeyFormat('groq', 'sk-openai'), false);
 console.log('✅ validateKeyFormat tests passed.');
+
+// 1.1 Test provider model parsing and strict real-validation errors
+const createJsonResponse = (status, body) => ({
+  ok: status >= 200 && status < 300,
+  status,
+  async json() {
+    return body;
+  }
+});
+
+const geminiModels = await getModelsForProvider('gemini', 'real-looking-key', {
+  allowFallback: false,
+  fetchImpl: async () => createJsonResponse(200, {
+    models: [
+      { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/embedding-001', supportedGenerationMethods: ['embedContent'] }
+    ]
+  })
+});
+assert.ok(geminiModels.some(m => m.id === 'gemini-2.5-flash' && m.source === 'provider_api'));
+assert.ok(!geminiModels.some(m => m.id === 'embedding-001'));
+
+const openAiModels = await getModelsForProvider('openai', 'sk-real-looking-key', {
+  allowFallback: false,
+  fetchImpl: async () => createJsonResponse(200, {
+    data: [{ id: 'gpt-4o-mini' }, { id: 'gpt-4o' }]
+  })
+});
+assert.ok(openAiModels.some(m => m.id === 'gpt-4o-mini' && m.verifiedForKey));
+
+await assert.rejects(
+  () => getModelsForProvider('groq', 'gsk_real-looking-key', {
+    allowFallback: false,
+    fetchImpl: async () => createJsonResponse(401, { error: { message: 'invalid key' } })
+  }),
+  /PROVIDER_AUTH_FAILED/
+);
+
+await assert.rejects(
+  () => getModelsForProvider('openrouter', 'sk-or-real-looking-key', {
+    allowFallback: false,
+    fetchImpl: async () => { throw new Error('network down'); }
+  }),
+  /network down/
+);
+console.log('✅ provider model parsing and strict validation error tests passed.');
 
 // 2. Test Error translations
 const translateErrorCode = (status) => {

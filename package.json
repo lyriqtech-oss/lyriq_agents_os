@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "node tests/unit.js && node tests/integration.js",
+    "test:providers:real": "node tests/providers_real.js",
     "test:e2e": "node tests/e2e.js",
     "smoke:main-agent-chat": "node tests/smoke.js",
     "smoke:runtime": "node tests/smoke.js",

@@ -57,6 +57,146 @@ const redactSecrets = (text) => {
   return text.replace(/(sk-[a-zA-Z0-9_-]{15,}|sk-ant-[a-zA-Z0-9_-]{15,}|gsk_[a-zA-Z0-9_-]{15,}|sk-or-[a-zA-Z0-9_-]{15,}|nvapi-[a-zA-Z0-9_-]{15,}|sk_live_[a-zA-Z0-9_-]{15,}|sk_test_[a-zA-Z0-9_-]{15,})/g, (match) => maskApiKey(match));
 };
 
+const providerHttpError = (code, status, message, fix) => ({ code, status, message, fix });
+
+const mapProviderResponseError = async (provider, response) => {
+  let providerMessage = '';
+  try {
+    const text = await response.text();
+    providerMessage = redactSecrets(text).slice(0, 300);
+  } catch {
+    providerMessage = '';
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    return providerHttpError(
+      'PROVIDER_AUTH_FAILED',
+      401,
+      'Chave rejeitada pelo provedor.',
+      'Confirme se a chave pertence ao provedor selecionado e está ativa.'
+    );
+  }
+  if (response.status === 402) {
+    return providerHttpError(
+      'PROVIDER_INSUFFICIENT_QUOTA',
+      402,
+      'A chave foi aceita, mas a conta está sem billing ou créditos.',
+      'Ative billing ou adicione créditos no provedor.'
+    );
+  }
+  if (response.status === 429) {
+    return providerHttpError(
+      'PROVIDER_RATE_LIMITED',
+      429,
+      'O provedor recusou por limite temporário de uso.',
+      'Aguarde alguns minutos ou use outra chave.'
+    );
+  }
+  if (response.status >= 500) {
+    return providerHttpError(
+      'PROVIDER_DOWN',
+      503,
+      `O provedor ${provider} retornou erro temporário.`,
+      'Tente novamente em alguns minutos.'
+    );
+  }
+  return providerHttpError(
+    'PROVIDER_VALIDATION_FAILED',
+    400,
+    providerMessage || 'Não foi possível validar a chave no provedor.',
+    'Revise provider, permissões, billing e chave usada.'
+  );
+};
+
+const validateProviderKeyFormat = (provider, apiKey) => {
+  const key = (apiKey || '').trim();
+  if (!key) {
+    return providerHttpError('PROVIDER_NOT_CONFIGURED', 400, 'Chave de API não configurada.', 'Insira a chave de API.');
+  }
+  if (key.length < 10) {
+    return providerHttpError('PROVIDER_AUTH_FAILED', 401, 'Chave de API curta demais.', 'Copie a chave completa do provedor.');
+  }
+  if (provider === 'openai' && key.startsWith('gsk_')) {
+    return providerHttpError('PROVIDER_MISMATCH', 400, 'Essa parece ser uma chave Groq, não OpenAI.', 'Selecione Groq ou use uma chave OpenAI.');
+  }
+  if (provider === 'groq' && !key.startsWith('gsk_') && !key.startsWith('mock-')) {
+    return providerHttpError('PROVIDER_MISMATCH', 400, 'Essa chave não parece pertencer ao Groq.', 'Selecione o provedor correto ou cole uma chave Groq.');
+  }
+  if (provider === 'anthropic' && !key.startsWith('sk-ant-') && !key.startsWith('mock-')) {
+    return providerHttpError('PROVIDER_MISMATCH', 400, 'Essa chave não parece pertencer à Anthropic.', 'Selecione o provedor correto ou cole uma chave Anthropic.');
+  }
+  if (provider === 'openrouter' && !key.startsWith('sk-or-') && !key.startsWith('mock-')) {
+    return providerHttpError('PROVIDER_MISMATCH', 400, 'Essa chave não parece pertencer ao OpenRouter.', 'Selecione o provedor correto ou cole uma chave OpenRouter.');
+  }
+  return null;
+};
+
+const buildMockProviderModels = (provider, key) => {
+  if (key === 'mock-model-missing-key') return [];
+  if (provider === 'gemini') return ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
+  if (provider === 'anthropic') return ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'];
+  if (provider === 'groq') return ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+  if (provider === 'openrouter') return ['openai/gpt-4o-mini', 'anthropic/claude-3.5-sonnet', 'meta-llama/llama-3.3-70b-instruct'];
+  if (provider === 'nvidia' || provider === 'nvidia-build') return ['deepseek-ai/deepseek-v4-flash', 'deepseek-ai/deepseek-v4-pro', 'meta/llama-3.3-70b-instruct'];
+  return ['gpt-4o-mini', 'gpt-4o', 'text-embedding-3-small', 'mock-chat-fast', 'mock-chat-slow', 'mock-chat-timeout', 'mock-chat-error'];
+};
+
+const validateRealProviderKey = async (provider, key) => {
+  const normalizedProvider = provider === 'google-gemini' ? 'gemini' : provider;
+  const formatError = validateProviderKeyFormat(normalizedProvider, key);
+  if (formatError) return { ok: false, error: formatError };
+
+  if (key.startsWith('mock-')) {
+    if (key === 'mock-valid-key') {
+      const models = buildMockProviderModels(normalizedProvider, key);
+      return { ok: models.length > 0, models, account: 'mock-account@lyriq.internal', source: 'mock' };
+    }
+    if (key === 'mock-invalid-key') return { ok: false, error: providerHttpError('PROVIDER_AUTH_FAILED', 401, 'API key recusada pelo provider.', 'Verifique se a chave está ativa e pertence ao provedor selecionado.') };
+    if (key === 'mock-rate-limit-key') return { ok: false, error: providerHttpError('PROVIDER_RATE_LIMITED', 429, 'Chave de API atingiu o limite de requisições do provedor.', 'Aguarde alguns minutos ou use outra chave.') };
+    if (key === 'mock-quota-key') return { ok: false, error: providerHttpError('PROVIDER_INSUFFICIENT_QUOTA', 402, 'O provedor retornou erro de saldo insuficiente.', 'Carregue créditos na conta do provedor de IA.') };
+    if (key === 'mock-timeout-key') return { ok: false, error: providerHttpError('PROVIDER_TIMEOUT', 504, 'O provedor de IA demorou muito para responder.', 'Tente novamente.') };
+    if (key === 'mock-network-error-key') return { ok: false, error: providerHttpError('PROVIDER_NETWORK_ERROR', 503, 'Erro de rede ao conectar no provedor de IA.', 'Verifique sua conexão de rede ou firewall.') };
+    if (key === 'mock-provider-mismatch-key') return { ok: false, error: providerHttpError('PROVIDER_MISMATCH', 400, 'A chave não combina com o provedor selecionado.', 'Escolha o provedor correto.') };
+    const models = buildMockProviderModels(normalizedProvider, key);
+    return { ok: models.length > 0, models, account: 'mock-account@lyriq.internal', source: 'mock' };
+  }
+
+  try {
+    if (normalizedProvider === 'anthropic') {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-3-5-haiku-20241022',
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'Reply with ok.' }]
+        })
+      });
+      if (!response.ok) return { ok: false, error: await mapProviderResponseError(normalizedProvider, response) };
+      const models = (await getModelsForProvider(normalizedProvider, key, { allowFallback: false })).filter(m => m.isAvailable !== false).map(m => m.id);
+      return { ok: models.length > 0, models, account: 'anthropic-key', source: 'provider_api' };
+    }
+
+    const modelsList = await getModelsForProvider(normalizedProvider, key, { allowFallback: false });
+    const models = modelsList.filter(m => m.isAvailable !== false).map(m => m.id);
+    if (models.length === 0) {
+      return { ok: false, error: providerHttpError('PROVIDER_NO_MODELS', 400, 'A chave foi aceita, mas nenhum modelo utilizável foi encontrado.', 'Confirme se a chave tem permissão para modelos de chat.') };
+    }
+    return { ok: true, models, account: `${normalizedProvider}-key`, source: 'provider_api' };
+  } catch (err) {
+    const msg = String(err?.message || '');
+    if (msg.startsWith('PROVIDER_AUTH_FAILED')) return { ok: false, error: providerHttpError('PROVIDER_AUTH_FAILED', 401, 'Chave rejeitada pelo provedor.', 'Confirme se a chave está correta e ativa.') };
+    if (msg.startsWith('PROVIDER_RATE_LIMITED')) return { ok: false, error: providerHttpError('PROVIDER_RATE_LIMITED', 429, 'O provedor recusou por limite temporário de uso.', 'Aguarde alguns minutos ou use outra chave.') };
+    if (msg.startsWith('PROVIDER_DOWN')) return { ok: false, error: providerHttpError('PROVIDER_DOWN', 503, 'O provedor retornou erro temporário.', 'Tente novamente em alguns minutos.') };
+    if (err?.name === 'AbortError') return { ok: false, error: providerHttpError('PROVIDER_TIMEOUT', 504, 'O provedor demorou muito para responder.', 'Tente novamente.') };
+    return { ok: false, error: providerHttpError('PROVIDER_NETWORK_ERROR', 503, 'Erro de rede ao conectar no provedor de IA.', 'Verifique conexão, DNS ou firewall.') };
+  }
+};
+
 const runOutputGuard = (answer) => {
   if (!answer || typeof answer !== 'string') return answer;
   const apiKeyRegex = /(sk-[a-zA-Z0-9_-]{15,}|sk-ant-[a-zA-Z0-9_-]{15,}|gsk_[a-zA-Z0-9_-]{15,}|sk-or-[a-zA-Z0-9_-]{15,}|nvapi-[a-zA-Z0-9_-]{15,}|sk_live_[a-zA-Z0-9_-]{15,})/i;
@@ -1589,141 +1729,48 @@ const server = http.createServer(async (req, res) => {
       const key = apiKey.trim();
       const duration = Date.now() - startTime;
 
-      // Mock Provider connection flows (Section 21)
-      if (key.startsWith('mock-')) {
-        if (key === 'mock-invalid-key') {
-          logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, 'PROVIDER_AUTH_FAILED');
-          return sendError(res, 401, 'PROVIDER_AUTH_FAILED', 'API key recusada pelo provider.', 'Verifique se a chave está ativa, pertence ao provedor selecionado e possui permissão de uso.', 'blocking', null, reqId);
-        }
-        if (key === 'mock-rate-limit-key') {
-          logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, 'PROVIDER_RATE_LIMITED');
-          return sendError(res, 429, 'PROVIDER_RATE_LIMITED', 'Chave de API atingiu o limite de requisições do provedor.', 'Aguarde alguns minutos ou use outra chave.', 'blocking', null, reqId);
-        }
-        if (key === 'mock-quota-key') {
-          logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, 'PROVIDER_INSUFFICIENT_QUOTA');
-          return sendError(res, 402, 'PROVIDER_INSUFFICIENT_QUOTA', 'O provedor retornou erro de saldo insuficiente.', 'Carregue créditos na conta do provedor de IA.', 'blocking', null, reqId);
-        }
-        if (key === 'mock-timeout-key') {
-          logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, 'PROVIDER_TIMEOUT');
-          return sendError(res, 504, 'PROVIDER_TIMEOUT', 'O provedor de IA demorou muito para responder (timeout).', 'Tente novamente.', 'blocking', null, reqId);
-        }
-
-        const db = readDb();
-        const availableModels = key === 'mock-model-missing-key' ? [] : (provider === 'gemini' 
-          ? ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']
-          : (provider === 'nvidia' || provider === 'nvidia-build')
-          ? ['deepseek-ai/deepseek-v4-flash', 'deepseek-ai/deepseek-v4-pro', 'meta/llama-3.3-70b-instruct']
-          : ['gpt-4o-mini', 'gpt-4o', 'text-embedding-3-small', 'mock-chat-fast', 'mock-chat-slow', 'mock-chat-timeout', 'mock-chat-error']);
-
-        let providerConn;
-        if (connectionId) {
-          providerConn = db.providers.find(p => p.id === connectionId);
-          if (providerConn) {
-            providerConn.status = 'valid';
-            providerConn.detected_account = 'mock-account@lyriq.internal';
-            providerConn.available_models = availableModels;
-            if (preferredChatModel) {
-              providerConn.selected_chat_model = preferredChatModel;
-            } else if (!providerConn.selected_chat_model && availableModels.length > 0) {
-              providerConn.selected_chat_model = availableModels[0];
-            }
-            providerConn.selected_embedding_model = preferredEmbeddingModel || 'text-embedding-3-small';
-            providerConn.last_validated_at = new Date().toISOString();
-          }
-        }
-        
-        if (!providerConn) {
-          providerConn = {
-            id: connectionId || `provider-${Date.now()}`,
-            workspace_id: workspaceId || 'workspace_123',
-            provider,
-            encrypted_api_key: btoa(key),
-            status: 'valid',
-            detected_account: 'mock-account@lyriq.internal',
-            available_models: availableModels,
-            selected_chat_model: preferredChatModel || availableModels[0],
-            selected_embedding_model: preferredEmbeddingModel || 'text-embedding-3-small',
-            last_validated_at: new Date().toISOString(),
-            created_at: new Date().toISOString()
-          };
-          db.providers = db.providers.filter(p => p.provider !== provider);
-          db.providers.push(providerConn);
-        }
-        writeDb(db);
-
-        logRuntimeEvent(workspaceId, '', '', 'provider_validation_succeeded', 'completed', duration, { provider });
-        return sendSuccess(res, providerConn, reqId);
+      const validation = await validateRealProviderKey(provider, key);
+      if (!validation.ok) {
+        const err = validation.error || providerHttpError('PROVIDER_VALIDATION_FAILED', 400, 'Não foi possível validar a chave no provedor.', 'Revise provider e chave.');
+        logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, err.code);
+        return sendError(res, err.status, err.code, err.message, err.fix, 'blocking', null, reqId);
       }
 
-      // Real Provider HTTP API key validation
-      try {
-        let testUrl = '';
-        let headers = { 'Content-Type': 'application/json' };
-        if (provider === 'openai') {
-          testUrl = 'https://api.openai.com/v1/models';
-          headers['Authorization'] = `Bearer ${key}`;
-        } else if (provider === 'anthropic') {
-          testUrl = 'https://api.anthropic.com/v1/messages';
-          headers['x-api-key'] = key;
-          headers['anthropic-version'] = '2023-06-01';
-        } else if (provider === 'gemini') {
-          testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}`;
-        } else if (provider === 'groq') {
-          testUrl = 'https://api.groq.com/openai/v1/models';
-          headers['Authorization'] = `Bearer ${key}`;
-        } else if (provider === 'openrouter') {
-          testUrl = 'https://openrouter.ai/api/v1/models';
-          headers['Authorization'] = `Bearer ${key}`;
-        } else if (provider === 'nvidia' || provider === 'nvidia-build') {
-          testUrl = 'https://integrate.api.nvidia.com/v1/models';
-          headers['Authorization'] = `Bearer ${key}`;
-        }
+      const availableModels = validation.models || [];
+      if (availableModels.length === 0) {
+        logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, 'PROVIDER_NO_MODELS');
+        return sendError(res, 400, 'PROVIDER_NO_MODELS', 'A chave foi aceita, mas nenhum modelo utilizável foi encontrado.', 'Confirme se a chave tem permissão para modelos de chat.', 'blocking', null, reqId);
+      }
 
-        const testRes = await fetch(testUrl, { method: provider === 'anthropic' ? 'POST' : 'GET', headers, body: provider === 'anthropic' ? JSON.stringify({ messages: [], model: 'claude-3-5-sonnet-20241022' }) : undefined });
-        
-        if (testRes.status === 401 || testRes.status === 403) {
-          logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, 'PROVIDER_AUTH_FAILED');
-          return sendError(res, 401, 'PROVIDER_AUTH_FAILED', 'Chave rejeitada pelo provedor.', 'Confirme se a chave de API está correta.', 'blocking', null, reqId);
-        }
-
-        if (!testRes.ok) {
-          logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, 'PROVIDER_VALIDATION_FAILED');
-          return sendError(res, 400, 'PROVIDER_VALIDATION_FAILED', 'Não foi possível validar a chave no provedor.', 'Verifique permissões, saldo e provedor selecionado.', 'blocking', null, reqId);
-        }
-
-        const modelsList = await getModelsForProvider(provider, key);
-        const availableModels = modelsList.filter(m => m.isAvailable !== false).map(m => m.id);
-        if (availableModels.length === 0) {
-          return sendError(res, 400, 'PROVIDER_NO_MODELS', 'A chave foi aceita, mas nenhum modelo utilizável foi encontrado.', 'Confirme se a chave tem permissão para modelos de chat.', 'blocking', null, reqId);
-        }
-
-        const db = readDb();
-        if (!db.providers) db.providers = [];
-
-        const providerConn = {
-          id: `provider-${Date.now()}`,
+      if (!db.providers) db.providers = [];
+      let providerConn = connectionId ? db.providers.find(p => p.id === connectionId) : null;
+      if (!providerConn) {
+        providerConn = {
+          id: connectionId || `provider-${Date.now()}`,
           workspace_id: workspaceId || 'workspace_123',
           provider,
-          encrypted_api_key: btoa(key),
-          status: 'valid',
-          detected_account: 'developer@lyriq.com',
-          available_models: availableModels,
-          selected_chat_model: preferredChatModel || availableModels[0],
-          selected_embedding_model: preferredEmbeddingModel || 'text-embedding-3-small',
-          last_validated_at: new Date().toISOString(),
           created_at: new Date().toISOString()
         };
-
-        db.providers = db.providers.filter(p => p.provider !== provider);
+        db.providers = db.providers.filter(p => !(p.provider === provider && p.workspace_id === (workspaceId || 'workspace_123')));
         db.providers.push(providerConn);
-        writeDb(db);
-
-        logRuntimeEvent(workspaceId, '', '', 'provider_validation_succeeded', 'completed', duration, { provider });
-        return sendSuccess(res, providerConn, reqId);
-      } catch (err) {
-        logRuntimeEvent(workspaceId, '', '', 'provider_validation_failed', 'failed', duration, { provider }, 'PROVIDER_NETWORK_ERROR', err.message);
-        return sendError(res, 503, 'PROVIDER_NETWORK_ERROR', 'Erro de rede ao conectar no provedor de IA.', 'Verifique sua conexão de rede ou firewall.', 'blocking', null, reqId);
       }
+
+      providerConn.workspace_id = workspaceId || 'workspace_123';
+      providerConn.provider = provider;
+      providerConn.encrypted_api_key = btoa(key);
+      providerConn.status = 'valid';
+      providerConn.detected_account = validation.account || `${provider}-key`;
+      providerConn.available_models = availableModels;
+      providerConn.selected_chat_model = preferredChatModel && availableModels.includes(preferredChatModel) ? preferredChatModel : (providerConn.selected_chat_model && availableModels.includes(providerConn.selected_chat_model) ? providerConn.selected_chat_model : availableModels[0]);
+      providerConn.selected_embedding_model = preferredEmbeddingModel || providerConn.selected_embedding_model || (provider === 'openai' ? 'text-embedding-3-small' : null);
+      providerConn.key_fingerprint = maskApiKey(key);
+      providerConn.last_validated_at = new Date().toISOString();
+
+      writeDb(db);
+
+      const { encrypted_api_key, ...safeConn } = providerConn;
+      logRuntimeEvent(workspaceId, '', '', 'provider_validation_succeeded', 'completed', duration, { provider, source: validation.source });
+      return sendSuccess(res, safeConn, reqId);
     }
 
     // GET /api/providers
@@ -1773,13 +1820,24 @@ const server = http.createServer(async (req, res) => {
         return sendError(res, 400, 'INVALID_API_KEY', 'Chave de API é obrigatória.', 'Informe uma API key.', 'blocking', null, reqId);
       }
 
-      let modelsList = [];
-      try {
-        modelsList = await getModelsForProvider(providerId, apiKey);
-      } catch (err) {
-        return sendError(res, 401, 'PROVIDER_AUTH_FAILED', 'Chave rejeitada pelo provedor.', 'Confirme se a API key está correta e tem permissão para listar modelos.', 'blocking', null, reqId);
+      const key = apiKey.trim();
+      const validation = await validateRealProviderKey(providerId, key);
+      if (!validation.ok) {
+        const err = validation.error || providerHttpError('PROVIDER_VALIDATION_FAILED', 400, 'Não foi possível validar a chave no provedor.', 'Revise provider e chave.');
+        return sendError(res, err.status, err.code, err.message, err.fix, 'blocking', null, reqId);
       }
-      const availableModels = modelsList.filter(m => m.isAvailable !== false).map(m => m.id);
+
+      const modelsList = validation.source === 'mock'
+        ? (validation.models || []).map(id => ({
+          provider: providerId,
+          id,
+          displayName: id,
+          source: 'mock',
+          isAvailable: true,
+          verifiedForKey: true
+        }))
+        : await getModelsForProvider(providerId, key, { allowFallback: false });
+      const availableModels = validation.models || modelsList.filter(m => m.isAvailable !== false).map(m => m.id);
       if (availableModels.length === 0) {
         return sendError(res, 400, 'PROVIDER_NO_MODELS', 'Nenhum modelo disponível foi encontrado para esta chave.', 'Escolha outro provider ou revise permissões/saldo.', 'blocking', null, reqId);
       }
@@ -1790,17 +1848,29 @@ const server = http.createServer(async (req, res) => {
         id: `provider-${Date.now()}`,
         workspace_id: body.workspaceId || 'workspace_123',
         provider: providerId,
-        encrypted_api_key: btoa(apiKey),
+        encrypted_api_key: btoa(key),
         status: 'valid',
         available_models: availableModels,
         selected_chat_model: selectedChatModel,
         selected_embedding_model: body.embeddingModelId || 'text-embedding-3-small',
-        key_fingerprint: maskApiKey(apiKey),
+        key_fingerprint: maskApiKey(key),
         last_validated_at: new Date().toISOString(),
         created_at: new Date().toISOString()
       };
       db.providers = db.providers.filter(p => p.provider !== providerId);
       db.providers.push(conn);
+
+      if (!db.workspaceOnboarding) db.workspaceOnboarding = [];
+      let ob = db.workspaceOnboarding.find(o => o.workspaceId === conn.workspace_id);
+      if (!ob) {
+        ob = { id: `onboarding-${conn.workspace_id}`, userId: 'user_123', workspaceId: conn.workspace_id, currentStep: 5, createdAt: new Date().toISOString() };
+        db.workspaceOnboarding.push(ob);
+      }
+      ob.providerSelectedAt = new Date().toISOString();
+      ob.modelSelectedAt = new Date().toISOString();
+      ob.apiKeyValidatedAt = new Date().toISOString();
+      ob.updatedAt = new Date().toISOString();
+
       writeDb(db);
 
       return sendSuccess(res, {
@@ -1979,6 +2049,16 @@ const server = http.createServer(async (req, res) => {
       };
 
       db.agents.push(mainAgent);
+
+      if (!db.workspaceOnboarding) db.workspaceOnboarding = [];
+      let ob = db.workspaceOnboarding.find(o => o.workspaceId === mainAgent.workspace_id);
+      if (!ob) {
+        ob = { id: `onboarding-${mainAgent.workspace_id}`, userId: 'user_123', workspaceId: mainAgent.workspace_id, currentStep: 6, createdAt: new Date().toISOString() };
+        db.workspaceOnboarding.push(ob);
+      }
+      ob.mainAgentCompletedAt = new Date().toISOString();
+      ob.updatedAt = new Date().toISOString();
+
       writeDb(db);
 
       logRuntimeEvent(workspaceId, mainAgent.id, '', 'main_agent_created', 'completed', Date.now() - startTime);

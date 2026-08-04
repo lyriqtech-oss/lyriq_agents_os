@@ -918,7 +918,8 @@ function canUseModel({ workspaceId, userId, provider, modelId, plan = 'free' }) 
 /**
  * Dynamic API Fetcher Adapter with Fallback Catalog (Fix V3 Spec 4)
  */
-async function getModelsForProvider(provider, apiKey = '') {
+async function getModelsForProvider(provider, apiKey = '', options = {}) {
+  const { allowFallback = true, timeoutMs = 8000, fetchImpl = fetch } = options;
   // If API Key is present or for public endpoints (OpenRouter/Ollama/Groq), try fetching live list
   try {
     let fetchUrl = '';
@@ -944,13 +945,22 @@ async function getModelsForProvider(provider, apiKey = '') {
 
     if (fetchUrl) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-      const response = await fetch(fetchUrl, { headers, signal: controller.signal });
+      const response = await fetchImpl(fetchUrl, { headers, signal: controller.signal });
       clearTimeout(timeoutId);
 
       if (!response.ok && apiKey && [401, 403].includes(response.status)) {
         throw new Error(`PROVIDER_AUTH_FAILED:${provider}`);
+      }
+      if (!response.ok && apiKey && response.status === 429) {
+        throw new Error(`PROVIDER_RATE_LIMITED:${provider}`);
+      }
+      if (!response.ok && apiKey && response.status >= 500) {
+        throw new Error(`PROVIDER_DOWN:${provider}`);
+      }
+      if (!response.ok && apiKey && !allowFallback) {
+        throw new Error(`PROVIDER_VALIDATION_FAILED:${provider}:${response.status}`);
       }
 
       if (response.ok) {
@@ -1042,10 +1052,16 @@ async function getModelsForProvider(provider, apiKey = '') {
     if (apiKey && String(e?.message || '').startsWith('PROVIDER_AUTH_FAILED')) {
       throw e;
     }
+    if (!allowFallback && apiKey) {
+      throw e;
+    }
     // Fallback to catalog if network/API fails without proving the key invalid.
   }
 
   // Fallback catalog with top model marked as latest
+  if (!allowFallback && apiKey) {
+    throw new Error(`PROVIDER_NO_MODELS:${provider}`);
+  }
   const catalog = (FALLBACK_CATALOG[provider] || []).map((m, idx) => ({
     ...m,
     isLatest: idx === 0,

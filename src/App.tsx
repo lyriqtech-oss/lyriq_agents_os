@@ -2722,6 +2722,18 @@ export default function App() {
       setOnboardingModels(models.length ? models : onboardingModels);
       if (connection?.selected_chat_model) setOnboardingSelectedModel(connection.selected_chat_model);
       setOnboardingValidatedConnection(connection || null);
+      setProviders(prev => prev.map(p => p.id === onboardingSelectedProvider ? {
+        ...p,
+        status: 'valid',
+        apiKey: '',
+        lastTested: new Date().toLocaleString('pt-BR'),
+        modelsCount: models.length || connection?.available_models?.length || 0
+      } : p));
+      localStorage.setItem('lyriq_active_provider', onboardingSelectedProvider);
+      if (onboardingSelectedProvider === 'gemini') setGeminiModel(connection?.selected_chat_model || onboardingSelectedModel);
+      if (onboardingSelectedProvider === 'openai') setOpenaiModel(connection?.selected_chat_model || onboardingSelectedModel);
+      if (onboardingSelectedProvider === 'anthropic') setAnthropicModel(connection?.selected_chat_model || onboardingSelectedModel);
+      if (onboardingSelectedProvider === 'ollama') setOllamaModel(connection?.selected_chat_model || onboardingSelectedModel);
       setOnboardingApiKeyValidated(true);
       setOnboardingApiKeyStatusText(`API validada. Provider: ${onboardingSelectedProvider}. Modelo ativo: ${connection?.selected_chat_model || onboardingSelectedModel}. Chave: ${connection?.key_fingerprint || 'mascarada'}.`);
       addToast('API Key validada e modelos sincronizados.', 'success');
@@ -2942,8 +2954,18 @@ export default function App() {
           errStatus = 'insufficient_quota';
         } else if (errorDetail.code === 'PROVIDER_RATE_LIMITED') {
           errStatus = 'rate_limited';
-        } else if (errorDetail.code === 'PROVIDER_TIMEOUT') {
+        } else if (errorDetail.code === 'PROVIDER_TIMEOUT' || errorDetail.code === 'PROVIDER_DOWN' || errorDetail.code === 'PROVIDER_NETWORK_ERROR') {
           errStatus = 'provider_down';
+        } else if (errorDetail.code === 'PROVIDER_MISMATCH') {
+          errStatus = 'provider_mismatch';
+        } else if (errorDetail.code === 'PROVIDER_NO_MODELS') {
+          errStatus = 'no_models_found';
+        } else if (errorDetail.code === 'MODEL_NOT_FOUND') {
+          errStatus = 'model_not_available';
+        } else if (errorDetail.code === 'PROVIDER_AUTH_FAILED' || errorDetail.code === 'INVALID_API_KEY' || errorDetail.code === 'PROVIDER_NOT_CONFIGURED') {
+          errStatus = 'invalid_key';
+        } else {
+          errStatus = 'unknown_error';
         }
 
         setProviders(prev => prev.map(p => p.id === providerId ? { ...p, status: errStatus, lastTested: 'Agora mesmo' } : p));
@@ -2980,7 +3002,7 @@ export default function App() {
       setProviders(prev => prev.map(p => p.id === providerId ? {
         ...p,
         status: 'valid',
-        apiKey: connData.encrypted_api_key,
+        apiKey: '',
         lastTested: new Date().toLocaleString('pt-BR'),
         modelsCount: modelsFound
       } : p));
