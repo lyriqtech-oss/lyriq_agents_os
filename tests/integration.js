@@ -28,6 +28,23 @@ setTimeout(async () => {
   try {
     const baseUrl = `http://localhost:${testPort}/api`;
 
+    const codePersonal = await fetch(`${baseUrl}/code/run`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'personal', tier: 'free', surface: 'web', prompt: 'Criar app web' })
+    });
+    assert.strictEqual(codePersonal.status, 200);
+    const codeBusinessPro = await fetch(`${baseUrl}/code/run`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'business', tier: 'pro', surface: 'web' })
+    });
+    assert.strictEqual(codeBusinessPro.status, 402);
+    const codeBusinessMax = await fetch(`${baseUrl}/code/run`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'business', tier: 'max', surface: 'apps', platform: 'android' })
+    });
+    assert.strictEqual(codeBusinessMax.status, 200);
+    console.log('✅ Lyriq Code Personal/Business entitlement endpoints passed.');
+
     // 1. Test POST /api/providers/validate (Invalid Key format check)
     const resValInvalid = await fetch(`${baseUrl}/providers/validate`, {
       method: 'POST',
@@ -113,13 +130,16 @@ setTimeout(async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workspaceId: 'workspace_123',
-        apiKey: 'mock-valid-key'
+        apiKey: 'mock-valid-key',
+        modelId: 'gemini-2.5-flash',
+        plan: 'free'
       })
     });
     assert.strictEqual(resValKeyOk.status, 200);
     const bodyValKeyOk = await resValKeyOk.json();
     assert.strictEqual(bodyValKeyOk.ok, true);
     assert.ok(bodyValKeyOk.data.models.length > 0);
+    assert.strictEqual(bodyValKeyOk.data.connection.selected_chat_model, 'gemini-2.5-flash');
     assert.strictEqual(bodyValKeyOk.data.connection.encrypted_api_key, undefined);
     console.log('✅ POST /api/providers/:provider/validate-key (Mock Valid Key) passed.');
 

@@ -23,6 +23,7 @@ import { SecretRedactionService, PolicyEngine as CybersecurityPolicyEngine, Secu
 import { CONSOLIDATED_TABLES_CATALOG, SPRINT_PLAN, MasterPromptGenerator, ConsolidatedArchitectureService } from './src/services/consolidated_architecture_service.js';
 import { MANDATORY_TEST_CASES, QAReportService } from './src/services/qa_report_service.js';
 import { FALLBACK_CATALOG, canUseModel, getModelsForProvider } from './providersCatalog.js';
+import { PLAN_CATALOG, hasCodeAccess } from './plansCatalog.js';
 
 // Load environment variables from .env if present
 const dotenvPath = path.resolve('./.env');
@@ -1837,13 +1838,21 @@ const server = http.createServer(async (req, res) => {
           verifiedForKey: true
         }))
         : await getModelsForProvider(providerId, key, { allowFallback: false });
-      const availableModels = validation.models || modelsList.filter(m => m.isAvailable !== false).map(m => m.id);
+      const availableModels = modelsList.filter(m => m.isAvailable !== false).map(m => m.id);
       if (availableModels.length === 0) {
         return sendError(res, 400, 'PROVIDER_NO_MODELS', 'Nenhum modelo disponível foi encontrado para esta chave.', 'Escolha outro provider ou revise permissões/saldo.', 'blocking', null, reqId);
       }
       const db = readDb();
       if (!db.providers) db.providers = [];
-      const selectedChatModel = body.modelId && availableModels.includes(body.modelId) ? body.modelId : availableModels[0];
+      const normalizeModelId = id => String(id || '').replace(/^models\//, '');
+      const requestedModel = availableModels.find(id => normalizeModelId(id) === normalizeModelId(body.modelId));
+      const planCompatibleModel = availableModels.find(modelId => canUseModel({
+        workspaceId: body.workspaceId,
+        provider: providerId,
+        modelId: normalizeModelId(modelId),
+        plan: body.plan || 'free'
+      }).allowed);
+      const selectedChatModel = requestedModel || planCompatibleModel || availableModels[0];
       const conn = {
         id: `provider-${Date.now()}`,
         workspace_id: body.workspaceId || 'workspace_123',
@@ -3175,17 +3184,42 @@ const server = http.createServer(async (req, res) => {
     // Billing & Stripe Integration Endpoints
     // ----------------------------------------------------
 
+    if (pathName === '/api/code/run' && method === 'POST') {
+      const body = await parseBody(req);
+      const mode = body.mode || 'personal';
+      const tier = body.tier || 'free';
+      if (!hasCodeAccess(mode, tier)) {
+        return sendError(res, 402, 'CODE_PLAN_REQUIRED', 'O Lyriq Code no Business requer o plano Max ou superior.', 'Faça upgrade para Business Max.', 'blocking', null, reqId);
+      }
+      return sendSuccess(res, {
+        projectId: body.projectId || `code-project-${Date.now()}`,
+        workspaceMode: mode,
+        planTier: tier,
+        surface: body.surface || 'code',
+        platform: body.platform || null,
+        dimension: body.dimension || null,
+        status: 'preview_ready',
+        previewUrl: `/code/preview/${Date.now()}`,
+        skillsLoaded: body.surface === 'games' ? ['godot', 'threejs'] : body.surface === 'apps' ? ['react-native', 'flutter'] : ['git', 'tests', 'debug'],
+        message: 'Workspace autorizado e preview preparado.'
+      }, reqId);
+    }
+
     // GET /api/billing/plans
     if (pathName === '/api/billing/plans' && method === 'GET') {
-      return sendSuccess(res, [
-        { id: 'free', name: 'Free', priceMonthly: 0, credits: 400, maxWorkspaces: 1, maxAgents: 1, maxFiles: 3, mcpCount: 0, webSearchLimit: 0, rateLimitHr: 10 },
-        { id: 'flash', name: 'Flash', priceMonthly: 49.90, credits: 1000, maxWorkspaces: 1, maxAgents: 1, maxFiles: 10, mcpCount: 0, webSearchLimit: 20, rateLimitHr: 30 },
-        { id: 'pro', name: 'Pro', priceMonthly: 99.90, credits: 3000, maxWorkspaces: 1, maxAgents: 6, maxFiles: 50, mcpCount: 1, webSearchLimit: 100, rateLimitHr: 100, byok: true },
-        { id: 'max_5x', name: 'Max 5X', priceMonthly: 449.90, credits: 15000, maxWorkspaces: 3, maxAgents: 26, maxFiles: 300, mcpCount: 5, webSearchLimit: 500, rateLimitHr: 300, byok: true, templates: true },
-        { id: 'max_20x', name: 'Max 20X', priceMonthly: 849.90, credits: 60000, maxWorkspaces: 10, maxAgents: 101, maxFiles: 1000, mcpCount: 20, webSearchLimit: 2000, rateLimitHr: 1000, byok: true, templates: true },
-        { id: 'business', name: 'Business', priceMonthly: 1199.90, credits: 100000, maxWorkspaces: 20, maxAgents: 251, maxFiles: 3000, mcpCount: 50, webSearchLimit: 5000, rateLimitHr: 2000, byok: true, templates: true, rbac: true },
-        { id: 'enterprise', name: 'Enterprise', priceMonthly: null, credits: 'Custom', maxWorkspaces: 'Custom', maxAgents: 'Custom', maxFiles: 'Custom', mcpCount: 'Custom', webSearchLimit: 'Custom', rateLimitHr: 10000, byok: true, rbac: true }
-      ], reqId);
+      const plans = Object.entries(PLAN_CATALOG).flatMap(([mode, tiers]) =>
+        Object.entries(tiers).map(([tier, plan]) => ({
+          id: `${mode}_${tier}`,
+          mode,
+          tier,
+          name: plan.name,
+          priceMonthly: plan.priceCents / 100,
+          byok: true,
+          lyriqCode: hasCodeAccess(mode, tier),
+          ...plan
+        }))
+      );
+      return sendSuccess(res, plans, reqId);
     }
 
     // GET /api/usage/current

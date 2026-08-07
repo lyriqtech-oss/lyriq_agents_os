@@ -29,14 +29,20 @@ if (fs.existsSync(dotenvPath)) {
   });
 }
 
-const projectRef = env.SUPABASE_PROJECT_REF || 'txlructjsvtqvnleljyz';
+const projectRef = env.SUPABASE_PROJECT_REF
+  || (env.SUPABASE_URL ? new URL(env.SUPABASE_URL).hostname.split('.')[0] : null);
 const token = env.SUPABASE_ACCESS_TOKEN || env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!projectRef || !token) {
+  console.error('❌ Error: SUPABASE_URL/PROJECT_REF and SUPABASE_ACCESS_TOKEN are required.');
+  process.exit(1);
+}
 
 console.log(`Executing SQL from ${sqlFile} on Supabase project ${projectRef}...`);
 
 const run = async () => {
   try {
-    const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/query`, {
+    const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

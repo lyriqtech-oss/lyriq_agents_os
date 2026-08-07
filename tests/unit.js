@@ -1,8 +1,16 @@
 import assert from 'assert';
 import { selectOrchestrationAgents, orchestrateMultiAgentTask } from '../src/services/main_chat_service.js';
 import { getModelsForProvider } from '../providersCatalog.js';
+import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
 
 console.log('=== RUNNING UNIT TESTS ===');
+
+assert.strictEqual(PLAN_CATALOG.personal.pro.priceCents, 4990);
+assert.strictEqual(PLAN_CATALOG.business.max.priceCents, 59990);
+assert.strictEqual(hasCodeAccess('personal', 'free'), true);
+assert.strictEqual(hasCodeAccess('business', 'pro'), false);
+assert.strictEqual(hasCodeAccess('business', 'max'), true);
+console.log('✅ Personal/Business plan catalog and Lyriq Code gating tests passed.');
 
 // 1. Test Provider format checks
 const validateKeyFormat = (provider, key) => {

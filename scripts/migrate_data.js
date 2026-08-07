@@ -2,141 +2,100 @@ import fs from 'fs';
 import path from 'path';
 import { createClient } from '@supabase/supabase-js';
 
-console.log('=== STARTING SUPABASE DATA MIGRATION ===');
+const env = Object.fromEntries(
+  fs.readFileSync(path.resolve('.env'), 'utf8')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#') && line.includes('='))
+    .map(line => {
+      const separator = line.indexOf('=');
+      return [line.slice(0, separator).trim(), line.slice(separator + 1).trim()];
+    }),
+);
 
-// 1. Load environment variables
-const dotenvPath = path.resolve('./.env');
-const env = {};
-if (fs.existsSync(dotenvPath)) {
-  const envContent = fs.readFileSync(dotenvPath, 'utf8');
-  envContent.split('\n').forEach(line => {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
-      const parts = trimmed.split('=');
-      const key = parts[0].trim();
-      const val = parts.slice(1).join('=').trim();
-      if (key && val) {
-        env[key] = val;
-      }
-    }
-  });
+if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in .env');
 }
 
-const supabaseUrl = env.SUPABASE_URL;
-const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
+const source = JSON.parse(fs.readFileSync(path.resolve('database.json'), 'utf8'));
+const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
 
-if (!supabaseUrl || !supabaseKey || supabaseUrl.includes('SUA_URL_AQUI')) {
-  console.error('❌ Error: Supabase credentials not found in .env. Please configure them first.');
-  process.exit(1);
-}
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// 2. Read database.json
-const dbPath = path.resolve('./database.json');
-if (!fs.existsSync(dbPath)) {
-  console.error('❌ Error: database.json not found in the workspace.');
-  process.exit(1);
-}
-
-const dbData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
-
-const run = async () => {
-  try {
-    // 1. Sync workspaces
-    if (dbData.workspaces && dbData.workspaces.length > 0) {
-      console.log(`Migrating ${dbData.workspaces.length} workspaces...`);
-      const { error } = await supabase.from('workspaces').upsert(dbData.workspaces);
-      if (error) throw error;
-    }
-
-    // 2. Sync providers
-    if (dbData.providers && dbData.providers.length > 0) {
-      console.log(`Migrating ${dbData.providers.length} providers...`);
-      const mapped = dbData.providers.map(p => ({
-        id: p.id,
-        workspace_id: p.workspace_id || p.workspaceId,
-        provider: p.provider,
-        encrypted_api_key: p.encrypted_api_key || p.encryptedApiKey,
-        status: p.status,
-        detected_account: p.detected_account || null,
-        available_models: p.available_models || p.availableModels || [],
-        selected_chat_model: p.selected_chat_model || p.selectedChatModel || null,
-        selected_embedding_model: p.selected_embedding_model || p.selectedEmbeddingModel || null,
-        last_validated_at: p.last_validated_at || p.lastValidatedAt || null,
-        created_at: p.created_at || p.createdAt || null
-      }));
-      const { error } = await supabase.from('providers').upsert(mapped);
-      if (error) throw error;
-    }
-
-    // 3. Sync agents
-    if (dbData.agents && dbData.agents.length > 0) {
-      console.log(`Migrating ${dbData.agents.length} agents...`);
-      const mapped = dbData.agents.map(a => ({
-        id: a.id,
-        workspace_id: a.workspace_id || a.workspaceId,
-        provider_connection_id: a.provider_connection_id || a.providerConnectionId,
-        model_id: a.model_id || a.modelId,
-        name: a.name,
-        role: a.role,
-        instructions: a.instructions,
-        type: a.type,
-        status: a.status,
-        created_at: a.created_at || a.createdAt || null
-      }));
-      const { error } = await supabase.from('agents').upsert(mapped);
-      if (error) throw error;
-    }
-
-    // 4. Sync messages
-    if (dbData.messages && dbData.messages.length > 0) {
-      console.log(`Migrating ${dbData.messages.length} messages...`);
-      const mapped = dbData.messages.map(m => ({
-        id: m.id,
-        session_id: m.session_id || m.sessionId,
-        agent_id: m.agent_id || m.agentId,
-        role: m.role,
-        content: m.content,
-        provider: m.provider || null,
-        model: m.model || null,
-        token_input: m.token_input || m.tokenInput || null,
-        token_output: m.token_output || m.tokenOutput || null,
-        cost_estimate: m.cost_estimate || m.costEstimate || null,
-        created_at: m.created_at || m.createdAt || null
-      }));
-      const { error } = await supabase.from('messages').upsert(mapped);
-      if (error) throw error;
-    }
-
-    // 5. Sync runtimeLogs
-    if (dbData.runtimeLogs && dbData.runtimeLogs.length > 0) {
-      console.log(`Migrating ${dbData.runtimeLogs.length} runtimeLogs...`);
-      const mapped = dbData.runtimeLogs.map(l => ({
-        id: l.id,
-        request_id: l.requestId,
-        workspace_id: l.workspaceId,
-        user_id: l.userId,
-        agent_id: l.agentId,
-        session_id: l.sessionId,
-        event: l.event,
-        status: l.status,
-        duration_ms: l.durationMs,
-        error_code: l.errorCode,
-        safe_message: l.safeMessage,
-        metadata: l.metadata,
-        created_at: l.createdAt
-      }));
-      const { error } = await supabase.from('runtime_logs').upsert(mapped);
-      if (error) throw error;
-    }
-
-    console.log('🎉 DATA MIGRATION COMPLETED SUCCESSFULLY!');
-    process.exit(0);
-  } catch (err) {
-    console.error('❌ Data migration failed:', err.message);
-    process.exit(1);
-  }
+const snakeCase = value => value.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+const tableOverrides = {
+  approvals: 'approval_requests',
+  models: 'provider_models',
+  companyProfile: 'companies',
+  subscriptions: 'workspace_subscriptions',
 };
 
-run();
+const schemaResponse = await fetch(`${env.SUPABASE_URL}/rest/v1/`, {
+  headers: {
+    apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+  },
+});
+if (!schemaResponse.ok) throw new Error(`Could not inspect Supabase schema (${schemaResponse.status})`);
+const openApi = await schemaResponse.json();
+const definitions = openApi.definitions || openApi.components?.schemas || {};
+
+const result = { migrated: {}, skipped: {}, failed: {} };
+
+const legacyRecords = Object.entries(source).flatMap(([collection, rawRecords]) => {
+  const records = Array.isArray(rawRecords) ? rawRecords : [rawRecords];
+  return records.map((payload, index) => ({
+    collection_name: collection,
+    record_id: String(payload?.id ?? `${collection}:${index}`),
+    payload,
+    source_file: 'database.json',
+  }));
+});
+
+for (let offset = 0; offset < legacyRecords.length; offset += 100) {
+  const batch = legacyRecords.slice(offset, offset + 100);
+  const { error } = await supabase
+    .from('legacy_database_records')
+    .upsert(batch, { onConflict: 'collection_name,record_id' });
+  if (error) throw new Error(`Legacy staging import failed: ${error.message}`);
+}
+result.legacyStaging = legacyRecords.length;
+
+for (const [collection, rawRecords] of Object.entries(source)) {
+  const records = Array.isArray(rawRecords) ? rawRecords : [rawRecords];
+  if (records.length === 0) continue;
+
+  const table = tableOverrides[collection] || snakeCase(collection);
+  const definition = definitions[table];
+  if (!definition) {
+    result.skipped[collection] = `table ${table} does not exist`;
+    continue;
+  }
+
+  const columns = new Set(Object.keys(definition.properties || {}));
+  const mappedRecords = records.map(record => Object.fromEntries(
+      Object.entries(record)
+        .map(([key, value]) => [snakeCase(key), value])
+        .filter(([key, value]) => columns.has(key) && value !== undefined),
+    )).filter(record => Object.keys(record).length > 0);
+
+  if (mappedRecords.length === 0) {
+    result.failed[collection] = 'no compatible columns';
+    continue;
+  }
+
+  const canUpsert = columns.has('id') && mappedRecords.every(record => record.id != null);
+  const query = canUpsert
+    ? supabase.from(table).upsert(mappedRecords, { onConflict: 'id' })
+    : supabase.from(table).insert(mappedRecords);
+  const { error } = await query;
+  if (error) {
+    result.failed[collection] = `${error.code || 'error'} ${error.message}`;
+    continue;
+  }
+  result.migrated[collection] = mappedRecords.length;
+}
+
+const migratedCount = Object.values(result.migrated).reduce((sum, count) => sum + count, 0);
+console.log(JSON.stringify({ migratedCount, ...result }, null, 2));
+if (Object.keys(result.failed).length > 0 || Object.keys(result.skipped).length > 0) process.exitCode = 2;

@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from './lib/supabase';
+import { persistentStorage, setPersistentUser } from './lib/persistentStorage';
+import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
 import {
   LayoutDashboard,
   TrendingUp,
@@ -42,7 +45,11 @@ import {
   Key,
   Activity,
   Globe2,
-  Layout
+  Layout,
+  Code2,
+  Smartphone,
+  Gamepad2,
+  MonitorPlay
 } from 'lucide-react';
 
 // --- DATABASE TYPES ---
@@ -341,7 +348,7 @@ interface UserAccount {
   password?: string;
   name: string;
   role: 'user' | 'owner' | 'admin' | 'super_admin';
-  plan: 'free' | 'pro' | 'max' | 'business';
+  plan: 'free' | 'pro' | 'max' | 'max_5x' | 'max_20x' | 'enterprise';
 }
 
 interface CompanyProfile {
@@ -349,7 +356,7 @@ interface CompanyProfile {
   industry: string;
   size: string;
   goal: string;
-  plan?: 'free' | 'pro' | 'max' | 'business';
+  plan?: 'free' | 'pro' | 'max' | 'max_5x' | 'max_20x' | 'enterprise';
   tone?: string;
   processes?: string;
   description?: string;
@@ -759,18 +766,25 @@ const getAgentSkills = (id: string): string[] => {
 export default function App() {
   // ROUTER STATE
   const [currentRoute, setCurrentRoute] = useState<'landing' | 'auth' | 'onboarding' | 'terms' | 'privacy' | 'app'>(() => {
-    const session = localStorage.getItem('lyriq_session');
+    const session = persistentStorage.getItem('lyriq_session');
     if (!session) return 'landing';
-    const isCompleted = localStorage.getItem('lyriq_onboarding_completed') === 'true';
+    const isCompleted = persistentStorage.getItem('lyriq_onboarding_completed') === 'true';
     if (!isCompleted) return 'onboarding';
     return 'app';
   });
   
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [workspaceMode, setWorkspaceMode] = useState<'personal' | 'business'>(() =>
+    (persistentStorage.getItem('lyriq_workspace_mode') as 'personal' | 'business') || 'personal'
+  );
+
+  useEffect(() => {
+    persistentStorage.setItem('lyriq_workspace_mode', workspaceMode);
+  }, [workspaceMode]);
   
   // CURRENT USER STATE
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    const session = localStorage.getItem('lyriq_session');
+    const session = persistentStorage.getItem('lyriq_session');
     if (session) {
       try {
         const parsed = JSON.parse(session) as UserAccount;
@@ -838,7 +852,7 @@ export default function App() {
 
   useEffect(() => {
     if (currentUser) {
-      const isCompleted = localStorage.getItem('lyriq_onboarding_completed') === 'true';
+      const isCompleted = persistentStorage.getItem('lyriq_onboarding_completed') === 'true';
       if (!isCompleted && currentRoute === 'app') {
         setCurrentRoute('onboarding');
       }
@@ -847,12 +861,12 @@ export default function App() {
 
   // DB STATES (Syncs automatically with local storage)
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(() => {
-    const data = localStorage.getItem('lyriq_company');
+    const data = persistentStorage.getItem('lyriq_company');
     return data ? JSON.parse(data) : { name: '', industry: '', size: '', goal: '', setupComplete: false };
   });
 
   const [agents, setAgents] = useState<Agent[]>(() => {
-    const data = localStorage.getItem('lyriq_agents');
+    const data = persistentStorage.getItem('lyriq_agents');
     if (data) {
       try {
         const parsed = JSON.parse(data) as Agent[];
@@ -861,7 +875,7 @@ export default function App() {
           if (!hasMain) {
             const mainAgent = defaultAgentsList[0];
             const updated = [mainAgent, ...parsed];
-            localStorage.setItem('lyriq_agents', JSON.stringify(updated));
+            persistentStorage.setItem('lyriq_agents', JSON.stringify(updated));
             return updated;
           }
           return parsed;
@@ -874,31 +888,31 @@ export default function App() {
   });
 
   const [leads, setLeads] = useState<Lead[]>(() => {
-    const data = localStorage.getItem('lyriq_leads');
+    const data = persistentStorage.getItem('lyriq_leads');
     return data ? JSON.parse(data) : [];
   });
 
   const [approvals, setApprovals] = useState<Approval[]>(() => {
-    const data = localStorage.getItem('lyriq_approvals');
+    const data = persistentStorage.getItem('lyriq_approvals');
     return data ? JSON.parse(data) : demoApprovals;
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_approvals', JSON.stringify(approvals));
+    persistentStorage.setItem('lyriq_approvals', JSON.stringify(approvals));
   }, [approvals]);
 
   const [tickets, setTickets] = useState<Ticket[]>(() => {
-    const data = localStorage.getItem('lyriq_tickets');
+    const data = persistentStorage.getItem('lyriq_tickets');
     return data ? JSON.parse(data) : [];
   });
 
   const [workflows, setWorkflows] = useState<Workflow[]>(() => {
-    const data = localStorage.getItem('lyriq_workflows');
+    const data = persistentStorage.getItem('lyriq_workflows');
     return data ? JSON.parse(data) : demoWorkflows.map(w => ({ ...w, status: false, runsCount: 0 }));
   });
 
   const [cronAutomations, setCronAutomations] = useState<CronAutomation[]>(() => {
-    const data = localStorage.getItem('lyriq_cron_automations');
+    const data = persistentStorage.getItem('lyriq_cron_automations');
     return data ? JSON.parse(data) : demoCronAutomations;
   });
 
@@ -917,7 +931,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_cron_automations', JSON.stringify(cronAutomations));
+    persistentStorage.setItem('lyriq_cron_automations', JSON.stringify(cronAutomations));
   }, [cronAutomations]);
 
   useEffect(() => {
@@ -932,56 +946,56 @@ export default function App() {
   }, []);
 
   const [appointments, setAppointments] = useState<Appointment[]>(() => {
-    const data = localStorage.getItem('lyriq_appointments');
+    const data = persistentStorage.getItem('lyriq_appointments');
     return data ? JSON.parse(data) : demoAppointments;
   });
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    const data = localStorage.getItem('lyriq_audit_logs');
+    const data = persistentStorage.getItem('lyriq_audit_logs');
     return data ? JSON.parse(data) : demoAuditLogs;
   });
 
   const [activeTheme, setActiveTheme] = useState<string>(() => {
-    return localStorage.getItem('lyriq_theme') || 'glassmorphism';
+    return persistentStorage.getItem('lyriq_theme') || 'glassmorphism';
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_appointments', JSON.stringify(appointments));
+    persistentStorage.setItem('lyriq_appointments', JSON.stringify(appointments));
   }, [appointments]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_audit_logs', JSON.stringify(auditLogs));
+    persistentStorage.setItem('lyriq_audit_logs', JSON.stringify(auditLogs));
   }, [auditLogs]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_theme', activeTheme);
+    persistentStorage.setItem('lyriq_theme', activeTheme);
   }, [activeTheme]);
 
   const [memoryDocs, setMemoryDocs] = useState<MemoryDoc[]>(() => {
-    const data = localStorage.getItem('lyriq_memory');
+    const data = persistentStorage.getItem('lyriq_memory');
     return data ? JSON.parse(data) : [];
   });
 
   const [channels, setChannels] = useState<Channel[]>(() => {
-    const data = localStorage.getItem('lyriq_channels');
+    const data = persistentStorage.getItem('lyriq_channels');
     return data ? JSON.parse(data) : defaultChannels.map(c => ({ ...c, connected: false }));
   });
 
   const [team] = useState<TeamMember[]>(() => {
-    const data = localStorage.getItem('lyriq_team');
+    const data = persistentStorage.getItem('lyriq_team');
     return data ? JSON.parse(data) : defaultTeam;
   });
 
   // UI STATES
   const [currentTab, setCurrentTab] = useState<string>(() => {
     try {
-      const comp = localStorage.getItem('lyriq_company');
+      const comp = persistentStorage.getItem('lyriq_company');
       const compObj = comp ? JSON.parse(comp) : null;
-      const tested = localStorage.getItem('lyriq_main_agent_tested') === 'true';
-      const providersData = localStorage.getItem('lyriq_providers');
+      const tested = persistentStorage.getItem('lyriq_main_agent_tested') === 'true';
+      const providersData = persistentStorage.getItem('lyriq_providers');
       const providersParsed = providersData ? JSON.parse(providersData) : [];
       const providerValid = providersParsed.some((p: any) => p.status === 'valid');
-      const agentsData = localStorage.getItem('lyriq_agents');
+      const agentsData = persistentStorage.getItem('lyriq_agents');
       const mainAgentConfigured = agentsData ? JSON.parse(agentsData).some((a: any) => a.id === 'main') : false;
       
       const unlocked = compObj?.setupComplete || (compObj?.name && providerValid && mainAgentConfigured && tested);
@@ -990,10 +1004,33 @@ export default function App() {
       return 'setup_console';
     }
   });
+  const [codeSubTab, setCodeSubTab] = useState<'code' | 'apps' | 'web' | 'games'>('code');
+  const [codePlatform, setCodePlatform] = useState<'android' | 'ios' | 'windows' | 'macos' | 'linux'>('android');
+  const [gameDimension, setGameDimension] = useState<'2d' | '3d'>('2d');
+  const [codePrompt, setCodePrompt] = useState('Crie uma landing page premium para apresentar meu produto.');
+  const [codeRunStatus, setCodeRunStatus] = useState<'idle' | 'building' | 'ready'>('idle');
+  const runLyriqCode = async () => {
+    setCodeRunStatus('building');
+    try {
+      const tier = companyProfile.plan || currentUser?.plan || onboardingPlan || 'free';
+      const response = await fetch('/api/code/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: workspaceMode, tier, surface: codeSubTab, platform: codePlatform, dimension: gameDimension, prompt: codePrompt })
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw new Error(body.error?.message || 'Falha ao preparar o preview.');
+      setCodeRunStatus('ready');
+      addToast('Preview atualizado pelo agente.', 'success');
+    } catch (error: any) {
+      setCodeRunStatus('idle');
+      addToast(error.message || 'Falha ao executar o Lyriq Code.', 'error');
+    }
+  };
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [platformAdminSettings, setPlatformAdminSettings] = useState(() => {
-    const data = localStorage.getItem('lyriq_platform_admin_settings');
+    const data = persistentStorage.getItem('lyriq_platform_admin_settings');
     return data ? JSON.parse(data) : {
       signupsBlocked: false,
       maintenanceMode: false,
@@ -1002,7 +1039,7 @@ export default function App() {
     };
   });
   useEffect(() => {
-    localStorage.setItem('lyriq_platform_admin_settings', JSON.stringify(platformAdminSettings));
+    persistentStorage.setItem('lyriq_platform_admin_settings', JSON.stringify(platformAdminSettings));
   }, [platformAdminSettings]);
   const [configModalTab, setConfigModalTab] = useState<'overview' | 'instructions' | 'memory' | 'skills' | 'tools' | 'channels' | 'tests' | 'logs' | 'settings'>('overview');
   const [mainAgentSubTab, setMainAgentSubTab] = useState<'overview' | 'chat' | 'agents_md' | 'tools' | 'specialists'>('overview');
@@ -1026,12 +1063,12 @@ export default function App() {
     timestamp: string;
   }
   const [corrections, setCorrections] = useState<Correction[]>(() => {
-    const data = localStorage.getItem('lyriq_corrections');
+    const data = persistentStorage.getItem('lyriq_corrections');
     return data ? JSON.parse(data) : [];
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_corrections', JSON.stringify(corrections));
+    persistentStorage.setItem('lyriq_corrections', JSON.stringify(corrections));
   }, [corrections]);
 
   useEffect(() => {
@@ -1076,7 +1113,7 @@ export default function App() {
     done_criteria: string;
   }
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
-    const data = localStorage.getItem('lyriq_tasks_list');
+    const data = persistentStorage.getItem('lyriq_tasks_list');
     return data ? JSON.parse(data) : [
       { id: 'tsk-1', title: 'Enviar Proposta para Marcos Silva', description: 'Preparar contrato B2B e enviar PDF de cotação.', priority: 'high', status: 'todo', due_at: 'Amanhã', assigned_agent_id: 'sales', done_criteria: 'Email de cotação enviado' },
       { id: 'tsk-2', title: 'Triagem de Chamados Pendentes', description: 'Analisar e responder chamados marcados como insatisfeitos (SLA SLA).', priority: 'medium', status: 'in_progress', due_at: 'Hoje', assigned_agent_id: 'support', done_criteria: 'Tickets respondidos' }
@@ -1093,7 +1130,7 @@ export default function App() {
     done_criteria: task.done_criteria || task.doneCriteria || task.description || ''
   });
   useEffect(() => {
-    localStorage.setItem('lyriq_tasks_list', JSON.stringify(tasks));
+    persistentStorage.setItem('lyriq_tasks_list', JSON.stringify(tasks));
   }, [tasks]);
 
   useEffect(() => {
@@ -1135,7 +1172,7 @@ export default function App() {
     category: 'Lead' | 'Support' | 'General';
   }
   const [emailMessages] = useState<EmailMessage[]>(() => {
-    const data = localStorage.getItem('lyriq_emails');
+    const data = persistentStorage.getItem('lyriq_emails');
     return data ? JSON.parse(data) : [
       { id: 'msg-1', from: 'marcos.silva@parceiros.com', subject: 'Proposta Comercial - Parceria Lyriq', date: '12/07/2026 09:15', body: 'Olá, gostaria de entender as condições de contratação do Lyriq Agent OS para revenda.', category: 'Lead' },
       { id: 'msg-2', from: 'suporte.cliente@tecnologia.com', subject: 'Chamado técnico - Integração API travando', date: '12/07/2026 08:30', body: 'Nosso webhook está recebendo status 504 Gateway Timeout ao enviar dados.', category: 'Support' }
@@ -1143,7 +1180,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_emails', JSON.stringify(emailMessages));
+    persistentStorage.setItem('lyriq_emails', JSON.stringify(emailMessages));
   }, [emailMessages]);
 
   const [isDraftEmailModalOpen, setIsDraftEmailModalOpen] = useState(false);
@@ -1162,7 +1199,7 @@ export default function App() {
     capabilities: string[];
   }
   const [providers, setProviders] = useState<ProviderAccount[]>(() => {
-    const data = localStorage.getItem('lyriq_providers');
+    const data = persistentStorage.getItem('lyriq_providers');
     return data ? JSON.parse(data) : [
       { id: 'openai', name: 'OpenAI', status: 'not_configured', apiKey: '', lastTested: 'Nunca', modelsCount: 0, capabilities: ['chat', 'tool_calling', 'streaming', 'embeddings', 'structured_output'] },
       { id: 'anthropic', name: 'Anthropic', status: 'not_configured', apiKey: '', lastTested: 'Nunca', modelsCount: 0, capabilities: ['chat', 'tool_calling', 'streaming', 'structured_output', 'long_context'] },
@@ -1172,32 +1209,32 @@ export default function App() {
     ];
   });
   useEffect(() => {
-    localStorage.setItem('lyriq_providers', JSON.stringify(providers));
+    persistentStorage.setItem('lyriq_providers', JSON.stringify(providers));
   }, [providers]);
 
   // Database validation log states
   const [providerValidationRuns, setProviderValidationRuns] = useState<ProviderValidationRun[]>(() => {
-    const saved = localStorage.getItem('lyriq_validation_runs');
+    const saved = persistentStorage.getItem('lyriq_validation_runs');
     return saved ? JSON.parse(saved) : [];
   });
   useEffect(() => {
-    localStorage.setItem('lyriq_validation_runs', JSON.stringify(providerValidationRuns));
+    persistentStorage.setItem('lyriq_validation_runs', JSON.stringify(providerValidationRuns));
   }, [providerValidationRuns]);
 
   const [documentTrainingTests, setDocumentTrainingTests] = useState<DocumentTrainingTest[]>(() => {
-    const saved = localStorage.getItem('lyriq_training_tests');
+    const saved = persistentStorage.getItem('lyriq_training_tests');
     return saved ? JSON.parse(saved) : [];
   });
   useEffect(() => {
-    localStorage.setItem('lyriq_training_tests', JSON.stringify(documentTrainingTests));
+    persistentStorage.setItem('lyriq_training_tests', JSON.stringify(documentTrainingTests));
   }, [documentTrainingTests]);
 
   const [uiQualityChecks] = useState<UiQualityCheck[]>(() => {
-    const saved = localStorage.getItem('lyriq_ui_checks');
+    const saved = persistentStorage.getItem('lyriq_ui_checks');
     return saved ? JSON.parse(saved) : [];
   });
   useEffect(() => {
-    localStorage.setItem('lyriq_ui_checks', JSON.stringify(uiQualityChecks));
+    persistentStorage.setItem('lyriq_ui_checks', JSON.stringify(uiQualityChecks));
   }, [uiQualityChecks]);
 
   const [workspaceModelPreset, setWorkspaceModelPreset] = useState<'economico' | 'equilibrado' | 'avancado' | 'long_context' | 'multimodal'>('equilibrado');
@@ -1495,20 +1532,20 @@ export default function App() {
   ];
 
   const [isMainAgentTested, setIsMainAgentTested] = useState<boolean>(() => {
-    return localStorage.getItem('lyriq_main_agent_tested') === 'true';
+    return persistentStorage.getItem('lyriq_main_agent_tested') === 'true';
   });
 
   const [isKnowledgeSkipped, setIsKnowledgeSkipped] = useState<boolean>(() => {
-    return localStorage.getItem('lyriq_knowledge_skipped') === 'true';
+    return persistentStorage.getItem('lyriq_knowledge_skipped') === 'true';
   });
 
   const [setupConsoleActiveStep, setSetupConsoleActiveStep] = useState<number>(() => {
-    const saved = localStorage.getItem('lyriq_setup_console_step');
+    const saved = persistentStorage.getItem('lyriq_setup_console_step');
     return saved ? parseInt(saved, 10) : 1;
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_setup_console_step', setupConsoleActiveStep.toString());
+    persistentStorage.setItem('lyriq_setup_console_step', setupConsoleActiveStep.toString());
   }, [setupConsoleActiveStep]);
 
   const [isTestingMainAgent, setIsTestingMainAgent] = useState(false);
@@ -1516,11 +1553,11 @@ export default function App() {
 
 
   useEffect(() => {
-    localStorage.setItem('lyriq_main_agent_tested', isMainAgentTested ? 'true' : 'false');
+    persistentStorage.setItem('lyriq_main_agent_tested', isMainAgentTested ? 'true' : 'false');
   }, [isMainAgentTested]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_knowledge_skipped', isKnowledgeSkipped ? 'true' : 'false');
+    persistentStorage.setItem('lyriq_knowledge_skipped', isKnowledgeSkipped ? 'true' : 'false');
   }, [isKnowledgeSkipped]);
 
   // Reusable Skills templates database
@@ -1785,12 +1822,12 @@ export default function App() {
 
   // Version Control logs for manual overrides
   const [agentVersions, setAgentVersions] = useState<AgentVersion[]>(() => {
-    const saved = localStorage.getItem('lyriq_agent_versions');
+    const saved = persistentStorage.getItem('lyriq_agent_versions');
     return saved ? JSON.parse(saved) : [];
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_agent_versions', JSON.stringify(agentVersions));
+    persistentStorage.setItem('lyriq_agent_versions', JSON.stringify(agentVersions));
   }, [agentVersions]);
 
   const [selectedAgentTemplate, setSelectedAgentTemplate] = useState<AgentTemplate | null>(null);
@@ -1829,7 +1866,7 @@ export default function App() {
     fix?: string;
     logId?: string;
   }>>>(() => {
-    const data = localStorage.getItem('lyriq_chats');
+    const data = persistentStorage.getItem('lyriq_chats');
     if (data) {
       try {
         return JSON.parse(data);
@@ -1883,50 +1920,50 @@ export default function App() {
     { agent: 'System', text: 'Enxame de Agentes Autônomos (Swarm Mode) pronto para cooperação multi-agente.', time: 'Agora', type: 'system' }
   ]);
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
-    return localStorage.getItem('lyriq_gemini_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
+    return persistentStorage.getItem('lyriq_gemini_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_gemini_key', geminiApiKey);
+    persistentStorage.setItem('lyriq_gemini_key', geminiApiKey);
   }, [geminiApiKey]);
 
   const [expandedLogIds, setExpandedLogIds] = useState<Record<string, boolean>>({});
 
   // Multi-Provider AI Routing and Execution States
   const [activeProvider, setActiveProvider] = useState<string>(() => {
-    return localStorage.getItem('lyriq_active_provider') || 'gemini';
+    return persistentStorage.getItem('lyriq_active_provider') || 'gemini';
   });
   const [openaiApiKey, setOpenaiApiKey] = useState<string>(() => {
-    return localStorage.getItem('lyriq_openai_key') || '';
+    return persistentStorage.getItem('lyriq_openai_key') || '';
   });
   const [anthropicApiKey, setAnthropicApiKey] = useState<string>(() => {
-    return localStorage.getItem('lyriq_anthropic_key') || '';
+    return persistentStorage.getItem('lyriq_anthropic_key') || '';
   });
   const [ollamaEndpoint, setOllamaEndpoint] = useState<string>(() => {
-    return localStorage.getItem('lyriq_ollama_endpoint') || 'http://localhost:11434';
+    return persistentStorage.getItem('lyriq_ollama_endpoint') || 'http://localhost:11434';
   });
 
   // Budget Guard States
   const [monthlyBudgetLimit, setMonthlyBudgetLimit] = useState<number>(() => {
-    return Number(localStorage.getItem('lyriq_budget_limit')) || 100;
+    return Number(persistentStorage.getItem('lyriq_budget_limit')) || 100;
   });
   const [budgetGuardHardLimit, setBudgetGuardHardLimit] = useState<boolean>(() => {
-    return localStorage.getItem('lyriq_budget_hard_limit') !== 'false';
+    return persistentStorage.getItem('lyriq_budget_hard_limit') !== 'false';
   });
   const [apiExpenditureToday, setApiExpenditureToday] = useState<number>(() => {
-    return Number(localStorage.getItem('lyriq_api_expenditure_today')) || 12.40;
+    return Number(persistentStorage.getItem('lyriq_api_expenditure_today')) || 12.40;
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_budget_limit', String(monthlyBudgetLimit));
+    persistentStorage.setItem('lyriq_budget_limit', String(monthlyBudgetLimit));
   }, [monthlyBudgetLimit]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_budget_hard_limit', String(budgetGuardHardLimit));
+    persistentStorage.setItem('lyriq_budget_hard_limit', String(budgetGuardHardLimit));
   }, [budgetGuardHardLimit]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_api_expenditure_today', String(apiExpenditureToday));
+    persistentStorage.setItem('lyriq_api_expenditure_today', String(apiExpenditureToday));
   }, [apiExpenditureToday]);
 
   const [executionLogs, setExecutionLogs] = useState<string[]>(() => [
@@ -1937,7 +1974,7 @@ export default function App() {
 
   // Custom Skills States (Skills OS)
   const [skills, setSkills] = useState<Skill[]>(() => {
-    const saved = localStorage.getItem('lyriq_skills');
+    const saved = persistentStorage.getItem('lyriq_skills');
     if (saved) {
       const parsed = JSON.parse(saved);
       const systemSkills = [
@@ -2062,7 +2099,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_skills', JSON.stringify(skills));
+    persistentStorage.setItem('lyriq_skills', JSON.stringify(skills));
   }, [skills]);
 
   // Internal Skills Marketplace States (Section 14.3)
@@ -2079,7 +2116,7 @@ export default function App() {
     assignedAgentId: string;
   }
   const [marketplaceSkills, setMarketplaceSkills] = useState<MarketplaceSkill[]>(() => {
-    const saved = localStorage.getItem('lyriq_marketplace_skills');
+    const saved = persistentStorage.getItem('lyriq_marketplace_skills');
     if (saved) return JSON.parse(saved);
     return [
       {
@@ -2146,7 +2183,7 @@ export default function App() {
   });
 
   useEffect(() => {
-    localStorage.setItem('lyriq_marketplace_skills', JSON.stringify(marketplaceSkills));
+    persistentStorage.setItem('lyriq_marketplace_skills', JSON.stringify(marketplaceSkills));
   }, [marketplaceSkills]);
 
   // Skill Creation Modal States
@@ -2189,6 +2226,7 @@ export default function App() {
     { "source": "qualificar", "target": "crm" }
   ]
 }`);
+  const [automationAgentPrompt, setAutomationAgentPrompt] = useState('Quando chegar um lead pelo WhatsApp, qualifique com o agente SDR, salve no CRM, envie uma resposta inicial e avise o time se o score passar de 80.');
   const [workflowJsonError, setWorkflowJsonError] = useState('');
   const [sandboxTool, setSandboxTool] = useState<'read_file' | 'write_file' | 'delete_file' | 'execute_bash' | 'eval_javascript' | 'google_search'>('eval_javascript');
   const [sandboxReadFileId, setSandboxReadFileId] = useState('');
@@ -2242,16 +2280,16 @@ export default function App() {
 
   // Custom AI Model states
   const [geminiModel, setGeminiModel] = useState<string>(() => {
-    return localStorage.getItem('lyriq_gemini_model') || 'gemini-1.5-flash';
+    return persistentStorage.getItem('lyriq_gemini_model') || 'gemini-1.5-flash';
   });
   const [openaiModel, setOpenaiModel] = useState<string>(() => {
-    return localStorage.getItem('lyriq_openai_model') || 'gpt-4o-mini';
+    return persistentStorage.getItem('lyriq_openai_model') || 'gpt-4o-mini';
   });
   const [anthropicModel, setAnthropicModel] = useState<string>(() => {
-    return localStorage.getItem('lyriq_anthropic_model') || 'claude-3-5-sonnet-20241022';
+    return persistentStorage.getItem('lyriq_anthropic_model') || 'claude-3-5-sonnet-20241022';
   });
   const [ollamaModel, setOllamaModel] = useState<string>(() => {
-    return localStorage.getItem('lyriq_ollama_model') || 'llama3';
+    return persistentStorage.getItem('lyriq_ollama_model') || 'llama3';
   });
 
   const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'diagnostics'>('general');
@@ -2439,35 +2477,35 @@ export default function App() {
   };
 
   useEffect(() => {
-    localStorage.setItem('lyriq_gemini_model', geminiModel);
+    persistentStorage.setItem('lyriq_gemini_model', geminiModel);
   }, [geminiModel]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_openai_model', openaiModel);
+    persistentStorage.setItem('lyriq_openai_model', openaiModel);
   }, [openaiModel]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_anthropic_model', anthropicModel);
+    persistentStorage.setItem('lyriq_anthropic_model', anthropicModel);
   }, [anthropicModel]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_ollama_model', ollamaModel);
+    persistentStorage.setItem('lyriq_ollama_model', ollamaModel);
   }, [ollamaModel]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_active_provider', activeProvider);
+    persistentStorage.setItem('lyriq_active_provider', activeProvider);
   }, [activeProvider]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_openai_key', openaiApiKey);
+    persistentStorage.setItem('lyriq_openai_key', openaiApiKey);
   }, [openaiApiKey]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_anthropic_key', anthropicApiKey);
+    persistentStorage.setItem('lyriq_anthropic_key', anthropicApiKey);
   }, [anthropicApiKey]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_ollama_endpoint', ollamaEndpoint);
+    persistentStorage.setItem('lyriq_ollama_endpoint', ollamaEndpoint);
   }, [ollamaEndpoint]);
 
   // Log RAG memory updates
@@ -2498,7 +2536,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; type: 'success' | 'info' | 'error' }>>([]);
   const [onboardingStep, setOnboardingStep] = useState(1);
-  const [onboardingPlan, setOnboardingPlan] = useState<'free' | 'pro' | 'max_5x' | 'business' | 'enterprise'>('free');
+  const [onboardingPlan, setOnboardingPlan] = useState<'free' | 'pro' | 'max' | 'max_5x' | 'max_20x' | 'enterprise'>('free');
   const [onboardingPaymentStatus, setOnboardingPaymentStatus] = useState<string>('free');
   const [onboardingTermsAccepted, setOnboardingTermsAccepted] = useState(false);
   const [onboardingPrivacyAccepted, setOnboardingPrivacyAccepted] = useState(false);
@@ -2584,39 +2622,39 @@ export default function App() {
 
   // Auto-syncing DB with LocalStorage
   useEffect(() => {
-    localStorage.setItem('lyriq_company', JSON.stringify(companyProfile));
+    persistentStorage.setItem('lyriq_company', JSON.stringify(companyProfile));
   }, [companyProfile]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_agents', JSON.stringify(agents));
+    persistentStorage.setItem('lyriq_agents', JSON.stringify(agents));
   }, [agents]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_leads', JSON.stringify(leads));
+    persistentStorage.setItem('lyriq_leads', JSON.stringify(leads));
   }, [leads]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_tickets', JSON.stringify(tickets));
+    persistentStorage.setItem('lyriq_tickets', JSON.stringify(tickets));
   }, [tickets]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_workflows', JSON.stringify(workflows));
+    persistentStorage.setItem('lyriq_workflows', JSON.stringify(workflows));
   }, [workflows]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_memory', JSON.stringify(memoryDocs));
+    persistentStorage.setItem('lyriq_memory', JSON.stringify(memoryDocs));
   }, [memoryDocs]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_channels', JSON.stringify(channels));
+    persistentStorage.setItem('lyriq_channels', JSON.stringify(channels));
   }, [channels]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_team', JSON.stringify(team));
+    persistentStorage.setItem('lyriq_team', JSON.stringify(team));
   }, [team]);
 
   useEffect(() => {
-    localStorage.setItem('lyriq_chats', JSON.stringify(chatMessages));
+    persistentStorage.setItem('lyriq_chats', JSON.stringify(chatMessages));
   }, [chatMessages]);
 
   // Helper for adding toast
@@ -2722,7 +2760,8 @@ export default function App() {
         body: JSON.stringify({
           workspaceId: 'workspace_123',
           apiKey: onboardingApiKey,
-          modelId: onboardingSelectedModel
+          modelId: onboardingSelectedModel,
+          plan: onboardingPlan
         })
       });
       const body = await readJsonResponse(res);
@@ -2731,8 +2770,20 @@ export default function App() {
       }
       const models: ProviderModelOption[] = body.data?.models || [];
       const connection = body.data?.connection;
-      setOnboardingModels(models.length ? models : onboardingModels);
-      if (connection?.selected_chat_model) setOnboardingSelectedModel(connection.selected_chat_model);
+      const validatedModels = models.length ? models : onboardingModels;
+      setOnboardingModels(validatedModels);
+      const planWeights: Record<string, number> = { free: 1, flash: 2, pro: 3, max: 4, max_5x: 4, business: 5, enterprise: 6 };
+      const planAllows = (model?: ProviderModelOption) => model
+        && model.isAvailable !== false
+        && (planWeights[onboardingPlan] || 1) >= (planWeights[model.requiresPlan || 'free'] || 1);
+      const connectedModel = validatedModels.find(model => model.id === connection?.selected_chat_model);
+      const previouslySelected = validatedModels.find(model => model.id === onboardingSelectedModel);
+      const selectedModel = planAllows(connectedModel)
+        ? connectedModel!.id
+        : planAllows(previouslySelected)
+          ? previouslySelected!.id
+          : validatedModels.find(planAllows)?.id || connection?.selected_chat_model || onboardingSelectedModel;
+      setOnboardingSelectedModel(selectedModel);
       setOnboardingValidatedConnection(connection || null);
       setProviders(prev => prev.map(p => p.id === onboardingSelectedProvider ? {
         ...p,
@@ -2741,13 +2792,13 @@ export default function App() {
         lastTested: new Date().toLocaleString('pt-BR'),
         modelsCount: models.length || connection?.available_models?.length || 0
       } : p));
-      localStorage.setItem('lyriq_active_provider', onboardingSelectedProvider);
-      if (onboardingSelectedProvider === 'gemini') setGeminiModel(connection?.selected_chat_model || onboardingSelectedModel);
-      if (onboardingSelectedProvider === 'openai') setOpenaiModel(connection?.selected_chat_model || onboardingSelectedModel);
-      if (onboardingSelectedProvider === 'anthropic') setAnthropicModel(connection?.selected_chat_model || onboardingSelectedModel);
-      if (onboardingSelectedProvider === 'ollama') setOllamaModel(connection?.selected_chat_model || onboardingSelectedModel);
+      persistentStorage.setItem('lyriq_active_provider', onboardingSelectedProvider);
+      if (onboardingSelectedProvider === 'gemini') setGeminiModel(selectedModel);
+      if (onboardingSelectedProvider === 'openai') setOpenaiModel(selectedModel);
+      if (onboardingSelectedProvider === 'anthropic') setAnthropicModel(selectedModel);
+      if (onboardingSelectedProvider === 'ollama') setOllamaModel(selectedModel);
       setOnboardingApiKeyValidated(true);
-      setOnboardingApiKeyStatusText(`API validada. Provider: ${onboardingSelectedProvider}. Modelo ativo: ${connection?.selected_chat_model || onboardingSelectedModel}. Chave: ${connection?.key_fingerprint || 'mascarada'}.`);
+      setOnboardingApiKeyStatusText(`API validada. Provider: ${onboardingSelectedProvider}. Modelo ativo: ${selectedModel}. Chave: ${connection?.key_fingerprint || 'mascarada'}.`);
       addToast('API Key validada e modelos sincronizados.', 'success');
     } catch (err: any) {
       setOnboardingApiKeyValidated(false);
@@ -3102,39 +3153,42 @@ export default function App() {
   };
 
   // AUTH LOGIC
-  const handleAuthSubmit = (e: React.FormEvent) => {
+  const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!authEmail.trim() || !authPassword.trim()) {
       addToast('Preencha todos os campos.', 'error');
       return;
     }
 
-    const storedUsers = localStorage.getItem('lyriq_users');
-    const usersList: UserAccount[] = storedUsers ? JSON.parse(storedUsers) : [];
-
     if (authMode === 'signup') {
       if (!authName.trim()) {
         addToast('Nome é obrigatório para cadastro.', 'error');
         return;
       }
-      if (usersList.some(u => u.email === authEmail)) {
-        addToast('Este e-mail já está cadastrado.', 'error');
-        return;
-      }
-
       const newUser: UserAccount = {
         email: authEmail,
-        password: authPassword,
         name: authName,
         role: 'user',
         plan: 'free'
       };
-      usersList.push(newUser);
-      localStorage.setItem('lyriq_users', JSON.stringify(usersList));
+      const { data, error } = await supabase.auth.signUp({
+        email: authEmail,
+        password: authPassword,
+        options: { data: { name: authName, role: 'user', plan: 'free' } },
+      });
+      if (error) {
+        addToast(error.message, 'error');
+        return;
+      }
+      if (!data.session) {
+        addToast('Confira seu e-mail para confirmar o cadastro.', 'info');
+        return;
+      }
+      setPersistentUser(data.user?.id ?? null);
       
       // Automatic login after sign up -> mandatory redirect to onboarding (PDF V1 Section 4.2)
-      localStorage.setItem('lyriq_session', JSON.stringify(newUser));
-      localStorage.removeItem('lyriq_onboarding_completed');
+      persistentStorage.setItem('lyriq_session', JSON.stringify(newUser));
+      persistentStorage.removeItem('lyriq_onboarding_completed');
       setCurrentUser(newUser);
       
       // Fresh new company profile triggers onboarding wizard
@@ -3152,53 +3206,28 @@ export default function App() {
       setCurrentRoute('onboarding');
       setOnboardingStep(1);
     } else {
-      // LOGIN MODE
-      const matched = usersList.find(u => u.email === authEmail && u.password === authPassword);
-      
-      // Check for default demo credentials to make testing easier
-      if (authEmail === 'demo@lyriq.com' && authPassword === 'demo123') {
-        const demoUser: UserAccount = {
-          email: 'demo@lyriq.com',
-          name: 'Augusto Weymar (Demo)',
-          role: 'user',
-          plan: 'pro'
-        };
-        localStorage.setItem('lyriq_session', JSON.stringify(demoUser));
-        localStorage.setItem('lyriq_onboarding_completed', 'true');
-        setCurrentUser(demoUser);
-        
-        // Seed demo company state
-        setCompanyProfile({ ...demoCompany, plan: 'pro' });
-        setAgents(defaultAgentsList);
-        setLeads(demoLeads);
-        setTickets(demoTickets);
-        setMemoryDocs(demoMemoryDocs);
-        setWorkflows(demoWorkflows);
-        setChannels(defaultChannels);
-        
-        // Seed some starter timeline logs
-        setTimelineLogs([
-          { id: 'log-1', agent: 'Estevão Sales', action: 'Capturou lead Mariana Costa e preencheu o CRM.', time: 'Há 12 min', source: 'WhatsApp' },
-          { id: 'log-2', agent: 'Sofia Support', action: 'Abriu chamado urgente #tick-2481 para Glauber Souza.', time: 'Há 24 min', source: 'Slack' }
-        ]);
-        
-        addToast('Conectado com conta demo.', 'success');
-        setCurrentRoute('app');
-        setCurrentTab('dashboard');
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: authEmail,
+        password: authPassword,
+      });
+      if (error || !data.user) {
+        addToast(error?.message || 'Credenciais incorretas.', 'error');
         return;
       }
-
-      if (!matched) {
-        addToast('Credenciais incorretas.', 'error');
-        return;
-      }
-
-      localStorage.setItem('lyriq_session', JSON.stringify(matched));
+      setPersistentUser(data.user.id);
+      const metadata = data.user.user_metadata;
+      const matched: UserAccount = {
+        email: data.user.email || authEmail,
+        name: metadata.name || data.user.email || 'Usuário',
+        role: metadata.role || 'user',
+        plan: metadata.plan || 'free',
+      };
+      persistentStorage.setItem('lyriq_session', JSON.stringify(matched));
       setCurrentUser(matched);
       addToast(`Bem-vindo de volta, ${matched.name}!`, 'success');
 
       // Check if onboarding was completed
-      const isCompleted = localStorage.getItem('lyriq_onboarding_completed') === 'true';
+      const isCompleted = persistentStorage.getItem('lyriq_onboarding_completed') === 'true';
       if (isCompleted) {
         setCurrentRoute('app');
         setCurrentTab('dashboard');
@@ -3209,8 +3238,10 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('lyriq_session');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setPersistentUser(null);
+    persistentStorage.removeItem('lyriq_session');
     setCurrentUser(null);
     addToast('Sessão encerrada com sucesso.', 'info');
     setCurrentRoute('landing');
@@ -3224,7 +3255,7 @@ export default function App() {
       role: 'user',
       plan: 'pro'
     };
-    localStorage.setItem('lyriq_session', JSON.stringify(demoUser));
+    persistentStorage.setItem('lyriq_session', JSON.stringify(demoUser));
     setCurrentUser(demoUser);
     
     setCompanyProfile(demoCompany);
@@ -3665,7 +3696,7 @@ export default function App() {
       ]
     };
     setChatMessages(defaultChats as any);
-    localStorage.setItem('lyriq_chats', JSON.stringify(defaultChats));
+    persistentStorage.setItem('lyriq_chats', JSON.stringify(defaultChats));
     addToast('Histórico de mensagens reiniciado!', 'info');
   };
 
@@ -6601,13 +6632,31 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
             </div>
             <div className="text-xs text-slate-300 space-y-4 leading-relaxed">
-              <p>Ao criar sua conta, você concorda com os Termos de Uso e entende que é responsável pelos dados, documentos e API keys conectados ao workspace.</p>
+              <p>Ao criar sua conta, acessar ou usar o Lyriq Agents OS, você concorda com estes Termos de Uso. Se estiver usando a plataforma em nome de uma empresa, você declara ter autorização para aceitar estes termos por ela.</p>
               <h2 className="text-sm font-bold text-white pt-2">1. O que é o Lyriq Agents OS</h2>
-              <p>O Lyriq Agents OS é um sistema operacional para orquestração de agentes autônomos de Inteligência Artificial com suporte a RAG, arquivos, ferramentas e limite orçamentário.</p>
+              <p>O Lyriq Agents OS é uma plataforma para criação, configuração e operação de agentes de Inteligência Artificial, com chat, documentos, memória, automações, ferramentas, integrações, ambiente de código, aprovações humanas, logs e limites operacionais por plano.</p>
               <h2 className="text-sm font-bold text-white pt-2">2. Responsabilidade sobre dados e API Keys (BYOK)</h2>
-              <p>O usuário é inteiramente responsável pelos arquivos enviados e pelas chaves de API conectadas. API keys são processadas no backend, criptografadas e nunca exibidas completas novamente.</p>
-              <h2 className="text-sm font-bold text-white pt-2">3. Limites de uso por plano</h2>
-              <p>Cada plano (Free/Teste, Flash, Pro, Max, Business) impõe limites específicos de tamanho de arquivos, modelos permitidos e concorrência de execução.</p>
+              <p>O usuário é responsável pelos arquivos enviados, prompts, instruções, credenciais, API keys, webhooks e integrações conectadas. API keys devem ser processadas no backend, criptografadas em repouso e nunca exibidas completas novamente após o cadastro.</p>
+              <h2 className="text-sm font-bold text-white pt-2">3. Uso permitido e uso proibido</h2>
+              <p>Você pode usar a plataforma para produtividade, atendimento, conteúdo, desenvolvimento, análise, automações internas e operação empresarial lícita. É proibido usar o serviço para fraude, spam, malware, engenharia social, invasão, coleta abusiva de dados, violação de propriedade intelectual, discriminação ilegal ou qualquer atividade que viole lei aplicável ou termos de provedores conectados.</p>
+              <h2 className="text-sm font-bold text-white pt-2">4. Agentes, automações e aprovações humanas</h2>
+              <p>Agentes e automações podem gerar respostas, criar arquivos, chamar APIs, registrar tarefas e acionar sistemas externos conforme permissões configuradas. Ações sensíveis, como pagamentos, exclusões, publicação externa, envio em massa, alteração de permissões e mudanças contratuais, devem exigir aprovação humana e registro de auditoria.</p>
+              <h2 className="text-sm font-bold text-white pt-2">5. Lyriq Code</h2>
+              <p>O Lyriq Code permite criar, editar, organizar e executar projetos de software assistidos por IA. O usuário é responsável por revisar código, dependências, licenças, segredos, credenciais, saídas geradas e impacto de deploys antes de publicar ou usar em produção.</p>
+              <h2 className="text-sm font-bold text-white pt-2">6. Limites de uso por plano</h2>
+              <p>Cada plano pode impor limites de usuários, agentes, projetos, arquivos, armazenamento, créditos, chamadas de modelos, concorrência, automações, conectores, logs e suporte. A Lyriq pode aplicar rate limits, bloqueios temporários, pausas automáticas e limites de segurança para proteger usuários e a plataforma.</p>
+              <h2 className="text-sm font-bold text-white pt-2">7. Conteúdo gerado por IA</h2>
+              <p>As respostas e artefatos gerados por IA podem conter erros, omissões ou interpretações imprecisas. O usuário deve revisar resultados antes de tomar decisões jurídicas, financeiras, médicas, educacionais, operacionais críticas ou de comunicação pública.</p>
+              <h2 className="text-sm font-bold text-white pt-2">8. Assinaturas, cobrança e cancelamento</h2>
+              <p>Planos pagos podem ser cobrados de forma recorrente. O cancelamento interrompe futuras cobranças, mas não gera reembolso automático de períodos já utilizados, salvo exigência legal, oferta específica ou decisão comercial da Lyriq. Recursos excedentes podem gerar cobrança adicional quando expressamente contratado.</p>
+              <h2 className="text-sm font-bold text-white pt-2">9. Suspensão e encerramento</h2>
+              <p>A Lyriq pode suspender ou limitar contas em caso de abuso, risco de segurança, inadimplência, violação destes termos, uso que prejudique terceiros ou ordem legal. Quando possível e seguro, o usuário será informado sobre o motivo e formas de regularização.</p>
+              <h2 className="text-sm font-bold text-white pt-2">10. Propriedade intelectual</h2>
+              <p>A plataforma, marca, interface, fluxos internos e tecnologia da Lyriq pertencem à Lyriq. O conteúdo enviado pelo usuário continua pertencendo ao usuário ou à empresa responsável. O usuário concede à Lyriq licença limitada para processar esse conteúdo apenas para operar, proteger e melhorar o serviço contratado.</p>
+              <h2 className="text-sm font-bold text-white pt-2">11. Limitação de responsabilidade</h2>
+              <p>A plataforma é fornecida como ferramenta de apoio operacional. A Lyriq não responde por decisões tomadas sem revisão humana, falhas de provedores terceiros, mau uso de credenciais, integrações configuradas pelo usuário, perda causada por automações sem aprovação adequada ou uso fora das instruções do produto.</p>
+              <h2 className="text-sm font-bold text-white pt-2">12. Alterações dos termos</h2>
+              <p>Estes termos podem ser atualizados para refletir mudanças no produto, legislação, segurança ou modelo comercial. Alterações relevantes devem ser comunicadas dentro da plataforma, por e-mail ou por outro canal apropriado.</p>
             </div>
           </div>
         </div>
@@ -6630,11 +6679,31 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
             </div>
             <div className="text-xs text-slate-300 space-y-4 leading-relaxed">
-              <p>Usamos seus dados para operar o produto, proteger sua conta, processar documentos e permitir que seus agentes funcionem com contexto. API keys devem ser criptografadas e nunca exibidas completas novamente.</p>
+              <p>Esta Política de Privacidade explica como a Lyriq coleta, usa, armazena, protege e compartilha dados no Lyriq Agents OS. Usamos dados para operar o produto, proteger contas, processar documentos, executar agentes, manter automações e melhorar a experiência.</p>
               <h2 className="text-sm font-bold text-white pt-2">1. Dados coletados</h2>
-              <p>Coletamos nome, e-mail, perfil da empresa, metadados de documentos e chaves de API criptografadas para execução dos agentes.</p>
-              <h2 className="text-sm font-bold text-white pt-2">2. Armazenamento e Criptografia</h2>
-              <p>Documentos são armazenados de forma isolada por tenant (RLS). Chaves de API de provedores externos são criptografadas e mantidas em cofre seguro.</p>
+              <p>Podemos coletar nome, e-mail, senha ou identificador de login, empresa, cargo, plano, preferências, configurações de workspace, agentes, prompts, documentos enviados, metadados de arquivos, histórico de uso, logs técnicos, eventos de auditoria, IP, dispositivo, navegador e dados de cobrança quando aplicável.</p>
+              <h2 className="text-sm font-bold text-white pt-2">2. Dados de agentes, documentos e automações</h2>
+              <p>Prompts, instruções, arquivos, chunks, embeddings, mensagens, resultados de automações, webhooks e registros de execução podem ser processados para entregar respostas, recuperar contexto, executar ferramentas e manter rastreabilidade operacional.</p>
+              <h2 className="text-sm font-bold text-white pt-2">3. API keys, credenciais e integrações</h2>
+              <p>Chaves de API e credenciais de terceiros devem ser armazenadas com criptografia, controle de acesso e mascaramento. Elas são usadas para conectar provedores, modelos, canais, ferramentas e integrações autorizadas pelo usuário.</p>
+              <h2 className="text-sm font-bold text-white pt-2">4. Bases legais e finalidades</h2>
+              <p>Tratamos dados para executar contrato, cumprir obrigações legais, proteger a plataforma, prevenir fraude, oferecer suporte, medir desempenho, melhorar recursos, enviar comunicações operacionais e, quando permitido, apresentar novidades do produto.</p>
+              <h2 className="text-sm font-bold text-white pt-2">5. Compartilhamento com terceiros</h2>
+              <p>Dados podem ser enviados a provedores de IA, infraestrutura, banco de dados, autenticação, pagamento, e-mail, analytics, logs, armazenamento e integrações conectadas, sempre na medida necessária para operar o serviço. Provedores externos também podem aplicar seus próprios termos e políticas.</p>
+              <h2 className="text-sm font-bold text-white pt-2">6. Segurança e isolamento</h2>
+              <p>O produto deve usar isolamento por workspace, políticas de acesso, RLS quando aplicável, criptografia em trânsito, criptografia em repouso para segredos, logs de auditoria, limitação de permissões e controles de abuso. Nenhuma medida é perfeita, mas segurança é requisito central do produto.</p>
+              <h2 className="text-sm font-bold text-white pt-2">7. Retenção e exclusão</h2>
+              <p>Dados são mantidos enquanto a conta estiver ativa ou enquanto forem necessários para operação, segurança, auditoria, cumprimento legal ou defesa de direitos. O usuário pode solicitar exclusão, exportação ou correção, respeitados limites técnicos, legais e contratuais.</p>
+              <h2 className="text-sm font-bold text-white pt-2">8. Treinamento de modelos</h2>
+              <p>Por padrão de produto empresarial, dados privados de usuários não devem ser usados para treinar modelos públicos sem autorização. Quando um provedor terceiro for usado, o tratamento dependerá da configuração e política desse provedor.</p>
+              <h2 className="text-sm font-bold text-white pt-2">9. Cookies e analytics</h2>
+              <p>Podemos usar cookies, armazenamento local e ferramentas de analytics para login, segurança, preferências, métricas de uso, diagnóstico de erros e melhoria de produto. O usuário pode controlar permissões pelo navegador quando aplicável.</p>
+              <h2 className="text-sm font-bold text-white pt-2">10. Direitos do titular</h2>
+              <p>Conforme a LGPD e demais leis aplicáveis, o usuário pode solicitar confirmação de tratamento, acesso, correção, portabilidade, anonimização, bloqueio, exclusão, informação sobre compartilhamento e revisão de decisões automatizadas quando cabível.</p>
+              <h2 className="text-sm font-bold text-white pt-2">11. Incidentes de segurança</h2>
+              <p>Em caso de incidente relevante envolvendo dados pessoais, a Lyriq deverá avaliar impacto, conter o problema, registrar evidências e comunicar usuários ou autoridades quando exigido por lei.</p>
+              <h2 className="text-sm font-bold text-white pt-2">12. Contato</h2>
+              <p>Dúvidas, solicitações de privacidade e pedidos relacionados a dados devem ser enviados pelos canais oficiais da Lyriq informados na plataforma.</p>
             </div>
           </div>
         </div>
@@ -6675,7 +6744,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
           <div className="bg-[#182032] border-b border-slate-800/80 px-6 py-3 shrink-0">
             <div className="max-w-5xl mx-auto flex items-center justify-between text-[11px] font-medium text-slate-400 gap-2 overflow-x-auto">
               {[
-                { step: 1, label: 'Empresa' },
+                { step: 1, label: 'Modo' },
                 { step: 2, label: 'Termos' },
                 { step: 3, label: 'Plano' },
                 { step: 4, label: 'Documentos' },
@@ -6720,14 +6789,37 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   <div>
                     <h2 className="text-lg font-bold text-white flex items-center gap-2">
                       <Building2 className="w-5 h-5 text-indigo-400" />
-                      <span>1. Configuração da Empresa</span>
+                      <span>1. Como você vai usar a Lyriq?</span>
                     </h2>
-                    <p className="text-xs text-slate-400 mt-1">Conte o básico da sua empresa para o Lyriq criar a memória inicial dos seus agentes.</p>
+                    <p className="text-xs text-slate-400 mt-1">Escolha o modo inicial. Você poderá alterar depois nas configurações.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => { setWorkspaceMode('personal'); if (onboardingPlan === 'enterprise') setOnboardingPlan('free'); }}
+                      className={`p-5 rounded-xl border text-left transition ${workspaceMode === 'personal' ? 'border-cyan-400 bg-cyan-950/30 ring-1 ring-cyan-400' : 'border-slate-800 bg-[#182032] hover:border-slate-600'}`}
+                    >
+                      <div className="flex items-center gap-3"><Code2 className="w-6 h-6 text-cyan-400" /><span className="font-bold text-white">Personal</span></div>
+                      <p className="text-xs text-slate-400 mt-2">Crie aplicativos, sites, jogos e agentes para seus projetos.</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setWorkspaceMode('business')}
+                      className={`p-5 rounded-xl border text-left transition ${workspaceMode === 'business' ? 'border-indigo-400 bg-indigo-950/30 ring-1 ring-indigo-400' : 'border-slate-800 bg-[#182032] hover:border-slate-600'}`}
+                    >
+                      <div className="flex items-center gap-3"><Building2 className="w-6 h-6 text-indigo-400" /><span className="font-bold text-white">Business</span></div>
+                      <p className="text-xs text-slate-400 mt-2">Automatize processos, coordene equipes e opere agentes com controle e governança.</p>
+                    </button>
+                  </div>
+
+                  <div className="border-t border-slate-800 pt-5">
+                    <p className="text-xs font-semibold text-white">{workspaceMode === 'personal' ? 'Configure seu workspace pessoal' : 'Configure sua empresa'}</p>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nome da Empresa *</label>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">{workspaceMode === 'personal' ? 'Nome do Workspace' : 'Nome da Empresa'} *</label>
                       <input 
                         type="text"
                         required
@@ -6933,48 +7025,33 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                     <p className="text-xs text-slate-400 mt-1">Selecione o plano ideal para a escala da sua empresa. Você pode usar Free/Teste ou assinar um plano pago.</p>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div 
-                      onClick={() => setOnboardingPlan('free')}
-                      className={`p-4 rounded-xl border cursor-pointer transition flex flex-col justify-between space-y-3 ${
-                        onboardingPlan === 'free' ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500' : 'bg-[#182032] border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Free / Teste</span>
-                        <h4 className="text-lg font-extrabold text-white mt-1">R$ 0 <span className="text-xs font-normal text-slate-400">/mês</span></h4>
-                        <p className="text-[11px] text-slate-400 mt-2">Não exige cartão. Permite BYOK e onboarding completo com limites.</p>
-                      </div>
-                      <span className="text-[10px] font-semibold text-emerald-400">Sem Pagamento Exigido</span>
-                    </div>
-
-                    <div 
-                      onClick={() => setOnboardingPlan('pro')}
-                      className={`p-4 rounded-xl border cursor-pointer transition flex flex-col justify-between space-y-3 ${
-                        onboardingPlan === 'pro' ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500' : 'bg-[#182032] border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <div>
-                        <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Pro</span>
-                        <h4 className="text-lg font-extrabold text-white mt-1">R$ 199,90 <span className="text-xs font-normal text-slate-400">/mês</span></h4>
-                        <p className="text-[11px] text-slate-400 mt-2">Uso sério para pequena empresa com até 8 agentes.</p>
-                      </div>
-                      <span className="text-[10px] font-semibold text-indigo-300">Checkout Stripe Disponível</span>
-                    </div>
-
-                    <div 
-                      onClick={() => setOnboardingPlan('max_5x')}
-                      className={`p-4 rounded-xl border cursor-pointer transition flex flex-col justify-between space-y-3 ${
-                        onboardingPlan === 'max_5x' ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500' : 'bg-[#182032] border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Max 5X</span>
-                        <h4 className="text-lg font-extrabold text-white mt-1">R$ 499,90 <span className="text-xs font-normal text-slate-400">/mês</span></h4>
-                        <p className="text-[11px] text-slate-400 mt-2">Bases maiores de arquivos, múltiplos conectores e mais automações.</p>
-                      </div>
-                      <span className="text-[10px] font-semibold text-indigo-300">Checkout Stripe Disponível</span>
-                    </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(Object.entries(PLAN_CATALOG[workspaceMode]) as Array<[string, any]>).map(([tier, plan]) => (
+                      <button
+                        key={tier}
+                        type="button"
+                        onClick={() => setOnboardingPlan(tier as typeof onboardingPlan)}
+                        className={`p-4 rounded-xl border text-left transition flex flex-col justify-between space-y-3 ${
+                          onboardingPlan === tier ? 'bg-indigo-950/40 border-indigo-500 ring-1 ring-indigo-500' : 'bg-[#182032] border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div>
+                          <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider">{plan.name}</span>
+                          <h4 className="text-lg font-extrabold text-white mt-1">
+                            {plan.custom ? 'A partir de ' : ''}{(plan.priceCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            <span className="text-xs font-normal text-slate-400"> /mês</span>
+                          </h4>
+                          <p className="text-[11px] text-slate-400 mt-2">
+                            {workspaceMode === 'personal'
+                              ? `${plan.codeProjects} projeto(s) no Lyriq Code e agentes pessoais.`
+                              : tier === 'free' || tier === 'pro'
+                                ? 'Operação empresarial, equipe e governança. Code disponível a partir do Max.'
+                                : 'Ferramentas empresariais e Lyriq Code incluídos.'}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-semibold text-emerald-400">BYOK incluído</span>
+                      </button>
+                    ))}
                   </div>
 
                   <div className="bg-[#182032] p-4 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
@@ -7490,7 +7567,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                             };
                             return [mainAgent, ...prev.filter(a => a.id !== 'main')];
                           });
-                          localStorage.setItem('lyriq_main_agent_tested', 'true');
+                          persistentStorage.setItem('lyriq_main_agent_tested', 'true');
                           addToast('Agente Main criado com provider e modelo validados.', 'success');
                           setOnboardingStep(7);
                         } catch (err: any) {
@@ -7641,8 +7718,8 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           });
                           const data = await res.json();
                           if (data.ok) {
-                            localStorage.setItem('lyriq_onboarding_completed', 'true');
-                            setCompanyProfile(prev => ({ ...prev, setupComplete: true }));
+                            persistentStorage.setItem('lyriq_onboarding_completed', 'true');
+                            setCompanyProfile(prev => ({ ...prev, plan: onboardingPlan, setupComplete: true }));
                             addToast(data.data.message, 'success');
                             setCurrentRoute('app');
                             setCurrentTab('dashboard');
@@ -7650,8 +7727,8 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                             addToast(data.error?.message || 'Conclua as etapas obrigatórias.', 'error');
                           }
                         } catch {
-                          localStorage.setItem('lyriq_onboarding_completed', 'true');
-                          setCompanyProfile(prev => ({ ...prev, setupComplete: true }));
+                          persistentStorage.setItem('lyriq_onboarding_completed', 'true');
+                          setCompanyProfile(prev => ({ ...prev, plan: onboardingPlan, setupComplete: true }));
                           addToast('Base pronta. Bem-vindo ao Lyriq Agents OS!', 'success');
                           setCurrentRoute('app');
                           setCurrentTab('dashboard');
@@ -7731,6 +7808,28 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
 
               <button
+                onClick={() => {
+                  const tier = companyProfile.plan || currentUser?.plan || onboardingPlan || 'free';
+                  if (hasCodeAccess(workspaceMode, tier)) setCurrentTab('code');
+                  else {
+                    setLockedFeatureName('Lyriq Code Business Max');
+                    setIsUpgradeModalOpen(true);
+                  }
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                  currentTab === 'code' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Code2 className="w-4 h-4 shrink-0 text-cyan-600" />
+                  <span>Lyriq Code</span>
+                </div>
+                <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${workspaceMode === 'business' ? 'bg-amber-50 text-amber-700' : 'bg-cyan-50 text-cyan-700'}`}>
+                  {workspaceMode === 'business' ? 'MAX+' : 'PERSONAL'}
+                </span>
+              </button>
+
+              <button
                 onClick={() => setCurrentTab('agents')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'agents' || currentTab === 'agent_studio' || currentTab === 'main_agent'
@@ -7745,6 +7844,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">{agents.length}</span>
               </button>
 
+              {workspaceMode === 'business' && (<>
               <button
                 onClick={() => setCurrentTab('tasks')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
@@ -7791,6 +7891,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   <span>Conexões</span>
                 </div>
               </button>
+              </>)}
 
               <button
                 onClick={() => setCurrentTab('documents')}
@@ -7807,7 +7908,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">{memoryDocs.length}</span>
               </button>
 
-              <button
+              {workspaceMode === 'business' && <button
                 onClick={() => setCurrentTab('reports')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'reports' || currentTab === 'executive_dashboard'
@@ -7819,7 +7920,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   <TrendingUp className="w-4 h-4 shrink-0 text-emerald-600" />
                   <span>Relatórios</span>
                 </div>
-              </button>
+              </button>}
 
               <button
                 onClick={() => setCurrentTab('settings')}
@@ -8075,7 +8176,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                             <button
                               onClick={() => {
                                 if (companyProfile.name.trim() && companyProfile.industry.trim()) {
-                                  localStorage.setItem('lyriq_company', JSON.stringify(companyProfile));
+                                  persistentStorage.setItem('lyriq_company', JSON.stringify(companyProfile));
                                   setSetupConsoleActiveStep(2);
                                   addToast('Perfil da empresa salvo com sucesso.', 'success');
                                 } else {
@@ -8453,6 +8554,106 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               )}
 
               {/* 1. APP: EXECUTIVE DASHBOARD */}
+              {currentTab === 'code' && (
+                <div className="h-full min-h-[720px] flex flex-col gap-4 text-left animate-in fade-in duration-200">
+                  {!hasCodeAccess(workspaceMode, companyProfile.plan || currentUser?.plan || onboardingPlan || 'free') ? (
+                    <div className="m-auto max-w-lg bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
+                      <Lock className="w-10 h-10 text-amber-500 mx-auto" />
+                      <h1 className="text-xl font-bold text-slate-950 mt-4">Lyriq Code não está incluído no seu plano</h1>
+                      <p className="text-sm text-slate-500 mt-2">No Business, o Lyriq Code está disponível a partir do plano Max. Seus agentes e ferramentas empresariais continuam ativos.</p>
+                      <button onClick={() => setCurrentTab('pricing')} className="mt-5 px-5 py-2.5 bg-slate-950 text-white rounded-lg text-xs font-bold">Ver planos com Code</button>
+                    </div>
+                  ) : (<>
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2"><Code2 className="w-6 h-6 text-cyan-600" /><h1 className="text-xl font-bold text-slate-950">Lyriq Code</h1></div>
+                        <p className="text-xs text-slate-500 mt-1">Transforme ideias em software funcional com agentes que escrevem, executam, testam e refinam o código.</p>
+                      </div>
+                      <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+                        {([
+                          ['code', 'Code', Code2], ['apps', 'Apps', Smartphone], ['web', 'Web', Globe2], ['games', 'Games', Gamepad2]
+                        ] as const).map(([id, label, Icon]) => (
+                          <button key={id} onClick={() => setCodeSubTab(id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${codeSubTab === id ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
+                            <Icon className="w-4 h-4" />{label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-12 flex-1 min-h-0 bg-[#0b1020] rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
+                      <aside className="col-span-2 border-r border-slate-800 p-4 text-slate-300">
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Explorer</p>
+                          <div className="flex gap-1">
+                            <button title="Nova pasta" className="w-6 h-6 grid place-items-center rounded hover:bg-slate-800 text-slate-400"><FolderOpen className="w-3.5 h-3.5" /></button>
+                            <button title="Novo arquivo" className="w-6 h-6 grid place-items-center rounded hover:bg-slate-800 text-slate-400"><FileText className="w-3.5 h-3.5" /></button>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-1.5 text-xs font-mono">
+                          <p className="text-cyan-300">▾ lyriq-agents-os</p>
+                          <p className="pl-3 text-slate-100">▾ src</p>
+                          <p className="pl-6 text-white bg-slate-800/70 rounded px-2 py-1">App.tsx</p>
+                          <p className="pl-6">components/</p>
+                          <p className="pl-6">services/</p>
+                          <p className="pl-3">▾ docs</p>
+                          <p className="pl-6">terms.md</p>
+                          <p className="pl-6">privacy.md</p>
+                          <p className="pl-3">public/</p>
+                          <p className="pl-3">package.json</p>
+                          <p className="pl-3">vite.config.ts</p>
+                        </div>
+                        <div className="mt-8 pt-4 border-t border-slate-800">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Skills ativas</p>
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {(codeSubTab === 'apps' ? ['React Native', 'Flutter', 'Build'] : codeSubTab === 'web' ? ['React', 'Vite', 'Deploy'] : codeSubTab === 'games' ? ['Godot', 'Three.js', gameDimension.toUpperCase()] : ['Git', 'Tests', 'Debug']).map(skill => <span key={skill} className="px-2 py-1 rounded bg-slate-800 text-[9px] text-slate-300">{skill}</span>)}
+                          </div>
+                        </div>
+                      </aside>
+
+                      <section className="col-span-5 flex flex-col border-r border-slate-800">
+                        <div className="h-10 border-b border-slate-800 flex items-center px-4 text-[10px] text-slate-400 font-mono">
+                          <span className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-t">App.tsx</span>
+                          <span className="px-2 py-1 border border-slate-800 border-l-0 rounded-t">terms.md</span>
+                          <span className="ml-auto text-emerald-400">● agent connected</span>
+                        </div>
+                        <pre className="flex-1 p-5 text-[11px] leading-6 text-slate-300 font-mono overflow-auto whitespace-pre-wrap">{`import { LyriqApp } from '@lyriq/runtime';\n\nexport default function App() {\n  return (\n    <LyriqApp mode="${codeSubTab}"${codeSubTab === 'apps' ? ` platform="${codePlatform}"` : ''}${codeSubTab === 'games' ? ` dimension="${gameDimension}"` : ''}>\n      <Hero title="Sua ideia já está rodando" />\n      <Agent status="building" />\n    </LyriqApp>\n  );\n}`}</pre>
+                        <div className="border-t border-slate-800 bg-slate-950">
+                          <div className="h-8 px-3 border-b border-slate-800 flex items-center gap-3 text-[10px] text-slate-400 font-mono">
+                            <span className="text-white">Terminal</span>
+                            <span>Problems</span>
+                            <span>Git</span>
+                            <span className="ml-auto text-cyan-300">workspace: folder mode</span>
+                          </div>
+                          <div className="px-3 py-2 text-[10px] text-emerald-300 font-mono border-b border-slate-800">$ lyriq-code agent apply --project lyriq-agents-os --tests</div>
+                        </div>
+                        <div className="border-t border-slate-800 p-3">
+                          <textarea value={codePrompt} onChange={e => setCodePrompt(e.target.value)} rows={3} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-white resize-none focus:outline-none focus:border-cyan-500" />
+                          <div className="mt-2 flex items-center gap-2">
+                            {codeSubTab === 'apps' && <select value={codePlatform} onChange={e => setCodePlatform(e.target.value as typeof codePlatform)} className="bg-slate-800 text-slate-200 rounded px-2 py-2 text-[10px]">{['android','ios','windows','macos','linux'].map(x => <option key={x}>{x}</option>)}</select>}
+                            {codeSubTab === 'games' && <div className="flex bg-slate-800 rounded p-0.5">{(['2d','3d'] as const).map(x => <button key={x} onClick={() => setGameDimension(x)} className={`px-3 py-1.5 text-[10px] rounded ${gameDimension === x ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>{x.toUpperCase()}</button>)}</div>}
+                            <button onClick={runLyriqCode} className="ml-auto px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-2"><Play className="w-3.5 h-3.5" />Executar agente</button>
+                          </div>
+                        </div>
+                      </section>
+
+                      <section className="col-span-5 bg-slate-100 flex flex-col">
+                        <div className="h-10 bg-white border-b border-slate-200 flex items-center px-3 gap-2 text-[10px] text-slate-500"><MonitorPlay className="w-4 h-4" /> Preview em tempo real <span className={`ml-auto font-bold ${codeRunStatus === 'building' ? 'text-amber-600' : 'text-emerald-600'}`}>{codeRunStatus === 'building' ? 'COMPILANDO...' : 'LIVE'}</span></div>
+                        <div className="flex-1 p-5 flex items-center justify-center">
+                          <div className={`w-full h-full max-h-[520px] bg-white shadow-xl overflow-hidden ${codeSubTab === 'apps' ? 'max-w-[270px] rounded-[32px] border-[8px] border-slate-900' : 'rounded-xl border border-slate-200'}`}>
+                            <div className="h-full bg-gradient-to-br from-slate-950 via-indigo-950 to-cyan-950 text-white p-8 flex flex-col justify-center">
+                              <span className="text-[10px] uppercase tracking-[0.3em] text-cyan-300">{codeSubTab === 'games' ? `Game ${gameDimension.toUpperCase()}` : codeSubTab === 'apps' ? `App ${codePlatform}` : codeSubTab === 'web' ? 'Web Application' : 'Code Workspace'}</span>
+                              <h2 className="text-3xl font-black mt-3">Sua ideia já está rodando.</h2>
+                              <p className="text-xs text-slate-300 mt-3 leading-relaxed">O agente alterou os arquivos, executou os testes e atualizou este preview automaticamente.</p>
+                              <button className="mt-6 self-start px-4 py-2 bg-cyan-400 text-slate-950 rounded-lg text-xs font-bold">Testar agora</button>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  </>)}
+                </div>
+              )}
+
               {currentTab === 'dashboard' && isDashboardUnlocked && (
                 <div className="space-y-6 max-w-6xl">
                   <div className="flex items-center justify-between">
@@ -8929,7 +9130,9 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                                   <span className="text-[10px] text-slate-400">{activeChatAgent.role} • Módulo {activeChatAgent.model}</span>
                                   <span className="h-1.5 w-px bg-slate-200"></span>
                                   <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${geminiApiKey.trim() ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-650'}`}>
-                                    {geminiApiKey.trim() ? '✨ Gemini LLM Real Ativo' : '🤖 Modo Simulação Local'}
+                                    {geminiApiKey.trim() || (onboardingSelectedProvider === 'gemini' && onboardingApiKeyValidated)
+                                      ? '✨ Gemini LLM Real Ativo'
+                                      : '🤖 Modo Simulação Local'}
                                   </span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -10618,6 +10821,49 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
                   {workflowsActiveSub === 'canvas' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="md:col-span-2 bg-slate-950 border border-slate-800 rounded-xl p-5 shadow-sm text-left">
+                        <div className="flex flex-col lg:flex-row gap-4">
+                          <div className="lg:w-72 shrink-0">
+                            <h2 className="text-sm font-bold text-white">Agente de Automações</h2>
+                            <p className="text-[11px] text-slate-400 mt-1">Descreva o processo em linguagem natural. O agente transforma em fluxo visual editável, com gatilho, passos, permissões e logs.</p>
+                          </div>
+                          <div className="flex-1 space-y-3">
+                            <textarea
+                              value={automationAgentPrompt}
+                              onChange={(e) => setAutomationAgentPrompt(e.target.value)}
+                              className="w-full h-20 px-3 py-2 bg-slate-900 text-slate-100 border border-slate-700 rounded-lg text-xs resize-none focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                            />
+                            <div className="flex flex-wrap gap-2 text-[10px]">
+                              {['Webhook', 'Agente SDR', 'CRM', 'WhatsApp', 'Aprovação humana', 'Log de auditoria'].map(item => (
+                                <span key={item} className="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">{item}</span>
+                              ))}
+                              <button
+                                onClick={() => {
+                                  setWorkflowJsonInput(JSON.stringify({
+                                    name: 'Fluxo criado por IA',
+                                    prompt: automationAgentPrompt,
+                                    nodes: [
+                                      { id: 'whatsapp', type: 'trigger', name: 'Entrada WhatsApp', config: { channel: 'whatsapp', event: 'message.received' } },
+                                      { id: 'sdr', type: 'agent', name: 'Agente SDR qualifica', config: { prompt: automationAgentPrompt, output: 'lead_score' } },
+                                      { id: 'crm', type: 'api', name: 'Salvar no CRM', apiProvider: 'CRM', apiKeyRef: 'CRM_API_KEY', config: { action: 'upsert_lead' } },
+                                      { id: 'approval', type: 'filter', name: 'Score acima de 80', config: { condition: 'lead_score > 80', then: 'notify_team' } }
+                                    ],
+                                    edges: [
+                                      { source: 'whatsapp', target: 'sdr' },
+                                      { source: 'sdr', target: 'crm' },
+                                      { source: 'crm', target: 'approval' }
+                                    ]
+                                  }, null, 2));
+                                  addToast('Rascunho de automação gerado pelo agente.', 'success');
+                                }}
+                                className="ml-auto px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded text-[10px] font-bold"
+                              >
+                                Gerar fluxo
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                       <div className="md:col-span-2 grid grid-cols-1 xl:grid-cols-3 gap-4 text-left">
                         <div className="xl:col-span-2 bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
                           <div className="flex items-start justify-between gap-3 mb-4">
@@ -11307,8 +11553,33 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
-              {/* APP: PLANOS & PRICING (Seção 10 do Prompt Mestre V2) */}
               {currentTab === 'pricing' && (
+                <div className="space-y-6 max-w-6xl text-left">
+                  <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div><span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Planos oficiais</span><h1 className="text-2xl font-bold text-slate-950 mt-1">Lyriq Agents OS {workspaceMode === 'personal' ? 'Personal' : 'Business'}</h1><p className="text-xs text-slate-500 mt-1">BYOK em todos os planos. Você controla suas chaves e escolhe seus modelos.</p></div>
+                    <div className="flex bg-slate-100 rounded-xl p-1">
+                      {(['personal','business'] as const).map(mode => <button key={mode} onClick={() => { setWorkspaceMode(mode); setOnboardingPlan('free'); }} className={`px-4 py-2 rounded-lg text-xs font-bold ${workspaceMode === mode ? 'bg-white shadow text-slate-950' : 'text-slate-500'}`}>{mode === 'personal' ? 'Personal' : 'Business'}</button>)}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {(Object.entries(PLAN_CATALOG[workspaceMode]) as Array<[string, any]>).map(([tier, plan]) => (
+                      <div key={tier} className={`bg-white rounded-2xl border p-5 flex flex-col ${tier === 'max' ? 'border-cyan-500 ring-1 ring-cyan-500 shadow-lg' : 'border-slate-200'}`}>
+                        <div className="flex justify-between items-start"><div><span className="text-xs font-bold uppercase text-slate-500">{plan.name}</span><div className="text-2xl font-black text-slate-950 mt-2">{plan.custom ? 'A partir de ' : ''}{(plan.priceCents / 100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}<span className="text-xs font-normal text-slate-400">/mês</span></div></div>{tier === 'max' && <span className="px-2 py-1 bg-cyan-50 text-cyan-700 rounded-full text-[9px] font-bold">RECOMENDADO</span>}</div>
+                        <ul className="mt-5 space-y-2 text-xs text-slate-600 flex-1">
+                          <li className="flex gap-2"><Check className="w-4 h-4 text-emerald-500" /> BYOK e modelos configuráveis</li>
+                          <li className="flex gap-2"><Check className="w-4 h-4 text-emerald-500" /> {workspaceMode === 'personal' ? `${plan.codeProjects} projeto(s) no Lyriq Code` : `${plan.seats ?? 'Ilimitados'} usuários e ${plan.agents ?? 'agentes customizados'}`}</li>
+                          <li className="flex gap-2">{hasCodeAccess(workspaceMode,tier) ? <Check className="w-4 h-4 text-emerald-500" /> : <X className="w-4 h-4 text-slate-300" />} Lyriq Code {hasCodeAccess(workspaceMode,tier) ? 'incluído' : 'a partir do Max'}</li>
+                          {workspaceMode === 'business' && <li className="flex gap-2"><Check className="w-4 h-4 text-emerald-500" /> Equipe, aprovações, auditoria e integrações</li>}
+                        </ul>
+                        <button onClick={() => plan.custom ? addToast('Nossa equipe entrará em contato para montar o Enterprise.','info') : openStripeCheckout(`${workspaceMode}_${tier}`)} className="mt-5 w-full py-2.5 bg-slate-950 text-white rounded-lg text-xs font-bold">{tier === (companyProfile.plan || currentUser?.plan || 'free') ? 'Plano atual' : plan.custom ? 'Falar com especialista' : 'Escolher plano'}</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* APP: PLANOS LEGADOS, mantidos temporariamente para migração de assinaturas */}
+              {false && currentTab === 'pricing' && (
                 <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200">
                   <div>
                     <div className="flex items-center gap-2">
@@ -16762,7 +17033,7 @@ Regras duras:
                         )}
                         <button
                           onClick={() => {
-                            localStorage.clear();
+                            persistentStorage.clear();
                             addToast('Todo o banco local foi reiniciado com sucesso! Recarregando...', 'success');
                             setTimeout(() => window.location.reload(), 1500);
                           }}

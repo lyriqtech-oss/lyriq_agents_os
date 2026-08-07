@@ -9,42 +9,68 @@ export const COMMERCIAL_PLANS = {
     code: 'free',
     name: 'Free / Teste',
     monthlyPriceCents: 0,
-    limits: { maxAgents: 1, maxWorkspaceUsers: 1, maxFiles: 5, maxStorageMb: 100, monthlyCredits: 500, maxAutomations: 0, maxActiveChannels: 1, byokEnabled: true, templatesEnabled: false, pdfReportsEnabled: false }
+    limits: { maxAgents: 1, maxWorkspaceUsers: 1, maxFiles: 5, maxStorageMb: 100, monthlyCredits: 500, maxAutomations: 0, maxActiveChannels: 1, byokEnabled: true, templatesEnabled: false, pdfReportsEnabled: false, lyriqCodeEnabled: true }
   },
   flash: {
     code: 'flash',
-    name: 'Flash',
+    name: 'Personal Pro (legado Flash)',
     monthlyPriceCents: 4990,
-    limits: { maxAgents: 2, maxWorkspaceUsers: 2, maxFiles: 25, maxStorageMb: 500, monthlyCredits: 2000, maxAutomations: 3, maxActiveChannels: 2, byokEnabled: true, templatesEnabled: false, pdfReportsEnabled: false }
+    limits: { maxAgents: 2, maxWorkspaceUsers: 2, maxFiles: 25, maxStorageMb: 500, monthlyCredits: 2000, maxAutomations: 3, maxActiveChannels: 2, byokEnabled: true, templatesEnabled: false, pdfReportsEnabled: false, lyriqCodeEnabled: true }
   },
   pro: {
     code: 'pro',
-    name: 'Pro',
-    monthlyPriceCents: 9990,
-    limits: { maxAgents: 5, maxWorkspaceUsers: 5, maxFiles: 100, maxStorageMb: 2000, monthlyCredits: 10000, maxAutomations: 10, maxActiveChannels: 3, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true }
+    name: 'Personal Pro',
+    monthlyPriceCents: 4990,
+    limits: { maxAgents: 5, maxWorkspaceUsers: 5, maxFiles: 100, maxStorageMb: 2000, monthlyCredits: 10000, maxAutomations: 10, maxActiveChannels: 3, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true, lyriqCodeEnabled: true }
+  },
+  max: {
+    code: 'max',
+    name: 'Personal Max',
+    monthlyPriceCents: 8990,
+    limits: { maxAgents: 10, maxWorkspaceUsers: 3, maxFiles: 250, maxStorageMb: 5000, monthlyCredits: 25000, maxAutomations: 20, maxActiveChannels: 5, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true, lyriqCodeEnabled: true }
   },
   max_5x: {
     code: 'max_5x',
     name: 'Max 5X',
-    monthlyPriceCents: 44990,
-    limits: { maxAgents: 15, maxWorkspaceUsers: 15, maxFiles: 500, maxStorageMb: 10000, monthlyCredits: 50000, maxAutomations: 25, maxActiveChannels: 5, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true }
+    monthlyPriceCents: 19990,
+    limits: { maxAgents: 15, maxWorkspaceUsers: 15, maxFiles: 500, maxStorageMb: 10000, monthlyCredits: 50000, maxAutomations: 25, maxActiveChannels: 5, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true, lyriqCodeEnabled: true }
   },
   max_20x: {
     code: 'max_20x',
     name: 'Max 20X',
-    monthlyPriceCents: 84990,
-    limits: { maxAgents: 30, maxWorkspaceUsers: 30, maxFiles: 2000, maxStorageMb: 50000, monthlyCredits: 200000, maxAutomations: 100, maxActiveChannels: 10, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true }
+    monthlyPriceCents: 49990,
+    limits: { maxAgents: 30, maxWorkspaceUsers: 30, maxFiles: 2000, maxStorageMb: 50000, monthlyCredits: 200000, maxAutomations: 100, maxActiveChannels: 10, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true, lyriqCodeEnabled: true }
   },
   business: {
     code: 'business',
-    name: 'Business',
-    monthlyPriceCents: 119990,
+    name: 'Business Pro',
+    monthlyPriceCents: 24990,
     limits: { maxAgents: 100, maxWorkspaceUsers: 100, maxFiles: 10000, maxStorageMb: 200000, monthlyCredits: 1000000, maxAutomations: 500, maxActiveChannels: 25, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true }
+  },
+  business_free: {
+    code: 'business_free', name: 'Business Free', monthlyPriceCents: 0,
+    limits: { maxAgents: 2, maxWorkspaceUsers: 2, maxFiles: 10, maxStorageMb: 500, monthlyCredits: 1000, maxAutomations: 2, maxActiveChannels: 2, byokEnabled: true, templatesEnabled: false, pdfReportsEnabled: false, lyriqCodeEnabled: false }
+  },
+  business_pro: {
+    code: 'business_pro', name: 'Business Pro', monthlyPriceCents: 24990,
+    limits: { maxAgents: 8, maxWorkspaceUsers: 8, maxFiles: 200, maxStorageMb: 5000, monthlyCredits: 25000, maxAutomations: 25, maxActiveChannels: 8, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true, lyriqCodeEnabled: false }
+  },
+  business_max: {
+    code: 'business_max', name: 'Business Max', monthlyPriceCents: 59990,
+    limits: { maxAgents: 20, maxWorkspaceUsers: 20, maxFiles: 1000, maxStorageMb: 25000, monthlyCredits: 100000, maxAutomations: 100, maxActiveChannels: 20, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true, lyriqCodeEnabled: true }
+  },
+  business_max_5x: {
+    code: 'business_max_5x', name: 'Business Max 5X', monthlyPriceCents: 129990,
+    limits: { maxAgents: 60, maxWorkspaceUsers: 50, maxFiles: 5000, maxStorageMb: 100000, monthlyCredits: 500000, maxAutomations: 500, maxActiveChannels: 50, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true, lyriqCodeEnabled: true }
+  },
+  business_max_20x: {
+    code: 'business_max_20x', name: 'Business Max 20X', monthlyPriceCents: 299990,
+    limits: { maxAgents: 250, maxWorkspaceUsers: 200, maxFiles: 25000, maxStorageMb: 500000, monthlyCredits: 2000000, maxAutomations: 2000, maxActiveChannels: 200, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true, lyriqCodeEnabled: true }
   },
   enterprise: {
     code: 'enterprise',
     name: 'Enterprise',
-    monthlyPriceCents: 0,
+    monthlyPriceCents: 500000,
     limits: { maxAgents: 9999, maxWorkspaceUsers: 9999, maxFiles: 99999, maxStorageMb: 1000000, monthlyCredits: 9999999, maxAutomations: 9999, maxActiveChannels: 999, byokEnabled: true, templatesEnabled: true, pdfReportsEnabled: true }
   }
 };
