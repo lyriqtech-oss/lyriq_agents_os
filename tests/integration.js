@@ -13,7 +13,7 @@ const testDatabaseFile = path.join(testDirectory, 'database.json');
 // Start backend server
 const testPort = process.env.TEST_PORT || '5002';
 const serverProcess = spawn('node', ['server.js'], {
-  env: { ...process.env, PORT: testPort, AGENT_CENTER_DB_FILE: testDatabaseFile }
+  env: { ...process.env, NODE_ENV: 'test', PORT: testPort, AGENT_CENTER_DB_FILE: testDatabaseFile }
 });
 
 serverProcess.stdout.on('data', (data) => {
@@ -123,6 +123,9 @@ setTimeout(async () => {
     assert.strictEqual(bodyValOk.data.status, 'valid');
     assert.strictEqual(bodyValOk.data.encrypted_api_key, undefined);
     const providerConnectionId = bodyValOk.data.id;
+    const storedProvider = JSON.parse(fs.readFileSync(testDatabaseFile, 'utf8')).providers.find(provider => provider.id === providerConnectionId);
+    assert.ok(storedProvider.encrypted_api_key.startsWith('v2:'));
+    assert.ok(fs.existsSync(path.join(testDirectory, '.agent-center.key')));
     console.log('✅ POST /api/providers/validate (Mock Valid Key) passed.');
 
     // 3.1 Test POST /api/providers/:provider/validate-key (Mock valid, safe response)
@@ -230,6 +233,30 @@ setTimeout(async () => {
     const flowHistory = await fetch(`${baseUrl}/automations/${flow.id}/runs`).then(response => response.json());
     assert.ok(flowHistory.data.some(run => run.id === flowRun.id));
     console.log('✅ Agent automation saves runs and reports a missing real model instead of a fake success.');
+    const scheduledFlow = await fetch(`${baseUrl}/automations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'agent_flow', workspaceId: 'workspace_123', name: 'Fluxo agendado', trigger: { type: 'interval', minutes: 5 }, steps: [{ id: 's1', type: 'agent_task', agentId: savedSpecialist.id, instruction: 'Resuma as informações disponíveis.' }, { id: 'c1', type: 'condition', contains: 'aprovado', onFalse: 'stop' }] }) }).then(response => response.json());
+    assert.strictEqual(scheduledFlow.data.status, 'draft');
+    const activatedFlow = await fetch(`${baseUrl}/automations/${scheduledFlow.data.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' }) }).then(response => response.json());
+    assert.ok(Date.parse(activatedFlow.data.nextRunAt) > Date.now());
+    await fetch(`${baseUrl}/automations/${scheduledFlow.data.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nextRunAt: new Date(Date.now() - 1000).toISOString() }) });
+    await new Promise(resolve => setTimeout(resolve, 750));
+    const scheduledRuns = await fetch(`${baseUrl}/automations/${scheduledFlow.data.id}/runs`).then(response => response.json());
+    assert.ok(scheduledRuns.data.some(run => run.source === 'interval' && run.status === 'failed'));
+    const webhookFlow = await fetch(`${baseUrl}/automations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'agent_flow', workspaceId: 'workspace_123', name: 'Fluxo webhook', trigger: { type: 'webhook' }, steps: [{ id: 's1', type: 'agent_task', agentId: savedSpecialist.id, instruction: 'Resuma as informações disponíveis.' }] }) }).then(response => response.json());
+    assert.ok(webhookFlow.data.webhookToken);
+    const webhookId = webhookFlow.data.id;
+    await fetch(`${baseUrl}/automations/${webhookId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' }) });
+    const deniedHook = await fetch(`http://localhost:${testPort}/api/automation-hooks/${webhookId}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-agent-center-hook-token': 'wrong' }, body: '{}' });
+    assert.strictEqual(deniedHook.status, 401);
+    const acceptedHook = await fetch(`http://localhost:${testPort}/api/automation-hooks/${webhookId}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-agent-center-hook-token': webhookFlow.data.webhookToken }, body: JSON.stringify({ lead: 'teste' }) });
+    assert.strictEqual(acceptedHook.status, 200);
+    assert.strictEqual((await acceptedHook.json()).data.run.status, 'failed');
+    const repeatedHook = await fetch(`http://localhost:${testPort}/api/automation-hooks/${webhookId}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-agent-center-hook-token': webhookFlow.data.webhookToken }, body: '{}' });
+    assert.strictEqual(repeatedHook.status, 429);
+    const deleteInUse = await fetch(`${baseUrl}/agents/${savedSpecialist.id}`, { method: 'DELETE' });
+    assert.strictEqual(deleteInUse.status, 409);
+    const deleteMain = await fetch(`${baseUrl}/agents/${agentId}`, { method: 'DELETE' });
+    assert.strictEqual(deleteMain.status, 400);
+    console.log('✅ Interval scheduling, conditions and authenticated webhook triggers are configured safely.');
 
     // 6. Test GET /api/agents
     const resAgentsList = await fetch(`${baseUrl}/agents`);

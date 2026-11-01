@@ -6,7 +6,7 @@ type CodeProposal = { summary: string; changes: { name: string; before: string; 
 
 const STORAGE_KEY = 'agent-center-code-workspace-v1';
 const STARTER_FILES: ProjectFiles = {
-  'index.html': '<main class="card">\n  <span class="eyebrow">Agent Center</span>\n  <h1>Seu projeto começa aqui.</h1>\n  <p>Edite os arquivos ao lado e clique em Executar.</p>\n  <button id="hello">Testar interação</button>\n</main>',
+  'index.html': '<main class="card">\n  <span class="eyebrow">Agent Center</span>\n  <h1>Seu projeto começa aqui.</h1>\n  <p>Edite os arquivos ao lado. A prévia aparece automaticamente.</p>\n  <button id="hello">Testar interação</button>\n</main>',
   'styles.css': 'body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1220; color: #f8fafc; font-family: Inter, Arial, sans-serif; }\n.card { max-width: 520px; padding: 48px; }\n.eyebrow { color: #22d3ee; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }\nh1 { font-size: clamp(32px, 5vw, 56px); line-height: 1.05; letter-spacing: -.04em; }\np { color: #cbd5e1; line-height: 1.6; }\nbutton { margin-top: 16px; padding: 12px 18px; border: 0; border-radius: 10px; background: #22d3ee; color: #082f49; font-weight: 700; cursor: pointer; }',
   'script.js': 'document.querySelector("#hello")?.addEventListener("click", () => {\n  document.querySelector("#hello").textContent = "Funcionou!";\n});'
 };
@@ -143,7 +143,7 @@ export default function CodeWorkspace() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-slate-950"><Code2 className="h-5 w-5 text-cyan-600" /> Agent Center Code</h1>
-          <p className="mt-1 text-xs text-slate-600">Edite e execute um projeto web local. Seus arquivos ficam salvos neste navegador.</p>
+          <p className="mt-1 text-xs text-slate-600">Edite seu projeto web e veja a prévia automaticamente. Os arquivos ficam salvos neste navegador.</p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => { setFiles({ ...STARTER_FILES }); setActiveFile('index.html'); setStatus('Projeto inicial restaurado. A prévia será atualizada.'); }} className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><RotateCcw className="h-3.5 w-3.5" /> Restaurar exemplo</button>

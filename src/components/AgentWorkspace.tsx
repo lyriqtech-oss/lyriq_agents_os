@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Bot, Plus, Search, Shield, Wrench, FileText, Save, ChevronRight, CircleHelp, Play, LockKeyhole } from 'lucide-react';
+import { Bot, Plus, Search, Shield, Wrench, FileText, Save, ChevronRight, CircleHelp, Play, LockKeyhole, Trash2 } from 'lucide-react';
 import './AgentWorkspace.css';
 
 type AgentRecord = {
@@ -74,6 +74,19 @@ export default function AgentWorkspace({ onOpenProviders }: { onOpenProviders: (
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Falha ao salvar agente.'); }
     finally { setBusy(false); }
   };
+  const remove = async () => {
+    if (!draft?.id || !window.confirm(`Excluir o agente "${draft.name}"?`)) return;
+    setBusy(true); setError('');
+    try {
+      const response = await fetch(`/api/agents/${encodeURIComponent(draft.id)}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error?.message || 'Não foi possível excluir o agente.');
+      const remaining = agents.filter(agent => agent.id !== draft.id);
+      setAgents(remaining); setSelectedId(remaining[0]?.id || null); setDraft(remaining[0] || null);
+      setNotice('Agente excluído.');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível excluir o agente.'); }
+    finally { setBusy(false); }
+  };
   const working = draft;
   const startCreate = () => { setCreating(true); setSelectedId(null); setDraft({ id: '', name: '', role: '', instructions: '', status: 'draft', type: 'specialist', capabilities: [], permissions: {} }); setSection('identity'); setError(''); setNotice(''); };
   const choose = (id: string) => { setCreating(false); setSelectedId(id); setSection('identity'); setError(''); setNotice(''); };
@@ -85,7 +98,7 @@ export default function AgentWorkspace({ onOpenProviders }: { onOpenProviders: (
         {visible.map(agent => <button key={agent.id} className={`aw-agent ${selectedId === agent.id && !creating ? 'selected' : ''}`} onClick={() => choose(agent.id)}><span className="aw-avatar"><Bot size={19}/></span><span className="aw-agent-copy"><strong>{agent.name}</strong><small>{agent.role}</small></span><ChevronRight size={15}/></button>)}
         {visible.length === 0 && <p className="aw-empty-list">{query ? 'Nenhum agente encontrado.' : 'Seu primeiro agente começa aqui.'}</p>}
       </div><div className="aw-list-footer"><CircleHelp size={16}/><span>Agentes novos ficam em rascunho até a configuração do modelo.</span></div></aside>
-      <main className="aw-main">{working ? <><div className="aw-agent-header"><div className="aw-agent-heading"><span className="aw-avatar large"><Bot size={24}/></span><div><div className="aw-title-row"><h2>{working.name || 'Novo agente'}</h2><span className="aw-status">{creating ? 'Novo' : working.status === 'active' ? 'Ativo' : 'Rascunho'}</span></div><p>{working.role || 'Defina a função deste agente'}</p></div></div><button className="aw-save" disabled={busy} onClick={creating ? create : save}><Save size={16}/>{busy ? 'Salvando...' : creating ? 'Criar rascunho' : 'Salvar alterações'}</button></div>
+      <main className="aw-main">{working ? <><div className="aw-agent-header"><div className="aw-agent-heading"><span className="aw-avatar large"><Bot size={24}/></span><div><div className="aw-title-row"><h2>{working.name || 'Novo agente'}</h2><span className="aw-status">{creating ? 'Novo' : working.status === 'active' ? 'Ativo' : 'Rascunho'}</span></div><p>{working.role || 'Defina a função deste agente'}</p></div></div><div className="aw-header-actions">{!creating && working.type !== 'main' && <button className="aw-delete" disabled={busy} onClick={remove} title="Excluir agente" aria-label="Excluir agente"><Trash2 size={16}/></button>}<button className="aw-save" disabled={busy} onClick={creating ? create : save}><Save size={16}/>{busy ? 'Salvando...' : creating ? 'Criar rascunho' : 'Salvar alterações'}</button></div></div>
         <nav className="aw-tabs" aria-label="Configuração do agente">{([['identity','Visão geral',Bot],['instructions','Instruções',FileText],['functions','Funções',Wrench],['permissions','Permissões',Shield]] as const).map(([id,label,Icon]) => <button key={id} className={section === id ? 'active' : ''} onClick={() => setSection(id)}><Icon size={16}/>{label}</button>)}</nav>
         <div className="aw-content">{error && <p className="aw-error" role="alert">{error}</p>}{notice && <p className="aw-notice" role="status">{notice}</p>}
           {section === 'identity' && <div className="aw-form"><div className="aw-section-head"><h3>Identidade do agente</h3><p>Defina quem ele é e qual trabalho deve assumir.</p></div><div className="aw-fields"><label>Nome<input value={working.name} onChange={event => update({ name: event.target.value })} placeholder="Ex.: Analista de pesquisa"/></label><label>Função<input value={working.role} onChange={event => update({ role: event.target.value })} placeholder="Ex.: Pesquisa e síntese"/></label></div><div className="aw-model"><div><LockKeyhole size={18}/><strong>Modelo de IA</strong><p>Vincule um modelo validado para conversar e executar automações.</p></div><button onClick={onOpenProviders}>Configurar provedor <ChevronRight size={15}/></button></div>{!creating && <div className="aw-fields"><label>Provedor<select value={working.provider_connection_id || ''} onChange={event => { const provider = providers.find(item => item.id === event.target.value); update({ provider_connection_id: provider?.id || null, model_id: provider?.selected_chat_model || provider?.available_models?.[0] || null }); }}><option value="">Selecione um provedor</option>{providers.map(provider => <option key={provider.id} value={provider.id}>{provider.provider}</option>)}</select></label><label>Modelo<select value={working.model_id || ''} onChange={event => update({ model_id: event.target.value || null })} disabled={!working.provider_connection_id}><option value="">Selecione um modelo</option>{providers.find(provider => provider.id === working.provider_connection_id)?.available_models?.map(model => <option key={model} value={model}>{model}</option>)}</select></label></div>}</div>}

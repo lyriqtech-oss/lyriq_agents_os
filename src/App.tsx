@@ -7823,6 +7823,20 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">{agents.length}</span>
               </button>
 
+              {workspaceMode === 'personal' && <button
+                onClick={() => setCurrentTab('automation_builder')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                  currentTab === 'automation_builder'
+                    ? 'bg-slate-950 text-white shadow-sm'
+                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Zap className="w-4 h-4 shrink-0 text-amber-500" />
+                  <span>Automações</span>
+                </div>
+              </button>}
+
               {workspaceMode === 'business' && (<>
               <button
                 onClick={() => setCurrentTab('tasks')}
@@ -7977,21 +7991,6 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </div>
 
               <div className="flex items-center gap-4">
-                {/* Budget status badge */}
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs">
-                  <CreditCard className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="text-slate-600 font-medium text-[11px]">API: <strong className="text-slate-900 font-semibold">R$ 95,00</strong> / R$ 100,00</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                </div>
-
-                {/* Global Create Button */}
-                <button
-                  onClick={() => setIsNewTaskModalOpen(true)}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center gap-1.5"
-                >
-                  <span>+ Criar</span>
-                </button>
-
                 {companyProfile.setupComplete && (
                   <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-100/70 rounded-md">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100"></span>
@@ -8013,24 +8012,6 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   )}
                 </button>
                 
-                {/* Simulation control dashboard */}
-                {companyProfile.setupComplete && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSimulateLead}
-                      className="px-2.5 py-1.5 border border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-50 font-semibold rounded text-[10px] transition"
-                    >
-                      + Simular Lead
-                    </button>
-                    <button
-                      onClick={handleSimulateTicket}
-                      className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded text-[10px] transition"
-                    >
-                      + Simular Ticket
-                    </button>
-                  </div>
-                )}
-
                 <button
                   onClick={handleLogout}
                   className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded text-[10px] font-semibold flex items-center gap-1 transition"
