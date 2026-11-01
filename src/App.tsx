@@ -1002,7 +1002,7 @@ export default function App() {
       const mainAgentConfigured = agentsData ? JSON.parse(agentsData).some((a: any) => a.id === 'main') : false;
       
       const unlocked = compObj?.setupComplete || (compObj?.name && providerValid && mainAgentConfigured && tested);
-      return unlocked ? 'dashboard' : 'setup_console';
+      return unlocked ? 'agents' : 'setup_console';
     } catch (e) {
       return 'setup_console';
     }
