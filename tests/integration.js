@@ -197,6 +197,24 @@ setTimeout(async () => {
     assert.ok(agentsAfterSpecialist.data.some(agent => agent.id === bodySpecialist.data.id));
     console.log('✅ POST /api/agents creates a specialist without replacing the main agent.');
 
+    const specialistConfig = await fetch(`${baseUrl}/agents/${bodySpecialist.data.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Analista de pesquisa', role: 'Pesquisador', instructions: 'Pesquisar fontes e resumir evidências.', capabilities: ['research'], permissions: { read_workspace: true, send_messages: false }, boundaries: 'Pedir aprovação antes de enviar.', status: 'active' })
+    });
+    assert.strictEqual(specialistConfig.status, 200);
+    const savedSpecialist = (await specialistConfig.json()).data;
+    assert.deepStrictEqual(savedSpecialist.capabilities, ['research']);
+    assert.strictEqual(savedSpecialist.permissions.read_workspace, true);
+    assert.strictEqual(savedSpecialist.status, 'draft');
+    console.log('✅ Agent configuration persists functions and permissions without bypassing activation.');
+    const deniedTool = await fetch(`${baseUrl}/tools/execute`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', agentId: savedSpecialist.id, toolName: 'send_notification', params: { userApproved: true } })
+    });
+    assert.strictEqual(deniedTool.status, 403);
+    assert.strictEqual((await deniedTool.json()).error.code, 'AGENT_PERMISSION_DENIED');
+    console.log('✅ Agent tool execution respects the saved permission policy.');
+
     // 6. Test GET /api/agents
     const resAgentsList = await fetch(`${baseUrl}/agents`);
     assert.strictEqual(resAgentsList.status, 200);

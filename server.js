@@ -2034,6 +2034,9 @@ const server = http.createServer(async (req, res) => {
         name,
         role,
         instructions,
+        capabilities: [],
+        permissions: {},
+        boundaries: '',
         type: 'specialist',
         status: 'draft',
         created_at: new Date().toISOString()
@@ -2181,9 +2184,23 @@ const server = http.createServer(async (req, res) => {
     if (agentPatchMatch && method === 'PATCH') {
       const body = await parseBody(req);
       const db = readDb();
-      db.agents = db.agents.map(a => a.id === agentPatchMatch[1] ? { ...a, ...body } : a);
+      const agent = db.agents.find(a => a.id === agentPatchMatch[1]);
+      if (!agent) return sendError(res, 404, 'AGENT_NOT_FOUND', 'Agente não encontrado.', 'Selecione outro agente.', 'blocking', null, reqId);
+      const name = String(body.name ?? agent.name).trim();
+      const role = String(body.role ?? agent.role).trim();
+      const instructions = String(body.instructions ?? agent.instructions).trim();
+      const allowedCapabilities = ['research', 'code', 'documents', 'automation'];
+      const allowedPermissions = ['read_workspace', 'write_workspace', 'external_requests', 'send_messages'];
+      if (name.length < 2 || role.length < 3 || instructions.length < 10 ||
+          !Array.isArray(body.capabilities) || body.capabilities.some(value => !allowedCapabilities.includes(value)) ||
+          !body.permissions || typeof body.permissions !== 'object' || Array.isArray(body.permissions) ||
+          Object.keys(body.permissions).some(key => !allowedPermissions.includes(key) || typeof body.permissions[key] !== 'boolean') ||
+          typeof body.boundaries !== 'string' || body.boundaries.length > 5000) {
+        return sendError(res, 400, 'AGENT_CONFIG_INVALID', 'Revise as instruções, funções e permissões do agente.', 'Preencha a configuração novamente.', 'blocking', null, reqId);
+      }
+      Object.assign(agent, { name, role, instructions, capabilities: [...new Set(body.capabilities)], permissions: body.permissions, boundaries: body.boundaries });
       writeDb(db);
-      return sendSuccess(res, { updated: true }, reqId);
+      return sendSuccess(res, agent, reqId);
     }
 
     // ----------------------------------------------------
@@ -2590,6 +2607,19 @@ const server = http.createServer(async (req, res) => {
       const agentId = body.agentId || 'agent-main';
       const toolName = body.toolName || body.toolId || 'search_knowledge';
       const params = body.params || body.payload || {};
+
+      const configuredAgent = (readDb().agents || []).find(agent => agent.id === agentId);
+      if (configuredAgent && Object.prototype.hasOwnProperty.call(configuredAgent, 'permissions')) {
+        const permissionByTool = {
+          search_knowledge: 'read_workspace', search_chunks: 'read_workspace',
+          create_task: 'write_workspace', send_notification: 'send_messages',
+          'email.send': 'send_messages', web_search: 'external_requests'
+        };
+        const neededPermission = permissionByTool[toolName];
+        if (!neededPermission || configuredAgent.permissions?.[neededPermission] !== true) {
+          return sendError(res, 403, 'AGENT_PERMISSION_DENIED', 'Este agente não tem permissão para usar esta ferramenta.', 'Ative a permissão correspondente na configuração do agente.', 'blocking', null, reqId);
+        }
+      }
 
       if (body.riskLevel === 'high' || body.riskLevel === 'critical' || body.riskLevel === 2 || body.riskLevel === 3 || toolName === 'send_notification' || toolName === 'email.send') {
         if (!params.userApproved) {

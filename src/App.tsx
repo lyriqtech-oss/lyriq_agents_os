@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import CodeWorkspace from './components/CodeWorkspace';
+import AgentWorkspace from './components/AgentWorkspace';
 import { persistentStorage, setPersistentUser } from './lib/persistentStorage';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
 import {
@@ -888,12 +889,6 @@ export default function App() {
     }
     return defaultAgentsList;
   });
-  const [newAgentName, setNewAgentName] = useState('');
-  const [newAgentRole, setNewAgentRole] = useState('');
-  const [newAgentInstructions, setNewAgentInstructions] = useState('');
-  const [agentCreateError, setAgentCreateError] = useState('');
-  const [isCreatingAgent, setIsCreatingAgent] = useState(false);
-  const [showCreateAgent, setShowCreateAgent] = useState(false);
 
   const [leads, setLeads] = useState<Lead[]>(() => {
     const data = persistentStorage.getItem('lyriq_leads');
@@ -1030,7 +1025,7 @@ export default function App() {
   const [mainAgentSubTab, setMainAgentSubTab] = useState<'overview' | 'chat' | 'agents_md' | 'tools' | 'specialists'>('overview');
   const [marketplaceSubTab, setMarketplaceSubTab] = useState<'agents' | 'playbooks'>('agents');
   const [isLogsDrawerOpen, setIsLogsDrawerOpen] = useState(false);
-  const [selectedAgentForLogs, setSelectedAgentForLogs] = useState<Agent | null>(null);
+  const [selectedAgentForLogs] = useState<Agent | null>(null);
   
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [telegramTokenInput, setTelegramTokenInput] = useState('');
@@ -3272,49 +3267,6 @@ export default function App() {
     const nextStatus = !target.status;
     addToast(`Agente ${target.name} foi ${nextStatus ? 'ativado' : 'pausado'}.`, nextStatus ? 'success' : 'info');
     setAgents(prev => prev.map(a => a.id === id ? { ...a, status: nextStatus, lastActive: nextStatus ? 'Agora mesmo' : 'Pausado' } : a));
-  };
-
-  const handleCreateSpecialist = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setAgentCreateError('');
-    setIsCreatingAgent(true);
-    try {
-      const response = await fetch('/api/agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId: 'workspace_123', name: newAgentName, role: newAgentRole, instructions: newAgentInstructions })
-      });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error?.message || 'Não foi possível criar o agente.');
-      const created = result.data;
-      setAgents(previous => [...previous, {
-        id: created.id,
-        name: created.name,
-        role: created.role,
-        area: 'Personalizado',
-        status: false,
-        agentStatus: 'draft',
-        metric: 'Ainda não executado',
-        metricLabel: 'Execuções',
-        tasksToday: 0,
-        description: created.instructions,
-        details: created.instructions,
-        icon: 'Bot',
-        model: 'Não configurado',
-        temperature: 0.3,
-        lastActive: 'Nunca',
-        systemPrompt: created.instructions
-      }]);
-      setNewAgentName('');
-      setNewAgentRole('');
-      setNewAgentInstructions('');
-      setShowCreateAgent(false);
-      addToast(`Agente ${created.name} criado como rascunho. Configure um modelo antes de ativá-lo.`, 'success');
-    } catch (error: any) {
-      setAgentCreateError(error.message || 'Não foi possível criar o agente.');
-    } finally {
-      setIsCreatingAgent(false);
-    }
   };
 
   const handleSaveAgentConfig = (e: React.FormEvent) => {
@@ -10162,103 +10114,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
-              {/* 2. APP: CENTRAL DE AGENTES */}
-              {currentTab === 'agents' && companyProfile.setupComplete && (
-                <div className="space-y-6 max-w-6xl">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Central de Agentes</h1>
-                      <p className="text-xs text-slate-600 mt-0.5">Crie especialistas, configure seus modelos e acompanhe a execução.</p>
-                    </div>
-                    <button type="button" onClick={() => setShowCreateAgent(value => !value)} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800">{showCreateAgent ? 'Fechar' : '+ Criar agente'}</button>
-                  </div>
-
-                  {showCreateAgent && <form onSubmit={handleCreateSpecialist} className="rounded-xl bg-white p-5 shadow-sm space-y-3" aria-label="Criar agente especialista">
-                    <h2 className="text-sm font-bold text-slate-900">Novo agente especialista</h2>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <label className="text-xs font-semibold text-slate-700">Nome<input value={newAgentName} onChange={event => setNewAgentName(event.target.value)} minLength={2} required className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Analista de pesquisa" /></label>
-                      <label className="text-xs font-semibold text-slate-700">Função<input value={newAgentRole} onChange={event => setNewAgentRole(event.target.value)} minLength={3} required className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Pesquisa e síntese" /></label>
-                    </div>
-                    <label className="block text-xs font-semibold text-slate-700">Instruções<textarea value={newAgentInstructions} onChange={event => setNewAgentInstructions(event.target.value)} minLength={10} required rows={4} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Descreva o objetivo, as tarefas e os limites deste agente." /></label>
-                    <p className="text-xs text-slate-600">O agente será criado como rascunho. Para conversar com ele, configure e valide um modelo de IA.</p>
-                    {agentCreateError && <p role="alert" className="text-xs text-red-700">{agentCreateError}</p>}
-                    <button type="submit" disabled={isCreatingAgent} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">{isCreatingAgent ? 'Criando...' : 'Criar rascunho'}</button>
-                  </form>}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {agents.map((agent) => {
-                      const AgentIcon = getIconComponent(agent.icon);
-                      return (
-                        <div 
-                          key={agent.id}
-                          className={`bg-white border rounded-xl p-5 shadow-sm transition-all duration-300 flex flex-col justify-between ${
-                            agent.status ? 'border-indigo-100 hover:border-indigo-200' : 'border-slate-150 opacity-75'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-2.5">
-                                <div className={`p-2.5 bg-slate-50 border rounded-lg text-slate-700 ${agent.status ? 'agent-active-glow border-indigo-150' : 'border-slate-200/60'}`}>
-                                  <AgentIcon className="w-4.5 h-4.5" />
-                                </div>
-                                <div>
-                                  <h3 className="text-xs font-semibold text-slate-900">{agent.name}</h3>
-                                  <span className="text-[10px] text-slate-400">{agent.role}</span>
-                                </div>
-                              </div>
-
-                              <button
-                                onClick={() => handleAgentToggle(agent.id)}
-                                className={`w-8 h-4 rounded-full p-0.5 transition-all ${
-                                  agent.status ? 'bg-slate-950' : 'bg-slate-200'
-                                }`}
-                              >
-                                <div className={`w-3 h-3 rounded-full bg-white transition-all transform ${
-                                  agent.status ? 'translate-x-4' : 'translate-x-0'
-                                }`}></div>
-                              </button>
-                            </div>
-
-                            <p className="text-xs text-slate-500 mt-4 leading-relaxed min-h-[40px]">{agent.description}</p>
-                            
-                            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                              <div>
-                                <span className="block font-medium font-sans">Métrica Primária</span>
-                                <span className="font-bold text-slate-900">{agent.metric}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="block font-medium font-sans">Processados</span>
-                                <span className="font-bold text-slate-900">{agent.tasksToday}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-5 pt-3 border-t border-slate-100 flex items-center gap-2">
-                            <button
-                              onClick={() => {
-                                setSelectedAgent(agent);
-                                setIsConfigModalOpen(true);
-                              }}
-                              className="flex-1 py-1.5 border border-slate-200 hover:bg-slate-50 rounded text-[10px] font-semibold text-slate-700 transition"
-                            >
-                              Configurar
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedAgentForLogs(agent);
-                                setIsLogsDrawerOpen(true);
-                              }}
-                              className="flex-1 py-1.5 bg-slate-950 hover:bg-slate-800 text-white rounded text-[10px] font-semibold transition"
-                            >
-                              Console / Logs
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              {currentTab === 'agents' && companyProfile.setupComplete && <AgentWorkspace onOpenProviders={() => setCurrentTab('providers')} />}
               {currentTab === 'memory' && companyProfile.setupComplete && (
                 <div className="space-y-6 max-w-6xl">
                   <div>
@@ -14304,7 +14160,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => { setCurrentTab('agents'); setShowCreateAgent(true); }}
+                        onClick={() => { setCurrentTab('agents'); }}
                         className="px-3.5 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition shadow-sm"
                       >
                         + Criar Agente do Zero
