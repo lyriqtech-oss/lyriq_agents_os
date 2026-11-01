@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Code2, FilePlus2, Play, RotateCcw, Save, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Code2, FilePlus2, Monitor, Play, RotateCcw, Save, Smartphone, Trash2 } from 'lucide-react';
 
 type ProjectFiles = Record<string, string>;
 type CodeProposal = { summary: string; changes: { name: string; before: string; after: string }[]; provider: string; model: string };
@@ -24,11 +24,11 @@ function loadFiles(): ProjectFiles {
   return { ...STARTER_FILES };
 }
 
-function buildPreview(files: ProjectFiles): string {
-  const html = files['index.html'] || '';
-  const css = files['styles.css'] || '';
-  const js = files['script.js'] || '';
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>${css.replace(/<\/style/gi, '<\\/style')}</style></head><body>${html}<script>${js.replace(/<\/script/gi, '<\\/script')}<\/script></body></html>`;
+function buildPreview(files: ProjectFiles, page = 'index.html'): string {
+  const html = files[page] || '';
+  const css = Object.entries(files).filter(([name]) => name.endsWith('.css')).map(([, content]) => content).join('\n');
+  const js = Object.entries(files).filter(([name]) => name.endsWith('.js')).map(([, content]) => content).join('\n');
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>${css.replace(/<\/style/gi, '<\\/style')}</style><script>window.addEventListener('error',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:event.message},'*')});window.addEventListener('unhandledrejection',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:String(event.reason)},'*')});<\/script></head><body>${html}<script>${js.replace(/<\/script/gi, '<\\/script')}<\/script></body></html>`;
 }
 
 export default function CodeWorkspace() {
@@ -40,11 +40,27 @@ export default function CodeWorkspace() {
   const [proposal, setProposal] = useState<CodeProposal | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentError, setAgentError] = useState('');
+  const [previewError, setPreviewError] = useState('');
+  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [previewPage, setPreviewPage] = useState('index.html');
+  const previewRef = useRef<HTMLIFrameElement>(null);
   const dirty = useMemo(() => JSON.stringify(files) !== JSON.stringify(previewFiles), [files, previewFiles]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
   }, [files]);
+  useEffect(() => {
+    if (!dirty) return;
+    const timeout = window.setTimeout(() => { setPreviewFiles({ ...files }); setPreviewError(''); setStatus('Prévia atualizada automaticamente.'); }, 650);
+    return () => window.clearTimeout(timeout);
+  }, [files, dirty]);
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source === previewRef.current?.contentWindow && event.data?.source === 'agent-center-preview' && event.data.type === 'error') setPreviewError(String(event.data.message).slice(0, 500));
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
 
   const addFile = () => {
     const name = window.prompt('Nome do arquivo (.html, .css ou .js):');
@@ -75,11 +91,13 @@ export default function CodeWorkspace() {
       return next;
     });
     setActiveFile('index.html');
+    if (activeFile === previewPage) setPreviewPage('index.html');
     setStatus('Arquivo removido.');
   };
 
   const run = () => {
     setPreviewFiles({ ...files });
+    setPreviewError('');
     setStatus('Prévia atualizada. HTML, CSS e JavaScript executados no navegador.');
   };
 
@@ -111,10 +129,13 @@ export default function CodeWorkspace() {
       setProposal(null);
       return;
     }
-    setFiles(previous => ({ ...previous, ...Object.fromEntries(proposal.changes.map(change => [change.name, change.after])) }));
+    const nextFiles = { ...files, ...Object.fromEntries(proposal.changes.map(change => [change.name, change.after])) };
+    setFiles(nextFiles);
+    setPreviewFiles(nextFiles);
+    setPreviewError('');
     setActiveFile(proposal.changes[0].name);
     setProposal(null);
-    setStatus('Alterações aplicadas e salvas. Clique em Executar para atualizar a prévia.');
+    setStatus('Alterações aplicadas. Prévia atualizada.');
   };
 
   return (
@@ -125,7 +146,7 @@ export default function CodeWorkspace() {
           <p className="mt-1 text-xs text-slate-600">Edite e execute um projeto web local. Seus arquivos ficam salvos neste navegador.</p>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => { setFiles({ ...STARTER_FILES }); setActiveFile('index.html'); setStatus('Projeto inicial restaurado. Clique em Executar para atualizar a prévia.'); }} className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><RotateCcw className="h-3.5 w-3.5" /> Restaurar exemplo</button>
+          <button type="button" onClick={() => { setFiles({ ...STARTER_FILES }); setActiveFile('index.html'); setStatus('Projeto inicial restaurado. A prévia será atualizada.'); }} className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><RotateCcw className="h-3.5 w-3.5" /> Restaurar exemplo</button>
           <button type="button" onClick={run} className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-400"><Play className="h-3.5 w-3.5" /> Executar</button>
         </div>
       </div>
@@ -178,8 +199,9 @@ export default function CodeWorkspace() {
           <div role="status" className="border-t border-slate-800 px-4 py-2 text-[11px] text-slate-300">{status}</div>
         </section>
         <section className="flex min-h-[350px] flex-col bg-white" aria-label="Prévia do projeto">
-          <div className="flex h-11 items-center justify-between border-b border-slate-200 px-4 text-xs font-semibold text-slate-700"><span>Prévia</span><span className={dirty ? 'text-amber-700' : 'text-emerald-700'}>{dirty ? 'Atualize para ver mudanças' : 'Atualizada'}</span></div>
-          <iframe key={buildPreview(previewFiles)} title="Prévia isolada do projeto" sandbox="allow-scripts" srcDoc={buildPreview(previewFiles)} className="min-h-[300px] w-full flex-1 border-0" />
+          <div className="flex h-11 items-center justify-between gap-2 border-b border-slate-200 px-4 text-xs font-semibold text-slate-700"><span>Prévia {dirty && <span className="text-amber-700">· atualizando</span>}</span><div className="flex items-center gap-2"><select aria-label="Página da prévia" value={previewPage} onChange={event => setPreviewPage(event.target.value)} className="max-w-32 rounded border border-slate-200 bg-white px-1 py-1 text-[11px]">{Object.keys(files).filter(name => name.endsWith('.html')).map(name => <option key={name} value={name}>{name}</option>)}</select><button type="button" onClick={() => setDevice('desktop')} aria-label="Prévia desktop" title="Desktop" className={`rounded p-1 ${device === 'desktop' ? 'bg-slate-200 text-slate-900' : 'text-slate-400'}`}><Monitor className="h-4 w-4" /></button><button type="button" onClick={() => setDevice('mobile')} aria-label="Prévia celular" title="Celular" className={`rounded p-1 ${device === 'mobile' ? 'bg-slate-200 text-slate-900' : 'text-slate-400'}`}><Smartphone className="h-4 w-4" /></button></div></div>
+          <div className="flex min-h-[300px] flex-1 justify-center overflow-auto bg-slate-100 p-2"><iframe ref={previewRef} key={buildPreview(previewFiles, previewPage)} title="Prévia isolada do projeto" sandbox="allow-scripts" srcDoc={buildPreview(previewFiles, previewPage)} className={`min-h-[300px] flex-1 border-0 bg-white ${device === 'mobile' ? 'max-w-[375px]' : 'w-full'}`} /></div>
+          {previewError && <p role="alert" className="border-t border-red-200 bg-red-50 px-3 py-2 font-mono text-[11px] text-red-800">Erro na prévia: {previewError}</p>}
         </section>
       </div>
     </div>

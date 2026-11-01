@@ -215,6 +215,22 @@ setTimeout(async () => {
     assert.strictEqual((await deniedTool.json()).error.code, 'AGENT_PERMISSION_DENIED');
     console.log('✅ Agent tool execution respects the saved permission policy.');
 
+    const flowResponse = await fetch(`${baseUrl}/automations`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'agent_flow', workspaceId: 'workspace_123', name: 'Pesquisa semanal', trigger: { type: 'manual' }, steps: [{ id: 'research-step', type: 'agent_task', agentId: savedSpecialist.id, instruction: 'Resuma as informações disponíveis.' }] })
+    });
+    assert.strictEqual(flowResponse.status, 200);
+    const flow = (await flowResponse.json()).data;
+    const flowRunResponse = await fetch(`${baseUrl}/automations/${flow.id}/trigger`, { method: 'POST' });
+    assert.strictEqual(flowRunResponse.status, 200);
+    const flowRun = (await flowRunResponse.json()).data.run;
+    assert.strictEqual(flowRun.status, 'failed');
+    assert.strictEqual(flowRun.creditsUsed, null);
+    assert.ok(flowRun.error.includes('modelo real'));
+    const flowHistory = await fetch(`${baseUrl}/automations/${flow.id}/runs`).then(response => response.json());
+    assert.ok(flowHistory.data.some(run => run.id === flowRun.id));
+    console.log('✅ Agent automation saves runs and reports a missing real model instead of a fake success.');
+
     // 6. Test GET /api/agents
     const resAgentsList = await fetch(`${baseUrl}/agents`);
     assert.strictEqual(resAgentsList.status, 200);

@@ -2198,7 +2198,13 @@ const server = http.createServer(async (req, res) => {
           typeof body.boundaries !== 'string' || body.boundaries.length > 5000) {
         return sendError(res, 400, 'AGENT_CONFIG_INVALID', 'Revise as instruções, funções e permissões do agente.', 'Preencha a configuração novamente.', 'blocking', null, reqId);
       }
-      Object.assign(agent, { name, role, instructions, capabilities: [...new Set(body.capabilities)], permissions: body.permissions, boundaries: body.boundaries });
+      const providerId = body.provider_connection_id === undefined ? agent.provider_connection_id : body.provider_connection_id;
+      const modelId = body.model_id === undefined ? agent.model_id : body.model_id;
+      const provider = (db.providers || []).find(item => item.id === providerId && item.workspace_id === agent.workspace_id && item.status === 'valid');
+      if ((providerId || modelId) && (!provider || !isModelConfiguredForProvider(provider, modelId))) {
+        return sendError(res, 400, 'MODEL_NOT_CONFIGURED', MODEL_NOT_CONFIGURED_MESSAGE, 'Selecione um provedor validado e um modelo disponível.', 'blocking', null, reqId);
+      }
+      Object.assign(agent, { name, role, instructions, capabilities: [...new Set(body.capabilities)], permissions: body.permissions, boundaries: body.boundaries, provider_connection_id: providerId || null, model_id: modelId || null });
       writeDb(db);
       return sendSuccess(res, agent, reqId);
     }
@@ -3207,7 +3213,7 @@ const server = http.createServer(async (req, res) => {
       }
       const workspaceId = body.workspaceId || 'workspace_123';
       const db = readDb();
-      const providerConn = (db.providers || []).find(p => p.workspace_id === workspaceId && p.status === 'valid');
+      const providerConn = (db.providers || []).find(p => p.workspace_id === workspaceId && p.status === 'valid' && p.selected_chat_model && !decodeStoredKey(p.encrypted_api_key).startsWith('mock-'));
       const key = decodeStoredKey(providerConn?.encrypted_api_key);
       const model = providerConn?.selected_chat_model;
       if (!providerConn || !model || !key || key.startsWith('mock-')) {
@@ -3684,12 +3690,23 @@ const server = http.createServer(async (req, res) => {
       const { workspaceId = 'workspace_123', name, description, trigger, steps } = body;
       const db = readDb();
 
+      if (body.kind === 'agent_flow') {
+        const validSteps = Array.isArray(steps) && steps.length > 0 && steps.length <= 5 && steps.every(step =>
+          step && step.type === 'agent_task' && typeof step.agentId === 'string' &&
+          (db.agents || []).some(agent => agent.id === step.agentId && agent.workspace_id === workspaceId) &&
+          typeof step.instruction === 'string' && step.instruction.trim().length >= 10 && step.instruction.length <= 4000);
+        if (!String(name || '').trim() || !validSteps || trigger?.type !== 'manual') {
+          return sendError(res, 400, 'AUTOMATION_INVALID', 'Defina nome, gatilho manual e pelo menos uma etapa com agente e instrução.', 'Revise o fluxo.', 'blocking', null, reqId);
+        }
+      }
+
       const newAuto = {
-        id: `auto_${Date.now()}`,
+        id: `auto_${crypto.randomUUID()}`,
         workspaceId,
         name: name || 'Nova Automação',
         description: description || '',
-        status: 'active',
+        kind: body.kind || 'legacy',
+        status: body.kind === 'agent_flow' ? 'draft' : 'active',
         trigger: trigger || { type: 'manual' },
         steps: steps || [{ id: 's1', order: 1, type: 'agent_task', name: 'Executar tarefa' }],
         ownerUserId: 'user_123',
@@ -3714,6 +3731,16 @@ const server = http.createServer(async (req, res) => {
       const auto = (db.automations || []).find(a => a.id === autoPatchMatch[1]);
       if (!auto) {
         return sendError(res, 404, 'AUTOMATION_NOT_FOUND', 'Automação não encontrada.', 'Informe um ID válido.', 'blocking', null, reqId);
+      }
+      if (auto.kind === 'agent_flow') {
+        const proposedSteps = body.steps === undefined ? auto.steps : body.steps;
+        const validSteps = Array.isArray(proposedSteps) && proposedSteps.length > 0 && proposedSteps.length <= 5 && proposedSteps.every(step =>
+          step && step.type === 'agent_task' && typeof step.agentId === 'string' &&
+          (db.agents || []).some(agent => agent.id === step.agentId && agent.workspace_id === auto.workspaceId) &&
+          typeof step.instruction === 'string' && step.instruction.trim().length >= 10 && step.instruction.length <= 4000);
+        if (!validSteps || (body.trigger && body.trigger.type !== 'manual') || (body.name !== undefined && !String(body.name).trim())) {
+          return sendError(res, 400, 'AUTOMATION_INVALID', 'Revise o nome, gatilho e etapas do fluxo.', 'Corrija a configuração.', 'blocking', null, reqId);
+        }
       }
 
       Object.assign(auto, {
@@ -3752,6 +3779,33 @@ const server = http.createServer(async (req, res) => {
         return sendError(res, 404, 'AUTOMATION_NOT_FOUND', 'Automação não encontrada.', 'Informe um ID válido.', 'blocking', null, reqId);
       }
 
+      if (auto.kind === 'agent_flow') {
+        const startedAt = new Date().toISOString();
+        const stepResults = [];
+        let previousOutput = '';
+        let error = null;
+        for (const step of auto.steps) {
+          const agent = (db.agents || []).find(item => item.id === step.agentId && item.workspace_id === auto.workspaceId);
+          if (!agent) { error = 'Agente da etapa não encontrado.'; break; }
+          const provider = getValidProviderForAgent(db, agent, auto.workspaceId);
+          const key = decodeStoredKey(provider?.encrypted_api_key);
+          if (!provider || !isModelConfiguredForProvider(provider, agent.model_id) || !key || key.startsWith('mock-')) {
+            error = `Configure um modelo real para ${agent.name} antes de executar.`; break;
+          }
+          const input = `${step.instruction}${previousOutput ? `\n\nResultado da etapa anterior:\n${previousOutput}` : ''}`;
+          const answer = await callRealLlmProvider(provider.provider, agent.model_id, key, [{ role: 'user', content: input }], `${agent.instructions || ''}\n${agent.boundaries || ''}`);
+          if (!answer) { error = `O modelo de ${agent.name} não retornou uma resposta.`; break; }
+          previousOutput = redactSecrets(runOutputGuard(answer)).slice(0, 12000);
+          stepResults.push({ stepId: step.id, agentId: agent.id, agentName: agent.name, output: previousOutput });
+        }
+        const run = { id: `autorun-${crypto.randomUUID()}`, automationId: auto.id, status: error ? 'failed' : 'completed', startedAt, finishedAt: new Date().toISOString(), steps: stepResults, error, creditsUsed: null };
+        db.automationRuns ||= [];
+        db.automationRuns.push(run);
+        auto.lastRunAt = run.finishedAt;
+        writeDb(db);
+        return sendSuccess(res, { triggered: true, automation: auto.name, run }, reqId);
+      }
+
       const run = {
         id: `autorun-${Date.now()}`,
         automationId: auto.id,
@@ -3765,6 +3819,14 @@ const server = http.createServer(async (req, res) => {
       writeDb(db);
 
       return sendSuccess(res, { triggered: true, automation: auto.name, run }, reqId);
+    }
+
+    const autoRunsMatch = pathName.match(/^\/api\/automations\/([a-zA-Z0-9_-]+)\/runs$/);
+    if (autoRunsMatch && method === 'GET') {
+      const db = readDb();
+      const auto = (db.automations || []).find(item => item.id === autoRunsMatch[1]);
+      if (!auto) return sendError(res, 404, 'AUTOMATION_NOT_FOUND', 'Automação não encontrada.', 'Selecione outro fluxo.', 'blocking', null, reqId);
+      return sendSuccess(res, (db.automationRuns || []).filter(run => run.automationId === auto.id).slice(-20).reverse(), reqId);
     }
 
     // ----------------------------------------------------

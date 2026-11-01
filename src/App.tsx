@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import CodeWorkspace from './components/CodeWorkspace';
 import AgentWorkspace from './components/AgentWorkspace';
+import AutomationWorkspace from './components/AutomationWorkspace';
 import { persistentStorage, setPersistentUser } from './lib/persistentStorage';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
 import {
@@ -7843,9 +7844,9 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
 
               <button
-                onClick={() => setCurrentTab('workflows')}
+                onClick={() => setCurrentTab('automation_builder')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'workflows'
+                  currentTab === 'automation_builder'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
@@ -10593,6 +10594,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
+              {currentTab === 'automation_builder' && companyProfile.setupComplete && <AutomationWorkspace />}
               {/* 6. APP: WORKFLOWS */}
               {currentTab === 'workflows' && companyProfile.setupComplete && (
                 <div className="space-y-6 max-w-6xl">
