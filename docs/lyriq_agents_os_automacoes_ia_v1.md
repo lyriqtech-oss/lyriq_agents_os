@@ -1,4 +1,4 @@
-# Lyriq Agents OS - Automacoes com Agente de IA V1
+# Agent Center - Automacoes com Agente de IA V1
 
 ## Objetivo
 
@@ -12,7 +12,7 @@ O usuario entra em Automações e escreve:
 
 > Quando chegar um lead pelo WhatsApp, qualifique com o agente SDR, salve no CRM, envie uma resposta inicial e avise o time se o score passar de 80.
 
-O Lyriq Agents OS deve:
+O Agent Center deve:
 
 1. Identificar gatilho, canais, agentes, tools e integrações necessárias.
 2. Criar um fluxo visual com nodes conectados.
@@ -210,4 +210,4 @@ Acoes altas exigem aprovacao humana:
 
 ## Resultado esperado
 
-O Lyriq Agents OS deixa de ser apenas uma plataforma de agentes e vira uma camada operacional. O diferencial nao e copiar o n8n. O diferencial e fazer o trabalho chato de configuracao com IA, mantendo controle humano onde pode dar prejuizo.
+O Agent Center deixa de ser apenas uma plataforma de agentes e vira uma camada operacional. O diferencial nao e copiar o n8n. O diferencial e fazer o trabalho chato de configuracao com IA, mantendo controle humano onde pode dar prejuizo.

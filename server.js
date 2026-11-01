@@ -1370,7 +1370,7 @@ const executeAgentTool = (workspaceId, agentId, toolName, params = {}) => {
     result = searchChunks(params.query || '', agentId);
   } else if (toolName === 'document_writer' || toolName === 'gerar_documento') {
     const filename = params.filename || `documento-${Date.now()}.md`;
-    const content = params.content || params.text || '# Documento gerado\n\nConteúdo criado por ferramenta interna do Lyriq Agents OS.';
+    const content = params.content || params.text || '# Documento gerado\n\nConteúdo criado por ferramenta interna do Agent Center.';
     const indexed = upsertKnowledgeDocument(db, {
       workspaceId: workspaceId || 'workspace_123',
       agentId,
@@ -4134,7 +4134,7 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
           content: `# MEMORY.md - Fatos e Contexto Operacional
 
 ## Fatos Persistentes sobre a Empresa
-- Empresa fundada e configurada no Lyriq Agents OS.
+- Empresa fundada e configurada no Agent Center.
 - Provedor configurado: ${provider.provider} (Modelo: ${provider.selectedChatModel}).
 
 ## Preferências do Usuário & Decisões
@@ -4277,7 +4277,7 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
         completed: true,
         redirectUrl: '/app',
         onboarding: ob,
-        message: 'Base pronta. Agora sim você pode entrar no Lyriq Agents OS com empresa, memória, modelo e agente principal configurados.'
+        message: 'Base pronta. Agora sim você pode entrar no Agent Center com empresa, memória, modelo e agente principal configurados.'
       }, reqId);
     }
 
@@ -5723,7 +5723,7 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
 
     // Helper: Default Public Components Catalog (PDF V1 Section 6)
     const DEFAULT_PUBLIC_COMPONENTS = [
-      { id: 'comp-platform', name: 'Plataforma Lyriq Agents OS', slug: 'platform-core', description: 'Núcleo do sistema operacional de agentes e dashboard', visibility: 'public', status: 'operational', sortOrder: 1 },
+      { id: 'comp-platform', name: 'Plataforma Agent Center', slug: 'platform-core', description: 'Núcleo do sistema operacional de agentes e dashboard', visibility: 'public', status: 'operational', sortOrder: 1 },
       { id: 'comp-auth', name: 'Login e Autenticação', slug: 'login-auth', description: 'Autenticação de usuários, SSO e controle de sessão', visibility: 'public', status: 'operational', sortOrder: 2 },
       { id: 'comp-chat', name: 'Console de Chat e Comunicação', slug: 'chat-console', description: 'Interface de mensagens e troca de contexto em tempo real', visibility: 'public', status: 'operational', sortOrder: 3 },
       { id: 'comp-execution', name: 'Execução de Agentes e Runtime', slug: 'agent-execution', description: 'Motor de inferência e ciclo de vida dos agentes', visibility: 'public', status: 'operational', sortOrder: 4 },
@@ -7458,7 +7458,7 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
       // Command handling
       let responseText = 'Olá! Sou o agente de IA da Lyriq integrado ao Telegram. Como posso te ajudar hoje?';
       if (text === '/start') {
-        responseText = '👋 Bem-vindo ao Lyriq Agents OS via Telegram! Seu bot está ativo e conectado ao seu workspace.';
+        responseText = '👋 Bem-vindo ao Agent Center via Telegram! Seu bot está ativo e conectado ao seu workspace.';
       } else if (text === '/help') {
         responseText = 'ℹ️ Comandos disponíveis:\n/start - Iniciar conversa\n/status - Ver status do agente\n/reset - Reiniciar contexto\n/help - Ajuda';
       } else if (text === '/status') {
@@ -7689,7 +7689,7 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
       }
 
       const targetPhone = toPhone || conn.displayPhoneNumber;
-      const testText = text || 'Olá! Esta é uma mensagem de teste enviada pelo Lyriq Agents OS V1.';
+      const testText = text || 'Olá! Esta é uma mensagem de teste enviada pelo Agent Center V1.';
       const adapter = new MetaCloudWhatsAppAdapter();
       const rawToken = conn.encryptedAccessToken ? atob(conn.encryptedAccessToken) : '';
 
@@ -8097,7 +8097,7 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
 
       if (templates.length === 0) {
         templates = [
-          { id: 'watpl-1', workspaceId, provider: 'meta_cloud', name: 'hello_world', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', body: 'Olá {{1}}, bem-vindo ao atendimento da Lyriq OS!', variables: ['nome'] },
+          { id: 'watpl-1', workspaceId, provider: 'meta_cloud', name: 'hello_world', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', body: 'Olá {{1}}, bem-vindo ao atendimento do Agent Center!', variables: ['nome'] },
           { id: 'watpl-2', workspaceId, provider: 'meta_cloud', name: 'lembrete_agendamento', language: 'pt_BR', category: 'UTILITY', status: 'APPROVED', body: 'Olá {{1}}, lembramos do seu agendamento no dia {{2}}.', variables: ['nome', 'data'] }
         ];
         db.whatsappMessageTemplates = templates;
@@ -8351,8 +8351,8 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
       }
 
       const targetEmail = toEmail || conn.emailAddress;
-      const testSubject = subject || 'Email de Teste - Lyriq Agents OS V1';
-      const testBody = bodyText || 'Este é um email de teste enviado pelo Lyriq Agents OS V1 via SMTP.';
+      const testSubject = subject || 'Email de Teste - Agent Center V1';
+      const testBody = bodyText || 'Este é um email de teste enviado pelo Agent Center V1 via SMTP.';
 
       const adapter = new ImapSmtpEmailAdapter();
       try {
@@ -8611,8 +8611,8 @@ ${forbiddenTopics.map(t => `- ${t}`).join('\n')}`;
         conversationId: conv.id,
         agentId: agentObj?.id || 'agent_123',
         subject: `Re: ${conv.subject}`,
-        bodyText: `Prezado cliente,\n\n${customPrompt}\n\nAtenciosamente,\n${agentObj?.name || 'Equipe Lyriq OS'}`,
-        bodyHtml: `<p>Prezado cliente,</p><p>${customPrompt}</p><p>Atenciosamente,<br/><strong>${agentObj?.name || 'Equipe Lyriq OS'}</strong></p>`,
+        bodyText: `Prezado cliente,\n\n${customPrompt}\n\nAtenciosamente,\n${agentObj?.name || 'Equipe Agent Center'}`,
+        bodyHtml: `<p>Prezado cliente,</p><p>${customPrompt}</p><p>Atenciosamente,<br/><strong>${agentObj?.name || 'Equipe Agent Center'}</strong></p>`,
         toAddresses: [],
         riskLevel: conv.riskLevel || 'safe',
         status: 'draft',

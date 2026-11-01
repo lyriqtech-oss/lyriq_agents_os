@@ -2635,7 +2635,7 @@ setTimeout(async () => {
     const resGetArchOverview = await fetch(`${baseUrl}/v1/system/architecture`);
     assert.strictEqual(resGetArchOverview.status, 200);
     const bodyGetArchOverview = await resGetArchOverview.json();
-    assert.strictEqual(bodyGetArchOverview.data.productName, 'Lyriq Agents OS V1');
+    assert.strictEqual(bodyGetArchOverview.data.productName, 'Agent Center V1');
     assert.strictEqual(bodyGetArchOverview.data.byokFirst, true);
 
     // 2. GET /api/v1/system/schema-consolidated (Catálogo Consolidado de 40+ Tabelas)
@@ -2654,7 +2654,7 @@ setTimeout(async () => {
     const resGetMasterPrompt = await fetch(`${baseUrl}/v1/system/master-prompt`);
     assert.strictEqual(resGetMasterPrompt.status, 200);
     const bodyGetMasterPrompt = await resGetMasterPrompt.json();
-    assert.ok(bodyGetMasterPrompt.data.prompt.includes('Lyriq Agents OS'));
+    assert.ok(bodyGetMasterPrompt.data.prompt.includes('Agent Center'));
 
     console.log('✅ Consolidated Architecture & Final Spec V1 Endpoints passed.');
 
