@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
+import CodeWorkspace from './components/CodeWorkspace';
 import { persistentStorage, setPersistentUser } from './lib/persistentStorage';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
 import {
@@ -47,9 +48,6 @@ import {
   Globe2,
   Layout,
   Code2,
-  Smartphone,
-  Gamepad2,
-  MonitorPlay
 } from 'lucide-react';
 
 // --- DATABASE TYPES ---
@@ -890,6 +888,12 @@ export default function App() {
     }
     return defaultAgentsList;
   });
+  const [newAgentName, setNewAgentName] = useState('');
+  const [newAgentRole, setNewAgentRole] = useState('');
+  const [newAgentInstructions, setNewAgentInstructions] = useState('');
+  const [agentCreateError, setAgentCreateError] = useState('');
+  const [isCreatingAgent, setIsCreatingAgent] = useState(false);
+  const [showCreateAgent, setShowCreateAgent] = useState(false);
 
   const [leads, setLeads] = useState<Lead[]>(() => {
     const data = persistentStorage.getItem('lyriq_leads');
@@ -1008,29 +1012,6 @@ export default function App() {
       return 'setup_console';
     }
   });
-  const [codeSubTab, setCodeSubTab] = useState<'code' | 'apps' | 'web' | 'games'>('code');
-  const [codePlatform, setCodePlatform] = useState<'android' | 'ios' | 'windows' | 'macos' | 'linux'>('android');
-  const [gameDimension, setGameDimension] = useState<'2d' | '3d'>('2d');
-  const [codePrompt, setCodePrompt] = useState('Crie uma landing page premium para apresentar meu produto.');
-  const [codeRunStatus, setCodeRunStatus] = useState<'idle' | 'building' | 'ready'>('idle');
-  const runLyriqCode = async () => {
-    setCodeRunStatus('building');
-    try {
-      const tier = companyProfile.plan || currentUser?.plan || onboardingPlan || 'free';
-      const response = await fetch('/api/code/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: workspaceMode, tier, surface: codeSubTab, platform: codePlatform, dimension: gameDimension, prompt: codePrompt })
-      });
-      const body = await response.json();
-      if (!response.ok || !body.ok) throw new Error(body.error?.message || 'Falha ao preparar o preview.');
-      setCodeRunStatus('ready');
-      addToast('Preview atualizado pelo agente.', 'success');
-    } catch (error: any) {
-      setCodeRunStatus('idle');
-      addToast(error.message || 'Falha ao executar o Lyriq Code.', 'error');
-    }
-  };
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [platformAdminSettings, setPlatformAdminSettings] = useState(() => {
@@ -3260,6 +3241,7 @@ export default function App() {
       plan: 'pro'
     };
     persistentStorage.setItem('lyriq_session', JSON.stringify(demoUser));
+    persistentStorage.setItem('lyriq_onboarding_completed', 'true');
     setCurrentUser(demoUser);
     
     setCompanyProfile(demoCompany);
@@ -3283,9 +3265,56 @@ export default function App() {
   const handleAgentToggle = (id: string) => {
     const target = agents.find(a => a.id === id);
     if (!target) return;
+    if (target.agentStatus === 'draft') {
+      addToast('Configure um provedor e teste este agente antes de ativá-lo.', 'info');
+      return;
+    }
     const nextStatus = !target.status;
     addToast(`Agente ${target.name} foi ${nextStatus ? 'ativado' : 'pausado'}.`, nextStatus ? 'success' : 'info');
     setAgents(prev => prev.map(a => a.id === id ? { ...a, status: nextStatus, lastActive: nextStatus ? 'Agora mesmo' : 'Pausado' } : a));
+  };
+
+  const handleCreateSpecialist = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setAgentCreateError('');
+    setIsCreatingAgent(true);
+    try {
+      const response = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: 'workspace_123', name: newAgentName, role: newAgentRole, instructions: newAgentInstructions })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error?.message || 'Não foi possível criar o agente.');
+      const created = result.data;
+      setAgents(previous => [...previous, {
+        id: created.id,
+        name: created.name,
+        role: created.role,
+        area: 'Personalizado',
+        status: false,
+        agentStatus: 'draft',
+        metric: 'Ainda não executado',
+        metricLabel: 'Execuções',
+        tasksToday: 0,
+        description: created.instructions,
+        details: created.instructions,
+        icon: 'Bot',
+        model: 'Não configurado',
+        temperature: 0.3,
+        lastActive: 'Nunca',
+        systemPrompt: created.instructions
+      }]);
+      setNewAgentName('');
+      setNewAgentRole('');
+      setNewAgentInstructions('');
+      setShowCreateAgent(false);
+      addToast(`Agente ${created.name} criado como rascunho. Configure um modelo antes de ativá-lo.`, 'success');
+    } catch (error: any) {
+      setAgentCreateError(error.message || 'Não foi possível criar o agente.');
+    } finally {
+      setIsCreatingAgent(false);
+    }
   };
 
   const handleSaveAgentConfig = (e: React.FormEvent) => {
@@ -7819,7 +7848,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               >
                 <div className="flex items-center gap-2.5">
                   <Code2 className="w-4 h-4 shrink-0 text-cyan-600" />
-                  <span>Lyriq Code</span>
+                  <span>Agent Center Code</span>
                 </div>
                 <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${workspaceMode === 'business' ? 'bg-amber-50 text-amber-700' : 'bg-cyan-50 text-cyan-700'}`}>
                   {workspaceMode === 'business' ? 'MAX+' : 'PERSONAL'}
@@ -8552,103 +8581,14 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               {/* 1. APP: EXECUTIVE DASHBOARD */}
               {currentTab === 'code' && (
-                <div className="h-full min-h-[720px] flex flex-col gap-4 text-left animate-in fade-in duration-200">
-                  {!hasCodeAccess(workspaceMode, companyProfile.plan || currentUser?.plan || onboardingPlan || 'free') ? (
-                    <div className="m-auto max-w-lg bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
-                      <Lock className="w-10 h-10 text-amber-500 mx-auto" />
-                      <h1 className="text-xl font-bold text-slate-950 mt-4">Lyriq Code não está incluído no seu plano</h1>
-                      <p className="text-sm text-slate-500 mt-2">No Business, o Lyriq Code está disponível a partir do plano Max. Seus agentes e ferramentas empresariais continuam ativos.</p>
-                      <button onClick={() => setCurrentTab('pricing')} className="mt-5 px-5 py-2.5 bg-slate-950 text-white rounded-lg text-xs font-bold">Ver planos com Code</button>
-                    </div>
-                  ) : (<>
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2"><Code2 className="w-6 h-6 text-cyan-600" /><h1 className="text-xl font-bold text-slate-950">Lyriq Code</h1></div>
-                        <p className="text-xs text-slate-500 mt-1">Transforme ideias em software funcional com agentes que escrevem, executam, testam e refinam o código.</p>
-                      </div>
-                      <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
-                        {([
-                          ['code', 'Code', Code2], ['apps', 'Apps', Smartphone], ['web', 'Web', Globe2], ['games', 'Games', Gamepad2]
-                        ] as const).map(([id, label, Icon]) => (
-                          <button key={id} onClick={() => setCodeSubTab(id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${codeSubTab === id ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
-                            <Icon className="w-4 h-4" />{label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-12 flex-1 min-h-0 bg-[#0b1020] rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
-                      <aside className="col-span-2 border-r border-slate-800 p-4 text-slate-300">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Explorer</p>
-                          <div className="flex gap-1">
-                            <button title="Nova pasta" className="w-6 h-6 grid place-items-center rounded hover:bg-slate-800 text-slate-400"><FolderOpen className="w-3.5 h-3.5" /></button>
-                            <button title="Novo arquivo" className="w-6 h-6 grid place-items-center rounded hover:bg-slate-800 text-slate-400"><FileText className="w-3.5 h-3.5" /></button>
-                          </div>
-                        </div>
-                        <div className="mt-4 space-y-1.5 text-xs font-mono">
-                          <p className="text-cyan-300">▾ lyriq-agents-os</p>
-                          <p className="pl-3 text-slate-100">▾ src</p>
-                          <p className="pl-6 text-white bg-slate-800/70 rounded px-2 py-1">App.tsx</p>
-                          <p className="pl-6">components/</p>
-                          <p className="pl-6">services/</p>
-                          <p className="pl-3">▾ docs</p>
-                          <p className="pl-6">terms.md</p>
-                          <p className="pl-6">privacy.md</p>
-                          <p className="pl-3">public/</p>
-                          <p className="pl-3">package.json</p>
-                          <p className="pl-3">vite.config.ts</p>
-                        </div>
-                        <div className="mt-8 pt-4 border-t border-slate-800">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Skills ativas</p>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {(codeSubTab === 'apps' ? ['React Native', 'Flutter', 'Build'] : codeSubTab === 'web' ? ['React', 'Vite', 'Deploy'] : codeSubTab === 'games' ? ['Godot', 'Three.js', gameDimension.toUpperCase()] : ['Git', 'Tests', 'Debug']).map(skill => <span key={skill} className="px-2 py-1 rounded bg-slate-800 text-[9px] text-slate-300">{skill}</span>)}
-                          </div>
-                        </div>
-                      </aside>
-
-                      <section className="col-span-5 flex flex-col border-r border-slate-800">
-                        <div className="h-10 border-b border-slate-800 flex items-center px-4 text-[10px] text-slate-400 font-mono">
-                          <span className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-t">App.tsx</span>
-                          <span className="px-2 py-1 border border-slate-800 border-l-0 rounded-t">terms.md</span>
-                          <span className="ml-auto text-emerald-400">● agent connected</span>
-                        </div>
-                        <pre className="flex-1 p-5 text-[11px] leading-6 text-slate-300 font-mono overflow-auto whitespace-pre-wrap">{`import { LyriqApp } from '@lyriq/runtime';\n\nexport default function App() {\n  return (\n    <LyriqApp mode="${codeSubTab}"${codeSubTab === 'apps' ? ` platform="${codePlatform}"` : ''}${codeSubTab === 'games' ? ` dimension="${gameDimension}"` : ''}>\n      <Hero title="Sua ideia já está rodando" />\n      <Agent status="building" />\n    </LyriqApp>\n  );\n}`}</pre>
-                        <div className="border-t border-slate-800 bg-slate-950">
-                          <div className="h-8 px-3 border-b border-slate-800 flex items-center gap-3 text-[10px] text-slate-400 font-mono">
-                            <span className="text-white">Terminal</span>
-                            <span>Problems</span>
-                            <span>Git</span>
-                            <span className="ml-auto text-cyan-300">workspace: folder mode</span>
-                          </div>
-                          <div className="px-3 py-2 text-[10px] text-emerald-300 font-mono border-b border-slate-800">$ lyriq-code agent apply --project lyriq-agents-os --tests</div>
-                        </div>
-                        <div className="border-t border-slate-800 p-3">
-                          <textarea value={codePrompt} onChange={e => setCodePrompt(e.target.value)} rows={3} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-white resize-none focus:outline-none focus:border-cyan-500" />
-                          <div className="mt-2 flex items-center gap-2">
-                            {codeSubTab === 'apps' && <select value={codePlatform} onChange={e => setCodePlatform(e.target.value as typeof codePlatform)} className="bg-slate-800 text-slate-200 rounded px-2 py-2 text-[10px]">{['android','ios','windows','macos','linux'].map(x => <option key={x}>{x}</option>)}</select>}
-                            {codeSubTab === 'games' && <div className="flex bg-slate-800 rounded p-0.5">{(['2d','3d'] as const).map(x => <button key={x} onClick={() => setGameDimension(x)} className={`px-3 py-1.5 text-[10px] rounded ${gameDimension === x ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>{x.toUpperCase()}</button>)}</div>}
-                            <button onClick={runLyriqCode} className="ml-auto px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-2"><Play className="w-3.5 h-3.5" />Executar agente</button>
-                          </div>
-                        </div>
-                      </section>
-
-                      <section className="col-span-5 bg-slate-100 flex flex-col">
-                        <div className="h-10 bg-white border-b border-slate-200 flex items-center px-3 gap-2 text-[10px] text-slate-500"><MonitorPlay className="w-4 h-4" /> Preview em tempo real <span className={`ml-auto font-bold ${codeRunStatus === 'building' ? 'text-amber-600' : 'text-emerald-600'}`}>{codeRunStatus === 'building' ? 'COMPILANDO...' : 'LIVE'}</span></div>
-                        <div className="flex-1 p-5 flex items-center justify-center">
-                          <div className={`w-full h-full max-h-[520px] bg-white shadow-xl overflow-hidden ${codeSubTab === 'apps' ? 'max-w-[270px] rounded-[32px] border-[8px] border-slate-900' : 'rounded-xl border border-slate-200'}`}>
-                            <div className="h-full bg-gradient-to-br from-slate-950 via-indigo-950 to-cyan-950 text-white p-8 flex flex-col justify-center">
-                              <span className="text-[10px] uppercase tracking-[0.3em] text-cyan-300">{codeSubTab === 'games' ? `Game ${gameDimension.toUpperCase()}` : codeSubTab === 'apps' ? `App ${codePlatform}` : codeSubTab === 'web' ? 'Web Application' : 'Code Workspace'}</span>
-                              <h2 className="text-3xl font-black mt-3">Sua ideia já está rodando.</h2>
-                              <p className="text-xs text-slate-300 mt-3 leading-relaxed">O agente alterou os arquivos, executou os testes e atualizou este preview automaticamente.</p>
-                              <button className="mt-6 self-start px-4 py-2 bg-cyan-400 text-slate-950 rounded-lg text-xs font-bold">Testar agora</button>
-                            </div>
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-                  </>)}
-                </div>
+                !hasCodeAccess(workspaceMode, companyProfile.plan || currentUser?.plan || onboardingPlan || 'free') ? (
+                  <div className="m-auto max-w-lg rounded-2xl bg-white p-8 text-center">
+                    <Lock className="mx-auto h-10 w-10 text-amber-500" />
+                    <h1 className="mt-4 text-xl font-bold text-slate-950">Agent Center Code não está incluído no seu plano</h1>
+                    <p className="mt-2 text-sm text-slate-600">No Business, o Code está disponível a partir do plano Max.</p>
+                    <button onClick={() => setCurrentTab('pricing')} className="mt-5 rounded-lg bg-slate-950 px-5 py-2.5 text-xs font-bold text-white">Ver planos com Code</button>
+                  </div>
+                ) : <CodeWorkspace />
               )}
 
               {currentTab === 'dashboard' && isDashboardUnlocked && (
@@ -10225,10 +10165,25 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               {/* 2. APP: CENTRAL DE AGENTES */}
               {currentTab === 'agents' && companyProfile.setupComplete && (
                 <div className="space-y-6 max-w-6xl">
-                  <div>
-                    <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Central de Agentes</h1>
-                    <p className="text-xs text-slate-400 mt-0.5">Ative, monitore e customize os parâmetros de IA do seu time digital.</p>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Central de Agentes</h1>
+                      <p className="text-xs text-slate-600 mt-0.5">Crie especialistas, configure seus modelos e acompanhe a execução.</p>
+                    </div>
+                    <button type="button" onClick={() => setShowCreateAgent(value => !value)} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800">{showCreateAgent ? 'Fechar' : '+ Criar agente'}</button>
                   </div>
+
+                  {showCreateAgent && <form onSubmit={handleCreateSpecialist} className="rounded-xl bg-white p-5 shadow-sm space-y-3" aria-label="Criar agente especialista">
+                    <h2 className="text-sm font-bold text-slate-900">Novo agente especialista</h2>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="text-xs font-semibold text-slate-700">Nome<input value={newAgentName} onChange={event => setNewAgentName(event.target.value)} minLength={2} required className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Analista de pesquisa" /></label>
+                      <label className="text-xs font-semibold text-slate-700">Função<input value={newAgentRole} onChange={event => setNewAgentRole(event.target.value)} minLength={3} required className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Ex.: Pesquisa e síntese" /></label>
+                    </div>
+                    <label className="block text-xs font-semibold text-slate-700">Instruções<textarea value={newAgentInstructions} onChange={event => setNewAgentInstructions(event.target.value)} minLength={10} required rows={4} className="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Descreva o objetivo, as tarefas e os limites deste agente." /></label>
+                    <p className="text-xs text-slate-600">O agente será criado como rascunho. Para conversar com ele, configure e valide um modelo de IA.</p>
+                    {agentCreateError && <p role="alert" className="text-xs text-red-700">{agentCreateError}</p>}
+                    <button type="submit" disabled={isCreatingAgent} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 disabled:opacity-50">{isCreatingAgent ? 'Criando...' : 'Criar rascunho'}</button>
+                  </form>}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     {agents.map((agent) => {
@@ -14349,7 +14304,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => addToast('Wizard de criação de agente do zero iniciado.', 'info')}
+                        onClick={() => { setCurrentTab('agents'); setShowCreateAgent(true); }}
                         className="px-3.5 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition shadow-sm"
                       >
                         + Criar Agente do Zero

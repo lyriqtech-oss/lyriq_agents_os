@@ -1,18 +1,19 @@
 import { spawn } from 'child_process';
 import assert from 'assert';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 console.log('=== RUNNING INTEGRATION TESTS ===');
 
-// Clean database file before running tests
-if (fs.existsSync('./database.json')) {
-  fs.unlinkSync('./database.json');
-}
+// Keep integration data isolated from the user's local application database.
+const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-center-test-'));
+const testDatabaseFile = path.join(testDirectory, 'database.json');
 
 // Start backend server
 const testPort = process.env.TEST_PORT || '5002';
 const serverProcess = spawn('node', ['server.js'], {
-  env: { ...process.env, PORT: testPort }
+  env: { ...process.env, PORT: testPort, AGENT_CENTER_DB_FILE: testDatabaseFile }
 });
 
 serverProcess.stdout.on('data', (data) => {
@@ -180,6 +181,21 @@ setTimeout(async () => {
     assert.strictEqual(bodyAgentOk.data.type, 'main');
     const agentId = bodyAgentOk.data.id;
     console.log('✅ POST /api/agents/main (Valid Agent Creation) passed.');
+
+    const resSpecialist = await fetch(`${baseUrl}/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', name: 'Analista de pesquisa', role: 'Pesquisador', instructions: 'Pesquisar fontes e resumir evidências.' })
+    });
+    assert.strictEqual(resSpecialist.status, 200);
+    const bodySpecialist = await resSpecialist.json();
+    assert.strictEqual(bodySpecialist.data.type, 'specialist');
+    assert.strictEqual(bodySpecialist.data.status, 'draft');
+    const resAgentsAfterSpecialist = await fetch(`${baseUrl}/agents`);
+    const agentsAfterSpecialist = await resAgentsAfterSpecialist.json();
+    assert.ok(agentsAfterSpecialist.data.some(agent => agent.id === agentId && agent.type === 'main'));
+    assert.ok(agentsAfterSpecialist.data.some(agent => agent.id === bodySpecialist.data.id));
+    console.log('✅ POST /api/agents creates a specialist without replacing the main agent.');
 
     // 6. Test GET /api/agents
     const resAgentsList = await fetch(`${baseUrl}/agents`);
@@ -412,6 +428,10 @@ setTimeout(async () => {
     const bodyAgentRun = await resAgentRun.json();
     assert.strictEqual(bodyAgentRun.ok, true);
     assert.ok(bodyAgentRun.data.runId.startsWith('run-'));
+    assert.strictEqual(bodyAgentRun.data.status, 'simulated');
+    assert.strictEqual(bodyAgentRun.data.mode, 'simulation');
+    assert.ok(bodyAgentRun.data.answer.includes('Simulação:'));
+    assert.ok(!bodyAgentRun.data.events.some(event => event.type === 'final'));
     assert.ok(bodyAgentRun.data.events.length > 0);
     const runId = bodyAgentRun.data.runId;
     console.log('✅ POST /api/runtime/agent-run (Operational Transparency Loop) passed.');
@@ -2674,10 +2694,12 @@ setTimeout(async () => {
 
     console.log('🎉 ALL INTEGRATION TESTS PASSED SUCCESSFULLY!');
     serverProcess.kill();
+    fs.rmSync(testDirectory, { recursive: true, force: true });
     process.exit(0);
   } catch (err) {
     console.error('❌ INTEGRATION TEST FAILED:', err);
     serverProcess.kill();
+    fs.rmSync(testDirectory, { recursive: true, force: true });
     process.exit(1);
   }
 }, 1500);
