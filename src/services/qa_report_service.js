@@ -1,5 +1,5 @@
 /**
- * Lyriq Agents OS - QA Report & Confiabilidade V1 Service Module
+ * Agent Center - QA Report & Confiabilidade V1 Service Module
  * Compiles empirical evidence, mandatory commands execution results, and detailed test case results by ID.
  */
 

@@ -1,12 +1,12 @@
-# Politica de Privacidade - Lyriq Agents OS V1
+# Politica de Privacidade - Agent Center V1
 
 Ultima atualizacao: 07/08/2026
 
-Este documento e uma base operacional para publicacao da Politica de Privacidade do Lyriq Agents OS. Antes de uso publico definitivo, deve passar por revisao juridica.
+Este documento e uma base operacional para publicacao da Politica de Privacidade do Agent Center. Antes de uso publico definitivo, deve passar por revisao juridica.
 
 ## 1. Escopo
 
-Esta Politica explica como a Lyriq coleta, usa, armazena, compartilha e protege dados pessoais e operacionais tratados no Lyriq Agents OS.
+Esta Politica explica como a Lyriq coleta, usa, armazena, compartilha e protege dados pessoais e operacionais tratados no Agent Center.
 
 ## 2. Dados coletados
 

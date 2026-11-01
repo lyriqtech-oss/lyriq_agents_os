@@ -1947,11 +1947,11 @@ console.log('✅ Sprint Roadmap Breakdown Gates tests passed.');
 
 // 141. Test Master Implementation Prompt Generator (PDF Final Section 17)
 const masterPromptTest = (promptText) => {
-  const requiredKeywords = ['Lyriq Agents OS', 'BYOK', 'workspace_id', 'RLS em todas', 'Service role key nunca', 'SSRF protection'];
+  const requiredKeywords = ['Agent Center', 'BYOK', 'workspace_id', 'RLS em todas', 'Service role key nunca', 'SSRF protection'];
   return requiredKeywords.every(kw => promptText.includes(kw));
 };
 
-const samplePrompt = `Você está construindo o MVP do Lyriq Agents OS. BYOK, workspace_id, RLS em todas, Service role key nunca, SSRF protection.`;
+const samplePrompt = `Você está construindo o MVP do Agent Center. BYOK, workspace_id, RLS em todas, Service role key nunca, SSRF protection.`;
 assert.strictEqual(masterPromptTest(samplePrompt), true);
 console.log('✅ Master Implementation Prompt Generator tests passed.');
 

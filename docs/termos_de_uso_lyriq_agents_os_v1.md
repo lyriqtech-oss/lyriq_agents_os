@@ -1,18 +1,18 @@
-# Termos de Uso - Lyriq Agents OS V1
+# Termos de Uso - Agent Center V1
 
 Ultima atualizacao: 07/08/2026
 
-Este documento e uma base operacional para publicacao dos Termos de Uso do Lyriq Agents OS. Antes de uso publico definitivo, deve passar por revisao juridica.
+Este documento e uma base operacional para publicacao dos Termos de Uso do Agent Center. Antes de uso publico definitivo, deve passar por revisao juridica.
 
 ## 1. Aceite
 
-Ao acessar, criar conta, contratar plano ou usar o Lyriq Agents OS, o usuario declara que leu, entendeu e concorda com estes Termos de Uso.
+Ao acessar, criar conta, contratar plano ou usar o Agent Center, o usuario declara que leu, entendeu e concorda com estes Termos de Uso.
 
 Se o uso ocorrer em nome de uma empresa, o usuario declara possuir poderes para representar essa empresa.
 
 ## 2. Definicao do servico
 
-O Lyriq Agents OS e uma plataforma de software para criacao, configuracao e operacao de agentes de IA, com recursos de chat, arquivos, memoria, RAG, automacoes, ferramentas, integracoes, ambiente de codigo, auditoria, planos, billing e controle de uso.
+O Agent Center e uma plataforma de software para criacao, configuracao e operacao de agentes de IA, com recursos de chat, arquivos, memoria, RAG, automacoes, ferramentas, integracoes, ambiente de codigo, auditoria, planos, billing e controle de uso.
 
 ## 3. Conta e seguranca
 
@@ -32,7 +32,7 @@ O servico pode ser usado para produtividade, atendimento, vendas, documentacao, 
 
 ## 6. Uso proibido
 
-E proibido usar o Lyriq Agents OS para:
+E proibido usar o Agent Center para:
 
 - fraude;
 - spam;
@@ -71,7 +71,7 @@ A Lyriq pode limitar, pausar ou bloquear uso que exceda plano, represente abuso,
 
 ## 11. Terceiros
 
-O Lyriq Agents OS pode se conectar a provedores de IA, pagamentos, bancos de dados, e-mail, calendarios, mensageria, CRMs e outros servicos. O usuario tambem deve respeitar os termos desses terceiros.
+O Agent Center pode se conectar a provedores de IA, pagamentos, bancos de dados, e-mail, calendarios, mensageria, CRMs e outros servicos. O usuario tambem deve respeitar os termos desses terceiros.
 
 A Lyriq nao controla disponibilidade, precos, politicas ou falhas de terceiros.
 

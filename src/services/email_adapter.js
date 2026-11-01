@@ -80,8 +80,8 @@ export class ImapSmtpEmailAdapter {
         bcc: [],
         sentAt: new Date().toISOString(),
         receivedAt: new Date().toISOString(),
-        bodyText: 'Olá equipe! Gostaria de receber uma proposta de valor para 10 licenças do Lyriq Agents OS.',
-        bodyHtmlSanitized: '<p>Olá equipe! Gostaria de receber uma proposta de valor para 10 licenças do Lyriq Agents OS.</p>',
+        bodyText: 'Olá equipe! Gostaria de receber uma proposta de valor para 10 licenças do Agent Center.',
+        bodyHtmlSanitized: '<p>Olá equipe! Gostaria de receber uma proposta de valor para 10 licenças do Agent Center.</p>',
         headers: {
           'message-id': `<msg.sync.${Date.now()}@cliente.com>`,
           'content-type': 'text/plain; charset=utf-8'

@@ -449,7 +449,7 @@ const defaultAgentsList: Agent[] = [
     model: 'gemini-1.5-flash',
     temperature: 0.3,
     lastActive: 'Há 10 min',
-    systemPrompt: 'Você é Estevão Sales, especialista em Vendas e Qualificação de Leads (SDR) do Lyriq Agent OS.',
+    systemPrompt: 'Você é Estevão Sales, especialista em Vendas e Qualificação de Leads (SDR) do Agent Center.',
     toolsEnabled: ['consultar_crm', 'buscar_memoria', 'web_search'],
     memoryScope: 'global',
     boundaries: 'Descontos acima de 15% exigem aprovação do coordenador.'
@@ -469,7 +469,7 @@ const defaultAgentsList: Agent[] = [
     model: 'gemini-1.5-flash',
     temperature: 0.2,
     lastActive: 'Há 5 min',
-    systemPrompt: 'Você é Sofia Support, especialista em Atendimento e Suporte Técnico do Lyriq Agent OS.',
+    systemPrompt: 'Você é Sofia Support, especialista em Atendimento e Suporte Técnico do Agent Center.',
     toolsEnabled: ['criar_tarefa', 'buscar_memoria'],
     memoryScope: 'global',
     boundaries: 'Exclusão de contas ou alteração de permissões exigem validação humana.'
@@ -489,7 +489,7 @@ const defaultAgentsList: Agent[] = [
     model: 'gemini-1.5-flash',
     temperature: 0.5,
     lastActive: 'Há 1 hora',
-    systemPrompt: 'Você é Mateus Marketing, especialista em Copywriting e Conteúdo do Lyriq Agent OS.',
+    systemPrompt: 'Você é Mateus Marketing, especialista em Copywriting e Conteúdo do Agent Center.',
     toolsEnabled: ['web_search', 'buscar_memoria'],
     memoryScope: 'global',
     boundaries: 'Publicações em redes sociais oficiais exigem aprovação prévia.'
@@ -509,7 +509,7 @@ const defaultAgentsList: Agent[] = [
     model: 'gemini-1.5-flash',
     temperature: 0.1,
     lastActive: 'Há 30 min',
-    systemPrompt: 'Você é Felipe Finance, especialista Financeiro do Lyriq Agent OS.',
+    systemPrompt: 'Você é Felipe Finance, especialista Financeiro do Agent Center.',
     toolsEnabled: ['buscar_memoria', 'report_generate'],
     memoryScope: 'global',
     boundaries: 'Pagamentos acima de R$ 500 exigem aprovação humana.'
@@ -529,7 +529,7 @@ const defaultAgentsList: Agent[] = [
     model: 'gemini-1.5-flash',
     temperature: 0.1,
     lastActive: 'Há 2 min',
-    systemPrompt: 'Você é Olívia Ops, especialista em Operações e Automações do Lyriq Agent OS.',
+    systemPrompt: 'Você é Olívia Ops, especialista em Operações e Automações do Agent Center.',
     toolsEnabled: ['web_search', 'task_create'],
     memoryScope: 'global',
     boundaries: 'Alterações em tokens de API ou rotas de webhook exigem aprovação.'
@@ -549,7 +549,7 @@ const defaultAgentsList: Agent[] = [
     model: 'gemini-1.5-flash',
     temperature: 0.1,
     lastActive: 'Agora mesmo',
-    systemPrompt: 'Você é Eva Executive, Orquestradora Executiva do Lyriq Agent OS para esta empresa.',
+    systemPrompt: 'Você é Eva Executive, Orquestradora Executiva do Agent Center para esta empresa.',
     toolsEnabled: ['web_search', 'task_create', 'report_generate'],
     memoryScope: 'global',
     boundaries: 'strategic, financial, public or reputation-impacting decisions require human approval.'
@@ -633,7 +633,7 @@ const demoTickets: Ticket[] = [
 ];
 
 const demoAppointments: Appointment[] = [
-  { id: 'meet-1', title: 'Apresentação Comercial Lyriq OS', customer: 'Camila Rocha', date: '12/07/2026', time: '10:00', agent: 'Estevão Sales' },
+  { id: 'meet-1', title: 'Apresentação Comercial Agent Center', customer: 'Camila Rocha', date: '12/07/2026', time: '10:00', agent: 'Estevão Sales' },
   { id: 'meet-2', title: 'Alinhamento Técnico API Gateway', customer: 'Glauber Souza', date: '13/07/2026', time: '15:30', agent: 'Sofia Support' },
   { id: 'meet-3', title: 'Assinatura Contrato SLA', customer: 'Rodrigo Ramos', date: '14/07/2026', time: '11:00', agent: 'Eva Executive' }
 ];
@@ -681,7 +681,7 @@ const demoCronAutomations: CronAutomation[] = [
 const demoMemoryDocs: MemoryDoc[] = [
   {
     id: 'doc-1',
-    name: 'Manual do Produto Lyriq Agent OS.pdf',
+    name: 'Manual do Produto Agent Center.pdf',
     size: '2.4 MB',
     type: 'pdf',
     source: 'Upload Local',
@@ -747,6 +747,10 @@ function LyriqLogo({ className = "w-6 h-6" }: { className?: string }) {
       <path d="M 30 63.5 L 50 75 L 70 63.5 L 62 59 L 50 66 L 38 59 Z" fill="url(#lyriq-grad-main)" />
     </svg>
   );
+}
+
+function AgentCenterWordmark({ light = false, className = "h-8 w-auto" }: { light?: boolean; className?: string }) {
+  return <img src={light ? '/agent-center-dark.png' : '/agent-center-light.png'} alt="Agent Center by Lyriq" className={className} />;
 }
 
 // Agent Skills mapper helper
@@ -1174,7 +1178,7 @@ export default function App() {
   const [emailMessages] = useState<EmailMessage[]>(() => {
     const data = persistentStorage.getItem('lyriq_emails');
     return data ? JSON.parse(data) : [
-      { id: 'msg-1', from: 'marcos.silva@parceiros.com', subject: 'Proposta Comercial - Parceria Lyriq', date: '12/07/2026 09:15', body: 'Olá, gostaria de entender as condições de contratação do Lyriq Agent OS para revenda.', category: 'Lead' },
+      { id: 'msg-1', from: 'marcos.silva@parceiros.com', subject: 'Proposta Comercial - Parceria Lyriq', date: '12/07/2026 09:15', body: 'Olá, gostaria de entender as condições de contratação do Agent Center para revenda.', category: 'Lead' },
       { id: 'msg-2', from: 'suporte.cliente@tecnologia.com', subject: 'Chamado técnico - Integração API travando', date: '12/07/2026 08:30', body: 'Nosso webhook está recebendo status 504 Gateway Timeout ao enviar dados.', category: 'Support' }
     ];
   });
@@ -1967,7 +1971,7 @@ export default function App() {
   }, [apiExpenditureToday]);
 
   const [executionLogs, setExecutionLogs] = useState<string[]>(() => [
-    '⚙️ Motor de Execução Lyriq Agent OS (Habilitado com Skills e Memória) inicializado.',
+    '⚙️ Motor de Execução Agent Center (Habilitado com Skills e Memória) inicializado.',
     '🔧 Skills Carregadas: [CRM_Sync, Ticket_Resolver, Document_Writer, Channel_Connector].',
     '🔌 Aguardando gatilhos de ferramentas dos agentes autônomos...'
   ]);
@@ -2244,7 +2248,7 @@ export default function App() {
 
   // Terminal OS State
   const [terminalHistory, setTerminalHistory] = useState<Array<{ type: 'input' | 'output' | 'error'; text: string }>>([
-    { type: 'output', text: '⚡ SISTEMA OPERACIONAL LYRIQ AGENTS OS [v1.2.0]' },
+    { type: 'output', text: '⚡ AGENT CENTER [v1.2.0]' },
     { type: 'output', text: '🔒 Conexão criptografada de terminal local estabelecida.' },
     { type: 'output', text: '💡 Digite "command list" para ver todos os comandos operacionais disponíveis.' },
     { type: 'output', text: '💡 Ou digite qualquer pergunta para consultar o uso da API e custos.' }
@@ -2315,7 +2319,7 @@ export default function App() {
       setDiagnosticsLogs(prev => [...prev, `[${new Date().toLocaleTimeString('pt-BR')}] ${msg}`]);
     };
 
-    logMsg('Iniciando varredura geral do Lyriq Agent OS...');
+    logMsg('Iniciando varredura geral do Agent Center...');
     
     let backendOk = false;
     let databaseOk = false;
@@ -3843,7 +3847,7 @@ export default function App() {
         ...prev,
         { type: 'output', text: '🤖 RESPOSTA DA EVA EXECUTIVE (IA):' },
         { type: 'output', text: '  Perguntas sobre OAuth e planos de assinatura:' },
-        { type: 'output', text: '  Planos de consumo pessoal (como ChatGPT Plus ou Gemini Advanced) NÃO podem ser convertidos em chaves de API OAuth para integrar no Lyriq Agents OS.' },
+        { type: 'output', text: '  Planos de consumo pessoal (como ChatGPT Plus ou Gemini Advanced) NÃO podem ser convertidos em chaves de API OAuth para integrar no Agent Center.' },
         { type: 'output', text: '  A OpenAI e o Google separam de forma rígida assinaturas de consumidor final da plataforma de desenvolvedor (Platform API).' },
         { type: 'output', text: '  ⚠️ Cuidado com proxies reversos alternativos que prometem usar limites do ChatGPT Plus no código: eles violam os termos de serviço e costumam banir contas.' }
       ]);
@@ -3902,7 +3906,7 @@ export default function App() {
 
       setTimeout(() => {
         setIsThinkingAgent(false);
-        const bookedTitle = 'Demonstração do Sistema Lyriq OS';
+        const bookedTitle = 'Demonstração do Sistema Agent Center';
         const bookedCust = 'André Silva';
         const bookedDate = '14/07/2026';
         const bookedTime = '14:00';
@@ -3988,7 +3992,7 @@ export default function App() {
       setActiveTheme(themeVal);
       setTerminalHistory(prev => [
         ...prev,
-        { type: 'output', text: `🎨 Tema do Lyriq OS atualizado com sucesso para: "${themeVal.toUpperCase()}"` }
+        { type: 'output', text: `🎨 Tema do Agent Center atualizado com sucesso para: "${themeVal.toUpperCase()}"` }
       ]);
       handleLogAuditEvent('Lyriq Theme Manager', `Aparência global alterada para o tema: ${themeVal}`, 'low');
       return;
@@ -4066,7 +4070,7 @@ export default function App() {
           setThinkingLogs(prev => [...prev, '[LLM Router] Resposta formulada com sucesso.', '[Telegram Poller] Enviando payload via sendTelegramMessage...']);
           
           // Formulate answer
-          const responseText = `Olá! Sou o assistente inteligente do Lyriq OS. Recebi sua mensagem via Telegram: "${msgText}". Como posso te ajudar hoje?`;
+          const responseText = `Olá! Sou o assistente inteligente do Agent Center. Recebi sua mensagem via Telegram: "${msgText}". Como posso te ajudar hoje?`;
           
           setTerminalHistory(prev => [
             ...prev,
@@ -4872,7 +4876,7 @@ export default function App() {
           isError: true,
           errorCode: 'BACKEND_OFFLINE',
           safeErrorMessage: err?.message || 'Backend indisponível',
-          fix: 'Inicie o backend API do Lyriq Agents OS.'
+          fix: 'Inicie o backend API do Agent Center.'
         };
         setChatMessages(prev => ({
           ...prev,
@@ -4962,7 +4966,7 @@ export default function App() {
       } else if (lowercaseMsg.includes('crie o arquivo') || lowercaseMsg.includes('criar arquivo') || lowercaseMsg.includes('gerar contrato')) {
         const matchName = messageText.match(/(?:arquivo|nome)\s+([a-zA-Z0-9_\-\.]+)/);
         const filename = matchName ? matchName[1] : 'manual_vendas.txt';
-        responseText = `Processando geração do arquivo. O manual foi indexado na Memória Compartilhada do Lyriq OS.\n\n[CREATE_FILE] ${filename} | Contrato de prestação de serviços simulado gerado de forma autônoma.`;
+        responseText = `Processando geração do arquivo. O manual foi indexado na Memória Compartilhada do Agent Center.\n\n[CREATE_FILE] ${filename} | Contrato de prestação de serviços simulado gerado de forma autônoma.`;
         localCommandSimulated = `Daniel Docs indexou o documento "${filename}" na base de dados.`;
       } else if (lowercaseMsg.includes('conecte o canal') || lowercaseMsg.includes('conectar canal')) {
         const matchName = lowercaseMsg.match(/(?:canal|integração)\s+([a-z]+)/);
@@ -5041,9 +5045,9 @@ export default function App() {
           if (isGreeting) {
             responseText = `Olá. Sou a Eva Executive, sua assistente de análise de performance. Compilei os dados de operações da **${companyProfile.name || 'Clínica Vitalis'}** e estou pronta para apresentar o diagnóstico estratégico. Como posso ajudar?`;
           } else if (isCapabilityCheck) {
-            responseText = `Como Agente Executiva, atuo na governança operacional do sistema Lyriq OS. Minhas atribuições incluem:\n\n1. **Geração de Relatórios**: Compilar ARR, leads qualificados, performance de marketing e suporte.\n2. **Alocação de Recursos**: Identificar gargalos e sugerir ativação/pausa de agentes específicos.\n3. **Metas corporativas**: Cruzar objetivos definidos no onboarding com a produtividade real do banco.\n\n*Digite "relatório" para gerar o resumo analítico consolidado das operações.*`;
+            responseText = `Como Agente Executiva, atuo na governança operacional do sistema Agent Center. Minhas atribuições incluem:\n\n1. **Geração de Relatórios**: Compilar ARR, leads qualificados, performance de marketing e suporte.\n2. **Alocação de Recursos**: Identificar gargalos e sugerir ativação/pausa de agentes específicos.\n3. **Metas corporativas**: Cruzar objetivos definidos no onboarding com a produtividade real do banco.\n\n*Digite "relatório" para gerar o resumo analítico consolidado das operações.*`;
           } else if (lowercaseMsg.includes('relatorio') || lowercaseMsg.includes('resumo') || lowercaseMsg.includes('status') || lowercaseMsg.includes('arr') || lowercaseMsg.includes('metas')) {
-            responseText = `### Relatório Estratégico de Performance (Lyriq OS)\n*Compilado em: ${new Date().toLocaleDateString('pt-BR')}*\n\n| Métrica Operacional | Valor Atual | Diagnóstico da IA |\n| :--- | :--- | :--- |\n| Empresa | **${companyProfile.name || 'Clínica Vitalis'}** | Setor: ${companyProfile.industry || 'Saúde'} |\n| Pipeline Comercial | **R$ ${revenueSum}** | ${leads.length} leads qualificados no banco local |\n| Fila de Suporte | **${tickets.length} chamados** | ${urgentTicketsCount} tickets necessitam de revisão humana |\n| Base de Conhecimento | **${memoryDocs.length} arquivos** | Fontes indexadas para triagem automatizada |\n| Agentes Digitais | **${activeAgentsCount} ativos** | Produtividade Geral: Excelente |\n\n**Sugestão da Eva**: ${
+            responseText = `### Relatório Estratégico de Performance (Agent Center)\n*Compilado em: ${new Date().toLocaleDateString('pt-BR')}*\n\n| Métrica Operacional | Valor Atual | Diagnóstico da IA |\n| :--- | :--- | :--- |\n| Empresa | **${companyProfile.name || 'Clínica Vitalis'}** | Setor: ${companyProfile.industry || 'Saúde'} |\n| Pipeline Comercial | **R$ ${revenueSum}** | ${leads.length} leads qualificados no banco local |\n| Fila de Suporte | **${tickets.length} chamados** | ${urgentTicketsCount} tickets necessitam de revisão humana |\n| Base de Conhecimento | **${memoryDocs.length} arquivos** | Fontes indexadas para triagem automatizada |\n| Agentes Digitais | **${activeAgentsCount} ativos** | Produtividade Geral: Excelente |\n\n**Sugestão da Eva**: ${
               tickets.some(t => t.status === 'urgent')
                 ? "Identifiquei chamados críticos na fila de suporte. Recomendo escalar para equipe humana para evitar atrito."
                 : "Operação estável e saudável. O pipeline comercial está qualificado. Recomendo ativar Felipe Finance para iniciar fluxos de cobrança."
@@ -5232,7 +5236,7 @@ export default function App() {
     if (isProviderConfigured) {
       try {
         const activeAgent = agents.find(a => a.id === agentId);
-        const systemPrompt = `Você é o agente inteligente "${activeAgent?.name}" (${activeAgent?.role}) do Lyriq Agent OS.
+        const systemPrompt = `Você é o agente inteligente "${activeAgent?.name}" (${activeAgent?.role}) do Agent Center.
 Seu perfil: ${activeAgent?.description}.
 Área de atuação: ${activeAgent?.area}.
 Empresa do cliente: "${companyProfile.name || 'Clínica Vitalis'}" (Setor: ${companyProfile.industry || 'Saúde'}, Objetivo principal: ${companyProfile.goal || 'melhorar conversão'}).
@@ -5870,7 +5874,7 @@ Instruções importantes:
     const goal = companyProfile.goal || 'Otimizar o atendimento ao cliente e vendas';
     
     const mockDiagnosis: OperationalDiagnosis = {
-      summary: `O Lyriq OS compilou as diretrizes institucionais de ${companyProfile.name}. A operação se enquadra no setor de ${industry}, com foco principal em "${goal}".`,
+      summary: `O Agent Center compilou as diretrizes institucionais de ${companyProfile.name}. A operação se enquadra no setor de ${industry}, com foco principal em "${goal}".`,
       operationalAreas: ['Atendimento ao Cliente (Nível 1)', 'Qualificação SDR & Vendas', 'Acompanhamento Financeiro', 'Infraestrutura de Automações'],
       bottlenecks: [
         'Tempo de resposta a leads novos superior a 15 minutos.',
@@ -5966,11 +5970,11 @@ Instruções importantes:
       metricLabel: 'Orquestração Central',
       tasksToday: 0,
       description: 'Coordenador operacional e roteador central das regras de negócio do OS.',
-      details: `Voce é ${mainAgentName}, ${mainAgentTitle} dentro do Lyriq Agent OS. Sua função é coordenar a operação, servir de roteador de tarefas e delegar para agentes especialistas quando necessário. Siga a personalidade: ${mainAgentPersonality}. Seu tom de voz preferido: ${mainAgentTone}. Estilo de decisão: ${mainAgentDecisionStyle}. Formato de relatório: ${mainAgentReportFormat}.`,
+      details: `Voce é ${mainAgentName}, ${mainAgentTitle} dentro do Agent Center. Sua função é coordenar a operação, servir de roteador de tarefas e delegar para agentes especialistas quando necessário. Siga a personalidade: ${mainAgentPersonality}. Seu tom de voz preferido: ${mainAgentTone}. Estilo de decisão: ${mainAgentDecisionStyle}. Formato de relatório: ${mainAgentReportFormat}.`,
       icon: 'Sparkles',
       temperature: 0.2,
       lastActive: 'Agora mesmo',
-      systemPrompt: `Voce é ${mainAgentName}, ${mainAgentTitle} dentro do Lyriq Agent OS. Sua função é coordenar a operação, servir de roteador de tarefas e delegar para agentes especialistas quando necessário. Siga a personalidade: ${mainAgentPersonality}. Seu tom de voz preferido: ${mainAgentTone}. Estilo de decisão: ${mainAgentDecisionStyle}. Formato de relatório: ${mainAgentReportFormat}.`,
+      systemPrompt: `Voce é ${mainAgentName}, ${mainAgentTitle} dentro do Agent Center. Sua função é coordenar a operação, servir de roteador de tarefas e delegar para agentes especialistas quando necessário. Siga a personalidade: ${mainAgentPersonality}. Seu tom de voz preferido: ${mainAgentTone}. Estilo de decisão: ${mainAgentDecisionStyle}. Formato de relatório: ${mainAgentReportFormat}.`,
       toolsEnabled: ['buscar_memoria', 'criar_tarefa'],
       memoryScope: 'global',
       boundaries: 'Decisões financeiras, alteração de contratos e exclusão de base de conhecimento exigem validação de gerente.'
@@ -6177,8 +6181,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                 className="flex items-center gap-2.5 text-left"
               >
-                <LyriqLogo className="w-8 h-8" />
-                <span className="text-sm font-semibold tracking-tight">Lyriq Agents OS</span>
+                <AgentCenterWordmark light className="h-10 w-auto max-w-[190px] object-contain" />
               </button>
 
               <nav className="hidden md:flex items-center gap-7 text-[12px] text-zinc-400 font-medium">
@@ -6377,7 +6380,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   <p className="text-sm font-semibold text-violet-300">O que é</p>
                   <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mt-3">Uma camada operacional para agentes de IA.</h2>
                   <p className="text-zinc-400 leading-relaxed mt-4">
-                    O Lyriq Agents OS fica entre seus modelos de IA, seus documentos e a rotina da empresa. Ele organiza contexto, permissões, tarefas e auditoria para a IA trabalhar sem virar bagunça.
+                    O Agent Center fica entre seus modelos de IA, seus documentos e a rotina da empresa. Ele organiza contexto, permissões, tarefas e auditoria para a IA trabalhar sem virar bagunça.
                   </p>
                 </div>
 
@@ -6458,7 +6461,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 <div className="rounded-3xl border border-white/10 overflow-hidden">
                   {[
                     ['Chat genérico', 'Não conhece seus arquivos, não respeita alçadas, não vira processo.'],
-                    ['Lyriq Agents OS', 'Conecta IA, documentos, tarefas, ferramentas, logs e aprovação humana.']
+                    ['Agent Center', 'Conecta IA, documentos, tarefas, ferramentas, logs e aprovação humana.']
                   ].map(([title, desc], idx) => (
                     <div key={title} className={`p-6 ${idx === 0 ? 'bg-white/[0.03] border-b border-white/10' : 'bg-violet-500/10'}`}>
                       <h3 className="font-semibold">{title}</h3>
@@ -6506,8 +6509,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 onClick={() => setCurrentRoute('landing')}
                 className="inline-flex items-center gap-2 cursor-pointer"
               >
-                <LyriqLogo className="w-6 h-6" />
-                <span className="font-semibold text-white text-xs tracking-tight">Lyriq Agents OS</span>
+                <AgentCenterWordmark light className="h-9 w-auto max-w-[180px] object-contain" />
               </div>
               <h2 className="text-lg font-bold text-white">
                 {authMode === 'login' ? 'Conecte-se ao seu Painel' : 'Crie sua conta corporativa'}
@@ -6622,7 +6624,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
                 <LyriqLogo className="w-6 h-6" />
-                <h1 className="text-lg font-bold text-white">Termos de Uso - Lyriq Agents OS</h1>
+                <h1 className="text-lg font-bold text-white">Termos de Uso - Agent Center</h1>
               </div>
               <button 
                 onClick={() => setCurrentRoute(currentUser ? 'onboarding' : 'landing')} 
@@ -6632,9 +6634,9 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
             </div>
             <div className="text-xs text-slate-300 space-y-4 leading-relaxed">
-              <p>Ao criar sua conta, acessar ou usar o Lyriq Agents OS, você concorda com estes Termos de Uso. Se estiver usando a plataforma em nome de uma empresa, você declara ter autorização para aceitar estes termos por ela.</p>
-              <h2 className="text-sm font-bold text-white pt-2">1. O que é o Lyriq Agents OS</h2>
-              <p>O Lyriq Agents OS é uma plataforma para criação, configuração e operação de agentes de Inteligência Artificial, com chat, documentos, memória, automações, ferramentas, integrações, ambiente de código, aprovações humanas, logs e limites operacionais por plano.</p>
+              <p>Ao criar sua conta, acessar ou usar o Agent Center, você concorda com estes Termos de Uso. Se estiver usando a plataforma em nome de uma empresa, você declara ter autorização para aceitar estes termos por ela.</p>
+              <h2 className="text-sm font-bold text-white pt-2">1. O que é o Agent Center</h2>
+              <p>O Agent Center é uma plataforma para criação, configuração e operação de agentes de Inteligência Artificial, com chat, documentos, memória, automações, ferramentas, integrações, ambiente de código, aprovações humanas, logs e limites operacionais por plano.</p>
               <h2 className="text-sm font-bold text-white pt-2">2. Responsabilidade sobre dados e API Keys (BYOK)</h2>
               <p>O usuário é responsável pelos arquivos enviados, prompts, instruções, credenciais, API keys, webhooks e integrações conectadas. API keys devem ser processadas no backend, criptografadas em repouso e nunca exibidas completas novamente após o cadastro.</p>
               <h2 className="text-sm font-bold text-white pt-2">3. Uso permitido e uso proibido</h2>
@@ -6669,7 +6671,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
             <div className="flex items-center justify-between border-b border-slate-800 pb-4">
               <div className="flex items-center gap-3">
                 <LyriqLogo className="w-6 h-6" />
-                <h1 className="text-lg font-bold text-white">Política de Privacidade - Lyriq Agents OS</h1>
+                <h1 className="text-lg font-bold text-white">Política de Privacidade - Agent Center</h1>
               </div>
               <button 
                 onClick={() => setCurrentRoute(currentUser ? 'onboarding' : 'landing')} 
@@ -6679,7 +6681,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
             </div>
             <div className="text-xs text-slate-300 space-y-4 leading-relaxed">
-              <p>Esta Política de Privacidade explica como a Lyriq coleta, usa, armazena, protege e compartilha dados no Lyriq Agents OS. Usamos dados para operar o produto, proteger contas, processar documentos, executar agentes, manter automações e melhorar a experiência.</p>
+              <p>Esta Política de Privacidade explica como a Lyriq coleta, usa, armazena, protege e compartilha dados no Agent Center. Usamos dados para operar o produto, proteger contas, processar documentos, executar agentes, manter automações e melhorar a experiência.</p>
               <h2 className="text-sm font-bold text-white pt-2">1. Dados coletados</h2>
               <p>Podemos coletar nome, e-mail, senha ou identificador de login, empresa, cargo, plano, preferências, configurações de workspace, agentes, prompts, documentos enviados, metadados de arquivos, histórico de uso, logs técnicos, eventos de auditoria, IP, dispositivo, navegador e dados de cobrança quando aplicável.</p>
               <h2 className="text-sm font-bold text-white pt-2">2. Dados de agentes, documentos e automações</h2>
@@ -6715,8 +6717,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
           {/* Top Header */}
           <header className="h-16 px-6 bg-[#121826] border-b border-slate-800 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
-              <LyriqLogo className="w-6 h-6" />
-              <span className="font-bold text-white text-sm tracking-tight">Lyriq Agents OS</span>
+              <AgentCenterWordmark light className="h-9 w-auto max-w-[170px] object-contain" />
               <span className="text-xs text-slate-500 font-mono border-l border-slate-800 pl-3">Onboarding Obrigatório V1</span>
             </div>
             <div className="flex items-center gap-4">
@@ -7729,7 +7730,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                         } catch {
                           persistentStorage.setItem('lyriq_onboarding_completed', 'true');
                           setCompanyProfile(prev => ({ ...prev, plan: onboardingPlan, setupComplete: true }));
-                          addToast('Base pronta. Bem-vindo ao Lyriq Agents OS!', 'success');
+                          addToast('Base pronta. Bem-vindo ao Agent Center!', 'success');
                           setCurrentRoute('app');
                           setCurrentTab('dashboard');
                         }
@@ -7741,7 +7742,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
                       }`}
                     >
-                      <span>Entrar no Lyriq Agents OS</span>
+                      <span>Entrar no Agent Center</span>
                       <ArrowRight className="w-4.5 h-4.5" />
                     </button>
 
@@ -7766,11 +7767,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
             {/* Header info */}
             <div className="h-16 px-6 border-b border-slate-200/60 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <LyriqLogo className="w-7 h-7" />
-                <div className="text-left">
-                  <span className="font-bold text-slate-900 text-sm tracking-tight block">Lyriq Agents OS</span>
-                  <span className="text-[9.5px] text-slate-500 font-medium leading-none mt-0.5 block">Sistema Operacional de IA</span>
-                </div>
+                <AgentCenterWordmark className="h-9 w-auto max-w-[170px] object-contain" />
               </div>
             </div>
 
@@ -11277,7 +11274,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200">
                   <div>
                     <h1 className="text-lg font-bold text-slate-900 tracking-tight font-sans">Modelos e API de IA</h1>
-                    <p className="text-xs text-slate-400 mt-0.5 font-sans">Gerencie as chaves de API dos provedores de IA. O Lyriq OS é model-agnostic e não depende de um único fornecedor.</p>
+                    <p className="text-xs text-slate-400 mt-0.5 font-sans">Gerencie as chaves de API dos provedores de IA. O Agent Center é model-agnostic e não depende de um único fornecedor.</p>
                   </div>
 
                   {/* Model Presets Selector */}
@@ -11556,7 +11553,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               {currentTab === 'pricing' && (
                 <div className="space-y-6 max-w-6xl text-left">
                   <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-                    <div><span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Planos oficiais</span><h1 className="text-2xl font-bold text-slate-950 mt-1">Lyriq Agents OS {workspaceMode === 'personal' ? 'Personal' : 'Business'}</h1><p className="text-xs text-slate-500 mt-1">BYOK em todos os planos. Você controla suas chaves e escolhe seus modelos.</p></div>
+                    <div><span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">Planos oficiais</span><h1 className="text-2xl font-bold text-slate-950 mt-1">Agent Center {workspaceMode === 'personal' ? 'Personal' : 'Business'}</h1><p className="text-xs text-slate-500 mt-1">BYOK em todos os planos. Você controla suas chaves e escolhe seus modelos.</p></div>
                     <div className="flex bg-slate-100 rounded-xl p-1">
                       {(['personal','business'] as const).map(mode => <button key={mode} onClick={() => { setWorkspaceMode(mode); setOnboardingPlan('free'); }} className={`px-4 py-2 rounded-lg text-xs font-bold ${workspaceMode === mode ? 'bg-white shadow text-slate-950' : 'text-slate-500'}`}>{mode === 'personal' ? 'Personal' : 'Business'}</button>)}
                     </div>
@@ -11586,7 +11583,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                       <span className="px-2 py-0.5 bg-amber-500/10 text-amber-700 text-[10px] font-bold rounded uppercase tracking-wider">Tabela de Assinaturas</span>
                       <span className="text-[10px] text-slate-400">| Faturamento transparente por créditos internos</span>
                     </div>
-                    <h1 className="text-xl font-bold text-slate-950 tracking-tight mt-1 font-sans">Planos do Lyriq Agents OS</h1>
+                    <h1 className="text-xl font-bold text-slate-950 tracking-tight mt-1 font-sans">Planos do Agent Center</h1>
                     <p className="text-xs text-slate-500 mt-1 font-sans">Escolha a escala ideal de agentes, memórias e automações para a sua empresa ou operação.</p>
                   </div>
 
@@ -11977,7 +11974,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                       <div className="w-4 h-4 rounded-full bg-emerald-500 animate-ping"></div>
                       <div>
                         <div className="flex items-center gap-2">
-                          <h1 className="text-xl font-black tracking-tight text-white font-sans">Lyriq Agents OS — Status da Plataforma</h1>
+                          <h1 className="text-xl font-black tracking-tight text-white font-sans">Agent Center — Status da Plataforma</h1>
                           <span className="px-2.5 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-bold uppercase font-mono tracking-wider">STATUS OFICIAL</span>
                         </div>
                         <p className="text-xs text-slate-400 mt-1">Todos os sistemas e serviços estão operando dentro dos parâmetros de desempenho normais.</p>
@@ -11998,7 +11995,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 font-sans">
                       {[
-                        { name: 'Plataforma Lyriq Agents OS', desc: 'Núcleo do sistema operacional de agentes e dashboard', status: 'Operacional', uptime: '99.99%' },
+                        { name: 'Plataforma Agent Center', desc: 'Núcleo do sistema operacional de agentes e dashboard', status: 'Operacional', uptime: '99.99%' },
                         { name: 'Login e Autenticação', desc: 'Autenticação de usuários, SSO e controle de sessão', status: 'Operacional', uptime: '100.00%' },
                         { name: 'Console de Chat e Comunicação', desc: 'Interface de mensagens e troca de contexto em tempo real', status: 'Operacional', uptime: '99.95%' },
                         { name: 'Execução de Agentes e Runtime', desc: 'Motor de inferência e ciclo de vida dos agentes', status: 'Operacional', uptime: '99.92%' },
@@ -12548,7 +12545,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                       <div className="flex justify-between items-center bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
                         <div className="text-xs">
                           <span className="font-bold text-slate-900 block">Receptores HTTP Inbound & Gatilhos</span>
-                          <span className="text-[10.5px] text-slate-500 font-sans">Sistemas externos podem disparar tarefas no Lyriq Agents OS via requisição POST segura.</span>
+                          <span className="text-[10.5px] text-slate-500 font-sans">Sistemas externos podem disparar tarefas no Agent Center via requisição POST segura.</span>
                         </div>
                         <button
                           onClick={() => addToast('Novo receptor Inbound criado!', 'success')}
@@ -13317,8 +13314,8 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                         <label className="block font-semibold text-slate-700 mb-1">Nome de Exibição do Remetente</label>
                         <input
                           type="text"
-                          defaultValue="Suporte Lyriq OS"
-                          placeholder="Ex: Suporte Lyriq OS"
+                          defaultValue="Suporte Agent Center"
+                          placeholder="Ex: Suporte Agent Center"
                           className="w-full bg-slate-50 border border-slate-300 rounded px-3 py-2 text-xs font-sans text-slate-900 focus:outline-none focus:border-blue-500"
                         />
                       </div>
@@ -13543,7 +13540,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                               Olá Mariana, obrigado pelo contato!<br/><br/>
                               Nosso plano Pro conta com suporte prioritário com tempo médio de resposta de até 2 horas. Fico à disposição para detalhar a proposta comercial e agendar uma demonstração.<br/><br/>
                               Atenciosamente,<br/>
-                              <strong>Agente Comercial — Lyriq OS</strong>
+                              <strong>Agente Comercial — Agent Center</strong>
                             </p>
                           </div>
 
@@ -13717,7 +13714,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           <span>25 Tokens | SHA256: a1b2c3...</span>
                         </div>
                         <p className="text-xs text-slate-200 font-sans leading-relaxed">
-                          "Manual de Atendimento Lyriq Agents OS. Política de Cancelamento: O cliente possui até 7 dias para solicitar o reembolso integral."
+                          "Manual de Atendimento Agent Center. Política de Cancelamento: O cliente possui até 7 dias para solicitar o reembolso integral."
                         </p>
                       </div>
 
@@ -13804,7 +13801,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           </div>
                           <span className="text-[10px] text-purple-700 font-semibold font-mono">Seção: Política de Cancelamento</span>
                           <p className="text-xs text-slate-700 leading-relaxed font-sans pt-1">
-                            "Manual de Atendimento Lyriq Agents OS. Política de Cancelamento: O cliente possui até 7 dias para solicitar o reembolso integral."
+                            "Manual de Atendimento Agent Center. Política de Cancelamento: O cliente possui até 7 dias para solicitar o reembolso integral."
                           </p>
                         </div>
 
@@ -13832,7 +13829,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 {`Fontes recuperadas da base de conhecimento do workspace:
 
 [1] Arquivo: manual_atendimento.pdf, página 1, seção Política de Cancelamento
-Trecho: "Manual de Atendimento Lyriq Agents OS. Política de Cancelamento: O cliente possui até 7 dias para solicitar o reembolso integral."
+Trecho: "Manual de Atendimento Agent Center. Política de Cancelamento: O cliente possui até 7 dias para solicitar o reembolso integral."
 
 [2] Arquivo: manual_atendimento.pdf, página 2, seção Níveis de Serviço (SLA)
 Trecho: "Suporte Prioritário: Atendimento em até 2 horas úteis para clientes dos planos Pro e Enterprise."
@@ -15745,7 +15742,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
                     <div className="bg-slate-950 text-slate-100 rounded-lg p-4 font-mono text-[11px] space-y-2 border border-slate-800">
                       <p className="text-emerald-400 font-bold">// Evidência gerada no arquivo QA_REPORT_LYRIQ_AGENTS_OS_2026-07-30.md</p>
                       <p className="text-slate-300 whitespace-pre-wrap">
-                        {`# QA Report - Lyriq Agents OS
+                        {`# QA Report - Agent Center
 
 ## 1. Resumo Executivo
 - Status geral: PASS (100% de Aprovação em Todos os Testes)
@@ -15773,7 +15770,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
                         <span className="text-[10px] text-slate-400">| Arquitetura Final, 40+ Tabelas, Roadmap Sprints 0-7 & Prompt Master</span>
                       </div>
                       <h1 className="text-xl font-bold text-slate-950 tracking-tight mt-1">Arquitetura Consolidada & Especificação Final V1</h1>
-                      <p className="text-xs text-slate-500 mt-0.5">Visão mestre do Lyriq Agents OS: catálogo completo de tabelas DDL, roteiro de sprints, gates de segurança e prompt final.</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Visão mestre do Agent Center: catálogo completo de tabelas DDL, roteiro de sprints, gates de segurança e prompt final.</p>
                     </div>
 
                     <div className="flex items-center gap-2 font-mono text-xs">
@@ -15889,7 +15886,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
                     <div className="bg-slate-950 text-slate-100 rounded-lg p-4 font-mono text-[11px] space-y-2 border border-slate-800">
                       <p className="text-emerald-400 font-bold">// Prompt Final Consolidado para Claude Code / Antigravity / Agent runtime</p>
                       <p className="text-slate-300 whitespace-pre-wrap">
-                        {`Você está construindo o MVP do Lyriq Agents OS.
+                        {`Você está construindo o MVP do Agent Center.
 
 Produto:
 SaaS multi-tenant para criação e operação de agentes de IA com workspace, BYOK, memória, arquivos/RAG, tools, tarefas, billing, limites, segurança e dashboard.
@@ -16741,7 +16738,7 @@ Regras duras:
                 <div className="space-y-6 max-w-6xl h-[calc(100vh-12rem)] flex flex-col">
                   <div>
                     <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Terminal do Sistema</h1>
-                    <p className="text-xs text-slate-400 mt-0.5">Console de execução integrado para interações de baixo nível com o Lyriq Agents OS.</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Console de execução integrado para interações de baixo nível com o Agent Center.</p>
                   </div>
 
                   <div className="flex-1 bg-slate-950 rounded-xl shadow-lg border border-slate-900 flex flex-col min-h-0 font-mono text-xs">
@@ -18434,7 +18431,7 @@ Regras duras:
                   required
                   value={draftEmailSubject}
                   onChange={(e) => setDraftEmailSubject(e.target.value)}
-                  placeholder="Sua proposta de contratação do Lyriq OS"
+                  placeholder="Sua proposta de contratação do Agent Center"
                   className="w-full px-3 py-2 border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-slate-400 font-sans"
                 />
               </div>
@@ -19776,7 +19773,7 @@ Regras duras:
 
             {/* Footer */}
             <div className="p-3 bg-slate-50 border-t border-slate-200 text-center text-[10px] text-slate-400 font-mono">
-              Notificações e Alertas Inteligentes — Lyriq OS V1
+              Notificações e Alertas Inteligentes — Agent Center V1
             </div>
 
           </div>

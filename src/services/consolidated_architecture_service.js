@@ -1,5 +1,5 @@
 /**
- * Lyriq Agents OS - Consolidated Architecture & Master Specification V1 Service Module
+ * Agent Center - Consolidated Architecture & Master Specification V1 Service Module
  * Unifies all 40+ database tables, API contracts, Sprint 0-7 breakdown, security gates, and Master Implementation Prompt.
  */
 
@@ -71,7 +71,7 @@ export const SPRINT_PLAN = [
 
 export const MasterPromptGenerator = {
   generatePrompt() {
-    return `Você está construindo o MVP do Lyriq Agents OS.
+    return `Você está construindo o MVP do Agent Center.
 
 Produto:
 SaaS multi-tenant para criação e operação de agentes de IA com workspace, BYOK, memória, arquivos/RAG, tools, tarefas, billing, limites, segurança e dashboard.
@@ -113,7 +113,7 @@ Regras duras:
 export const ConsolidatedArchitectureService = {
   getExecutiveOverview() {
     return {
-      productName: 'Lyriq Agents OS V1',
+      productName: 'Agent Center V1',
       thesis: 'Sistema operacional de agentes SaaS production-ready com BYOK, RLS e limites backend.',
       totalTablesCount: CONSOLIDATED_TABLES_CATALOG.length,
       sprintsCount: SPRINT_PLAN.length,
