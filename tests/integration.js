@@ -204,6 +204,15 @@ setTimeout(async () => {
     assert.ok(bodyAgentsList.data.length > 0);
     console.log('✅ GET /api/agents list passed.');
 
+    const codeAssistWithoutRealProvider = await fetch(`${baseUrl}/code/assist`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', prompt: 'Crie uma página de apresentação.', files: { 'index.html': '<h1>Oi</h1>', 'styles.css': '', 'script.js': '' } })
+    });
+    assert.strictEqual(codeAssistWithoutRealProvider.status, 400);
+    const codeAssistError = await codeAssistWithoutRealProvider.json();
+    assert.strictEqual(codeAssistError.error.code, 'CODE_PROVIDER_REQUIRED');
+    console.log('✅ Code assistant requires a real provider and does not pretend to edit files.');
+
     // 7. Test GET /api/agents/:agentId/health
     const resHealth = await fetch(`${baseUrl}/agents/${agentId}/health`);
     assert.strictEqual(resHealth.status, 200);

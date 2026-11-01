@@ -3164,6 +3164,50 @@ const server = http.createServer(async (req, res) => {
     // Billing & Stripe Integration Endpoints
     // ----------------------------------------------------
 
+    // The coding agent proposes file changes; the browser applies them only after review.
+    if (pathName === '/api/code/assist' && method === 'POST') {
+      const body = await parseBody(req);
+      const prompt = String(body.prompt || '').trim();
+      const files = body.files;
+      const allowedFiles = ['index.html', 'styles.css', 'script.js'];
+      if (prompt.length < 10 || !files || typeof files !== 'object' ||
+          allowedFiles.some(name => typeof files[name] !== 'string') ||
+          allowedFiles.some(name => files[name].length > 100_000)) {
+        return sendError(res, 400, 'CODE_INPUT_INVALID', 'Informe uma instrução e os três arquivos do projeto.', 'Revise o projeto e tente novamente.', 'blocking', null, reqId);
+      }
+      const workspaceId = body.workspaceId || 'workspace_123';
+      const db = readDb();
+      const providerConn = (db.providers || []).find(p => p.workspace_id === workspaceId && p.status === 'valid');
+      const key = decodeStoredKey(providerConn?.encrypted_api_key);
+      const model = providerConn?.selected_chat_model;
+      if (!providerConn || !model || !key || key.startsWith('mock-')) {
+        return sendError(res, 400, 'CODE_PROVIDER_REQUIRED', 'Conecte um provedor de IA real para usar o agente de código.', 'Configure e valide uma chave de API em Providers.', 'blocking', null, reqId);
+      }
+      const systemPrompt = 'Você é um agente de programação do Agent Center. Responda APENAS JSON válido no formato {"summary":"resumo curto","files":[{"name":"index.html","content":"conteúdo completo"}]}. Altere somente os arquivos necessários dentre index.html, styles.css e script.js. Não inclua markdown, comandos de terminal, URLs externas ou arquivos adicionais.';
+      const input = `Objetivo: ${prompt}\n\nArquivos atuais:\n${allowedFiles.map(name => `--- ${name} ---\n${files[name]}`).join('\n')}`;
+      const raw = await callRealLlmProvider(providerConn.provider, model, key, [{ role: 'user', content: input }], systemPrompt);
+      if (!raw) {
+        return sendError(res, 502, 'CODE_PROVIDER_FAILED', 'O modelo não retornou uma proposta.', 'Verifique o modelo e a cota do provedor.', 'blocking', null, reqId);
+      }
+      let parsed;
+      try {
+        parsed = JSON.parse(raw.replace(/^```(?:json)?\s*|\s*```$/g, '').trim());
+      } catch {
+        return sendError(res, 502, 'CODE_RESPONSE_INVALID', 'O modelo respondeu fora do formato de alterações.', 'Tente descrever a tarefa de forma mais específica.', 'blocking', null, reqId);
+      }
+      const changes = Array.isArray(parsed.files) ? parsed.files.filter(item =>
+        item && allowedFiles.includes(item.name) && typeof item.content === 'string' && item.content.length <= 100_000 && item.content !== files[item.name]
+      ) : [];
+      if (changes.length === 0) {
+        return sendError(res, 422, 'CODE_NO_CHANGES', 'O modelo não propôs mudanças válidas nos arquivos.', 'Peça uma alteração concreta em HTML, CSS ou JavaScript.', 'blocking', null, reqId);
+      }
+      return sendSuccess(res, {
+        summary: String(parsed.summary || 'Alterações propostas pelo agente.').slice(0, 500),
+        changes: changes.map(item => ({ name: item.name, before: files[item.name], after: item.content })),
+        provider: providerConn.provider, model, applied: false
+      }, reqId);
+    }
+
     if (pathName === '/api/code/run' && method === 'POST') {
       const body = await parseBody(req);
       const mode = body.mode || 'personal';

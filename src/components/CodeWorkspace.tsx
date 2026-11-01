@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Code2, FilePlus2, Play, RotateCcw, Save, Trash2 } from 'lucide-react';
 
 type ProjectFiles = Record<string, string>;
+type CodeProposal = { summary: string; changes: { name: string; before: string; after: string }[]; provider: string; model: string };
 
 const STORAGE_KEY = 'agent-center-code-workspace-v1';
 const STARTER_FILES: ProjectFiles = {
@@ -35,6 +36,10 @@ export default function CodeWorkspace() {
   const [activeFile, setActiveFile] = useState('index.html');
   const [previewFiles, setPreviewFiles] = useState<ProjectFiles>(() => loadFiles());
   const [status, setStatus] = useState('Projeto pronto');
+  const [agentPrompt, setAgentPrompt] = useState('');
+  const [proposal, setProposal] = useState<CodeProposal | null>(null);
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentError, setAgentError] = useState('');
   const dirty = useMemo(() => JSON.stringify(files) !== JSON.stringify(previewFiles), [files, previewFiles]);
 
   useEffect(() => {
@@ -78,6 +83,40 @@ export default function CodeWorkspace() {
     setStatus('Prévia atualizada. HTML, CSS e JavaScript executados no navegador.');
   };
 
+  const requestProposal = async () => {
+    setAgentError('');
+    setProposal(null);
+    setAgentBusy(true);
+    try {
+      const response = await fetch('/api/code/assist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: 'workspace_123', prompt: agentPrompt, files })
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw new Error(body.error?.message || 'O agente não conseguiu preparar a alteração.');
+      setProposal(body.data);
+      setStatus('Proposta recebida. Revise os arquivos antes de aplicar.');
+    } catch (error: any) {
+      setAgentError(error.message || 'Falha ao consultar o agente de código.');
+    } finally {
+      setAgentBusy(false);
+    }
+  };
+
+  const applyProposal = () => {
+    if (!proposal) return;
+    if (proposal.changes.some(change => files[change.name] !== change.before)) {
+      setAgentError('Os arquivos mudaram após a proposta. Gere uma nova proposta antes de aplicar.');
+      setProposal(null);
+      return;
+    }
+    setFiles(previous => ({ ...previous, ...Object.fromEntries(proposal.changes.map(change => [change.name, change.after])) }));
+    setActiveFile(proposal.changes[0].name);
+    setProposal(null);
+    setStatus('Alterações aplicadas e salvas. Clique em Executar para atualizar a prévia.');
+  };
+
   return (
     <div className="flex h-full min-h-[680px] flex-col gap-4 text-left">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -90,6 +129,29 @@ export default function CodeWorkspace() {
           <button type="button" onClick={run} className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-400"><Play className="h-3.5 w-3.5" /> Executar</button>
         </div>
       </div>
+      <section className="rounded-xl bg-white p-4 shadow-sm" aria-label="Agente de programação">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Pedir alteração ao agente</h2>
+            <p className="mt-1 text-xs text-slate-600">O código do projeto será enviado ao provedor de IA que você configurar. Nenhuma mudança é aplicada sem sua revisão.</p>
+          </div>
+          <button type="button" onClick={requestProposal} disabled={agentBusy || agentPrompt.trim().length < 10} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{agentBusy ? 'Preparando proposta...' : 'Gerar proposta'}</button>
+        </div>
+        <textarea aria-label="Instrução para o agente de código" value={agentPrompt} onChange={event => setAgentPrompt(event.target.value)} rows={2} placeholder="Ex.: Transforme a página em um portfólio pessoal com botão de contato." className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" />
+        {agentError && <p role="alert" className="mt-2 text-xs text-red-700">{agentError}</p>}
+        {proposal && <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+          <p className="text-sm font-semibold text-slate-900">{proposal.summary}</p>
+          <p className="text-xs text-slate-600">Proposta de {proposal.provider} / {proposal.model}. Confira antes de aplicar.</p>
+          {proposal.changes.map(change => <details key={change.name} className="rounded-lg border border-slate-200 p-3 text-xs">
+            <summary className="cursor-pointer font-semibold text-slate-900">{change.name} — ver antes e depois</summary>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div><p className="mb-1 font-semibold text-slate-600">Antes</p><pre className="max-h-48 overflow-auto rounded bg-slate-100 p-2 whitespace-pre-wrap">{change.before}</pre></div>
+              <div><p className="mb-1 font-semibold text-slate-600">Depois</p><pre className="max-h-48 overflow-auto rounded bg-slate-100 p-2 whitespace-pre-wrap">{change.after}</pre></div>
+            </div>
+          </details>)}
+          <div className="flex gap-2"><button type="button" onClick={applyProposal} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950">Aplicar mudanças</button><button type="button" onClick={() => setProposal(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">Descartar</button></div>
+        </div>}
+      </section>
       <div className="grid min-h-[600px] flex-1 grid-cols-1 overflow-hidden rounded-2xl bg-[#0b1020] lg:grid-cols-[190px_minmax(300px,1fr)_minmax(300px,1fr)]">
         <aside className="border-b border-slate-800 p-4 text-slate-200 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between">
