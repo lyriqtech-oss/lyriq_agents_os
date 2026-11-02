@@ -27,6 +27,7 @@ import { PLAN_CATALOG, hasCodeAccess } from './plansCatalog.js';
 import { validateCodeFiles, parseAppManifest, validateRecordInput } from './src/services/code_project_service.js';
 import { reviewGeneratedDesign } from './src/services/code_design_quality.js';
 import { BUILTIN_AGENT_SKILLS, buildAgentSystemPrompt, isKnownAgentSkill } from './src/services/agent_skills.js';
+import { normalizeAgentIdentity, isValidAgentIdentity, evaluateAgentReadiness } from './src/services/agent_identity.js';
 
 // Load environment variables from .env if present
 const dotenvPath = path.resolve('./.env');
@@ -2146,6 +2147,7 @@ const server = http.createServer(async (req, res) => {
         return sendError(res, 400, 'AGENT_INVALID_INPUT', 'Informe nome, função e instruções com pelo menos 10 caracteres.', 'Complete os dados do agente.', 'blocking', null, reqId);
       }
       const db = readDb();
+      if (!isValidAgentIdentity(body.identity)) return sendError(res, 400, 'AGENT_IDENTITY_INVALID', 'Revise a identidade do agente.', 'Corrija o propósito, o público e as entregas.', 'blocking', null, reqId);
       const capabilities = Array.isArray(body.capabilities) ? body.capabilities : [];
       const permissions = body.permissions && typeof body.permissions === 'object' && !Array.isArray(body.permissions) ? body.permissions : {};
       const installedSkills = Array.isArray(body.installedSkills) ? body.installedSkills : [];
@@ -2163,6 +2165,7 @@ const server = http.createServer(async (req, res) => {
         capabilities,
         permissions,
         boundaries: String(body.boundaries || '').slice(0, 5000),
+        identity: normalizeAgentIdentity(body.identity),
         type: 'specialist',
         status: 'draft',
         installedSkills,
@@ -2250,6 +2253,15 @@ const server = http.createServer(async (req, res) => {
       return sendSuccess(res, agent, reqId);
     }
 
+    const agentReadinessMatch = pathName.match(/^\/api\/agents\/([a-zA-Z0-9_\-]+)\/readiness$/);
+    if (agentReadinessMatch && method === 'GET') {
+      const db = readDb();
+      const agent = (db.agents || []).find(item => item.id === agentReadinessMatch[1]);
+      if (!agent) return sendError(res, 404, 'AGENT_NOT_FOUND', 'Agente não encontrado.', 'Selecione um agente.', 'blocking', null, reqId);
+      const provider = (db.providers || []).find(item => item.id === agent.provider_connection_id && item.status === 'valid');
+      return sendSuccess(res, evaluateAgentReadiness(agent, { providerValid: !!provider && isModelConfiguredForProvider(provider, agent.model_id) }), reqId);
+    }
+
     // GET /api/agents/:agentId/health (Main Agent Health - Section 8)
     const agentHealthMatch = pathName.match(/^\/api\/agents\/([a-zA-Z0-9_\-]+)\/health$/);
     if (agentHealthMatch && method === 'GET') {
@@ -2301,9 +2313,16 @@ const server = http.createServer(async (req, res) => {
       if (!providerConn || !isModelConfiguredForProvider(providerConn, agent.model_id)) {
         return sendError(res, 400, 'MODEL_NOT_CONFIGURED', MODEL_NOT_CONFIGURED_MESSAGE, 'Valide um provider e selecione um modelo disponível antes do teste.', 'blocking', null, reqId);
       }
+      const key = decodeStoredKey(providerConn.encrypted_api_key);
+      if (!key || key.startsWith('mock-')) return sendError(res, 400, 'AGENT_REAL_MODEL_REQUIRED', 'Conecte um modelo real para testar o agente.', 'Valide uma credencial real em Provedores.', 'blocking', null, reqId);
+      let answer;
+      try { answer = await callRealLlmProvider(providerConn.provider, agent.model_id, key, [{ role: 'user', content: 'Apresente em uma frase sua função e uma limitação importante.' }], buildAgentSystemPrompt(agent), { maxOutputTokens: 320, throwOnFailure: true }); }
+      catch { return sendError(res, 502, 'AGENT_TEST_FAILED', 'O modelo não concluiu o teste.', 'Verifique a conexão e tente novamente.', 'blocking', null, reqId); }
+      if (!answer) return sendError(res, 502, 'AGENT_TEST_EMPTY', 'O modelo respondeu sem conteúdo.', 'Tente outro modelo.', 'blocking', null, reqId);
+      agent.last_tested_at = new Date().toISOString();
       agent.status = 'active';
       writeDb(db);
-      return sendSuccess(res, { testPassed: true, latencyMs: 140 }, reqId);
+      return sendSuccess(res, { testPassed: true, answer: redactSecrets(runOutputGuard(answer)), latencyMs: Date.now() - startTime, testedAt: agent.last_tested_at }, reqId);
     }
 
     // PATCH /api/agents/:agentId
@@ -2325,6 +2344,7 @@ const server = http.createServer(async (req, res) => {
           typeof body.boundaries !== 'string' || body.boundaries.length > 5000) {
         return sendError(res, 400, 'AGENT_CONFIG_INVALID', 'Revise as instruções, funções e permissões do agente.', 'Preencha a configuração novamente.', 'blocking', null, reqId);
       }
+      if (!isValidAgentIdentity(body.identity)) return sendError(res, 400, 'AGENT_IDENTITY_INVALID', 'Revise a identidade do agente.', 'Corrija o propósito, o público e as entregas.', 'blocking', null, reqId);
       const providerId = body.provider_connection_id === undefined ? agent.provider_connection_id : body.provider_connection_id;
       const modelId = body.model_id === undefined ? agent.model_id : body.model_id;
       const provider = (db.providers || []).find(item => item.id === providerId && item.workspace_id === agent.workspace_id && item.status === 'valid');
@@ -2335,7 +2355,10 @@ const server = http.createServer(async (req, res) => {
       if (!Array.isArray(installedSkills) || installedSkills.length > 12 || installedSkills.some(id => !isKnownAgentSkill(id))) {
         return sendError(res, 400, 'AGENT_SKILLS_INVALID', 'Selecione apenas skills disponíveis no catálogo.', 'Revise as skills do agente.', 'blocking', null, reqId);
       }
-      Object.assign(agent, { name, role, instructions, capabilities: [...new Set(body.capabilities)], permissions: body.permissions, boundaries: body.boundaries, provider_connection_id: providerId || null, model_id: modelId || null, installedSkills: [...new Set(installedSkills)] });
+      const nextConfig = { name, role, instructions, capabilities: [...new Set(body.capabilities)], permissions: body.permissions, boundaries: body.boundaries, provider_connection_id: providerId || null, model_id: modelId || null, installedSkills: [...new Set(installedSkills)], identity: body.identity === undefined ? normalizeAgentIdentity(agent.identity) : normalizeAgentIdentity(body.identity) };
+      const changed = ['role', 'instructions', 'boundaries', 'provider_connection_id', 'model_id', 'installedSkills', 'identity'].some(key => JSON.stringify(agent[key] ?? null) !== JSON.stringify(nextConfig[key] ?? null));
+      Object.assign(agent, nextConfig);
+      if (changed) { agent.last_tested_at = null; agent.status = 'draft'; }
       writeDb(db);
       return sendSuccess(res, agent, reqId);
     }
@@ -2471,6 +2494,10 @@ const server = http.createServer(async (req, res) => {
         const writeDbAssistant = () => {
           const freshDb = readDb();
           freshDb.messages.push(assistantMsg);
+          if (!key.startsWith('mock-')) {
+            const completedAgent = (freshDb.agents || []).find(item => item.id === agent.id);
+            if (completedAgent) { completedAgent.last_tested_at = new Date().toISOString(); completedAgent.status = 'active'; }
+          }
           
           if (!freshDb.costEvents) freshDb.costEvents = [];
           freshDb.costEvents.push({

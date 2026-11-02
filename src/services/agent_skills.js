@@ -26,8 +26,10 @@ export function isKnownAgentSkill(id) { return BUILTIN_AGENT_SKILLS.some(skill =
 
 export function buildAgentSystemPrompt(agent) {
   const skills = resolveAgentSkills(agent.installedSkills);
+  const identity = agent.identity || {};
   return [
     String(agent.instructions || '').trim(),
+    `Identidade operacional:\nNome: ${agent.name || 'Agente'}\nFunção: ${agent.role || 'Assistente'}\nUso: ${identity.purpose === 'professional' ? 'profissional' : 'pessoal'}\nPúblico: ${identity.audience || 'não especificado'}\nTom: ${identity.tone || 'claro e respeitoso'}\nEntregas: ${identity.outputs || 'definidas pelo pedido'}\nCritério de sucesso: ${identity.successCriteria || 'responder corretamente ao pedido'}\nAutonomia: ${identity.autonomy || 'suggest'}. Ações externas dependem das permissões e aprovações da plataforma.`,
     agent.boundaries ? `Limites definidos pelo operador:\n${agent.boundaries}` : '',
     skills.length ? `Skills instaladas (use somente quando relevantes à tarefa):\n${skills.map(skill => `- ${skill.name}: ${skill.instructions}`).join('\n')}` : '',
     'As skills são instruções de trabalho, não concedem ferramentas nem permissões. Nunca finja ter executado uma ação externa.',

@@ -229,13 +229,20 @@ setTimeout(async () => {
 
     const specialistConfig = await fetch(`${baseUrl}/agents/${bodySpecialist.data.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'Analista de pesquisa', role: 'Pesquisador', instructions: 'Pesquisar fontes e resumir evidências.', capabilities: ['research'], permissions: { read_workspace: true, send_messages: false }, boundaries: 'Pedir aprovação antes de enviar.', status: 'active' })
+      body: JSON.stringify({ name: 'Analista de pesquisa', role: 'Pesquisador', instructions: 'Pesquisar fontes e resumir evidências.', capabilities: ['research'], permissions: { read_workspace: true, send_messages: false }, boundaries: 'Pedir aprovação antes de enviar.', installedSkills: ['skill-research'], identity: { purpose: 'professional', audience: 'Equipe de pesquisa', tone: 'Objetivo', outputs: 'Relatórios de pesquisa verificáveis', successCriteria: 'Fontes claras e resultados revisáveis', autonomy: 'suggest' }, status: 'active' })
     });
     assert.strictEqual(specialistConfig.status, 200);
     const savedSpecialist = (await specialistConfig.json()).data;
     assert.deepStrictEqual(savedSpecialist.capabilities, ['research']);
     assert.strictEqual(savedSpecialist.permissions.read_workspace, true);
     assert.strictEqual(savedSpecialist.status, 'draft');
+    assert.strictEqual(savedSpecialist.identity.audience, 'Equipe de pesquisa');
+    assert.deepStrictEqual(savedSpecialist.installedSkills, ['skill-research']);
+    const specialistReadiness = await fetch(`${baseUrl}/agents/${savedSpecialist.id}/readiness`);
+    assert.strictEqual(specialistReadiness.status, 200);
+    const readinessBody = await specialistReadiness.json();
+    assert.strictEqual(readinessBody.data.stage, 'configuring');
+    assert.ok(readinessBody.data.checks.some(check => check.id === 'model' && !check.done));
     console.log('✅ Agent configuration persists functions and permissions without bypassing activation.');
     const deniedTool = await fetch(`${baseUrl}/tools/execute`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -316,6 +323,11 @@ setTimeout(async () => {
     const bodyHealth = await resHealth.json();
     assert.strictEqual(bodyHealth.data.status, 'ready_to_test');
     console.log('✅ GET /api/agents/:agentId/health passed.');
+
+    const fakeReadinessTest = await fetch(`${baseUrl}/agents/${agentId}/test`, { method: 'POST' });
+    assert.strictEqual(fakeReadinessTest.status, 400);
+    assert.strictEqual((await fakeReadinessTest.json()).error.code, 'AGENT_REAL_MODEL_REQUIRED');
+    console.log('✅ Mock model cannot mark an agent as market-ready.');
 
     // 8. Test POST /api/agents/:agentId/chat
     const resChat = await fetch(`${baseUrl}/agents/${agentId}/chat`, {

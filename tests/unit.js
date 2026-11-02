@@ -4,6 +4,7 @@ import { getModelsForProvider } from '../providersCatalog.js';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
 import { reviewGeneratedDesign } from '../src/services/code_design_quality.js';
 import { buildAgentSystemPrompt, resolveAgentSkills } from '../src/services/agent_skills.js';
+import { normalizeAgentIdentity, isValidAgentIdentity, evaluateAgentReadiness } from '../src/services/agent_identity.js';
 
 console.log('=== RUNNING UNIT TESTS ===');
 
@@ -13,6 +14,16 @@ assert.ok(trainedPrompt.includes('Não envie mensagens sem aprovação.'));
 assert.ok(!trainedPrompt.includes('unknown'));
 assert.strictEqual(resolveAgentSkills(['skill-code', 'skill-code']).length, 1);
 console.log('✅ Installed skills and boundaries enter the agent prompt.');
+
+const professionalIdentity = { purpose: 'professional', audience: 'Equipe de produto', tone: 'Claro', outputs: 'Planos de ação revisáveis', successCriteria: 'Entregas verificadas', autonomy: 'approve' };
+assert.strictEqual(normalizeAgentIdentity(professionalIdentity).purpose, 'professional');
+assert.strictEqual(isValidAgentIdentity({ purpose: 'unknown' }), false);
+const readyAgent = { name: 'Analista', role: 'Pesquisa', instructions: 'Pesquise fontes e organize evidências verificáveis para a equipe.', boundaries: 'Peça aprovação antes de agir externamente.', installedSkills: ['skill-research'], provider_connection_id: 'provider-1', model_id: 'model-1', identity: professionalIdentity };
+assert.strictEqual(evaluateAgentReadiness(readyAgent, { providerValid: true }).stage, 'test');
+assert.strictEqual(evaluateAgentReadiness({ ...readyAgent, last_tested_at: '2026-11-02T00:00:00Z' }, { providerValid: true }).stage, 'ready');
+assert.strictEqual(evaluateAgentReadiness(readyAgent, { providerValid: false }).stage, 'configuring');
+assert.ok(buildAgentSystemPrompt(readyAgent).includes('Equipe de produto'));
+console.log('✅ Agent identity, readiness, and operational prompt tests passed.');
 
 const weakDesign = reviewGeneratedDesign({ creating: true, appProject: true, html: '<header>Agenda 🗓️</header><main><form></form></main>', css: 'body { place-items: center } .container { max-width: 600px; margin: 0 auto; box-shadow: 0 8px 30px #0002; }', script: '' });
 assert.ok(weakDesign.some(issue => issue.includes('emojis')));
