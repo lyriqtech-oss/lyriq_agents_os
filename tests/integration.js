@@ -1659,62 +1659,24 @@ setTimeout(async () => {
     assert.strictEqual(resMcpDelete.status, 200);
     console.log('✅ Native Connectors, OAuth & MCP Servers Endpoints passed.');
 
-    // 51. Test Telegram Bot & BotFather Connection V1 Endpoints (PDF V1 Specification)
-    console.log('Testing Telegram Bot & BotFather Connection V1 Endpoints...');
-
-    // POST /api/telegram/connections/validate-token (Validate BotFather token)
+    // An invented BotFather token must never be reported as a connected bot.
+    console.log('Testing Telegram connection validation...');
     const resTgVal = await fetch(`${baseUrl}/telegram/connections/validate-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: '8655720761:AAExemploDeTokenMuitoSecreto12345' })
+      body: JSON.stringify({ token: 'invalid-token' })
     });
-    assert.strictEqual(resTgVal.status, 200);
-    const bodyTgVal = await resTgVal.json();
-    assert.strictEqual(bodyTgVal.data.bot.id, '8655720761');
-
-    // POST /api/telegram/connections (Register Bot Connection)
+    assert.strictEqual(resTgVal.status, 400);
     const resTgCreate = await fetch(`${baseUrl}/telegram/connections`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        workspaceId: 'workspace_123',
-        token: '8655720761:AAExemploDeTokenMuitoSecreto12345',
-        defaultAgentId: 'agent_main'
-      })
+      body: JSON.stringify({ workspaceId: 'workspace_123', token: 'invalid-token', defaultAgentId: 'agent_main' })
     });
-    assert.strictEqual(resTgCreate.status, 200);
-    const bodyTgCreate = await resTgCreate.json();
-    const createdTgConnId = bodyTgCreate.data.connection.id;
-
-    // POST /api/telegram/connections/:id/set-webhook
-    const resTgWebhook = await fetch(`${baseUrl}/telegram/connections/${createdTgConnId}/set-webhook`, {
-      method: 'POST'
-    });
-    assert.strictEqual(resTgWebhook.status, 200);
-
-    // POST /api/telegram/connections/:id/test
-    const resTgTest = await fetch(`${baseUrl}/telegram/connections/${createdTgConnId}/test`, {
-      method: 'POST'
-    });
-    assert.strictEqual(resTgTest.status, 200);
-
-    // POST /api/telegram/webhook/:connectionId (Incoming Telegram Update Simulation)
-    const resTgWebhookRec = await fetch(`${baseUrl}/telegram/webhook/${createdTgConnId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        update_id: 10001,
-        message: {
-          message_id: 456,
-          from: { id: 8655720761, first_name: 'Augusto', username: 'augustoweymar' },
-          chat: { id: 8655720761, type: 'private' },
-          text: '/start'
-        }
-      })
-    });
-    assert.strictEqual(resTgWebhookRec.status, 200);
-    const bodyTgWebhookRec = await resTgWebhookRec.json();
-    assert.strictEqual(bodyTgWebhookRec.data.replySent, true);
+    assert.strictEqual(resTgCreate.status, 400);
+    const resTgList = await fetch(`${baseUrl}/telegram/connections`);
+    assert.strictEqual(resTgList.status, 200);
+    const bodyTgList = await resTgList.json();
+    assert.ok(bodyTgList.data.every(connection => !('botTokenEncrypted' in connection) && !('webhookSecret' in connection)));
 
     // GET /api/workspaces/workspace_123/telegram/chats
     const resTgChats = await fetch(`${baseUrl}/workspaces/workspace_123/telegram/chats`);
@@ -1724,7 +1686,7 @@ setTimeout(async () => {
     const resTgMsgs = await fetch(`${baseUrl}/workspaces/workspace_123/telegram/messages`);
     assert.strictEqual(resTgMsgs.status, 200);
 
-    console.log('✅ Telegram Bot & BotFather Connection Endpoints passed.');
+    console.log('✅ Telegram rejects fake credentials and hides secrets.');
 
     // ----------------------------------------------------
     // WHATSAPP BUSINESS V1 INTEGRATION TESTS

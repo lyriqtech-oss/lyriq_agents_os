@@ -3,8 +3,16 @@ import { selectOrchestrationAgents, orchestrateMultiAgentTask } from '../src/ser
 import { getModelsForProvider } from '../providersCatalog.js';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
 import { reviewGeneratedDesign } from '../src/services/code_design_quality.js';
+import { buildAgentSystemPrompt, resolveAgentSkills } from '../src/services/agent_skills.js';
 
 console.log('=== RUNNING UNIT TESTS ===');
+
+const trainedPrompt = buildAgentSystemPrompt({ instructions: 'Ajude a equipe.', boundaries: 'Não envie mensagens sem aprovação.', installedSkills: ['skill-code', 'skill-telegram', 'unknown'] });
+assert.ok(trainedPrompt.includes('Programação') && trainedPrompt.includes('Telegram'));
+assert.ok(trainedPrompt.includes('Não envie mensagens sem aprovação.'));
+assert.ok(!trainedPrompt.includes('unknown'));
+assert.strictEqual(resolveAgentSkills(['skill-code', 'skill-code']).length, 1);
+console.log('✅ Installed skills and boundaries enter the agent prompt.');
 
 const weakDesign = reviewGeneratedDesign({ creating: true, appProject: true, html: '<header>Agenda 🗓️</header><main><form></form></main>', css: 'body { place-items: center } .container { max-width: 600px; margin: 0 auto; box-shadow: 0 8px 30px #0002; }', script: '' });
 assert.ok(weakDesign.some(issue => issue.includes('emojis')));

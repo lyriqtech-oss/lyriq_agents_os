@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
 import CodeWorkspace from './components/CodeWorkspace';
 import AgentWorkspace from './components/AgentWorkspace';
+import SettingsWorkspace from './components/SettingsWorkspace';
 import AutomationWorkspace from './components/AutomationWorkspace';
 import { persistentStorage, setPersistentUser } from './lib/persistentStorage';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
@@ -891,6 +892,7 @@ export default function App() {
     }
     return defaultAgentsList;
   });
+  const [configuredChatAgents, setConfiguredChatAgents] = useState<Agent[]>([]);
 
   const [leads, setLeads] = useState<Lead[]>(() => {
     const data = persistentStorage.getItem('lyriq_leads');
@@ -1009,6 +1011,23 @@ export default function App() {
       return 'setup_console';
     }
   });
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => { setMobileNavOpen(false); }, [currentTab]);
+  useEffect(() => {
+    if (currentTab !== 'chat' && currentTab !== 'agents') return;
+    let live = true;
+    fetch('/api/agents').then(response => response.json()).then(result => {
+      if (!live || !Array.isArray(result.data)) return;
+      setConfiguredChatAgents(result.data.filter((item: any) => item.type !== 'main').map((item: any) => ({
+        id: item.id, name: item.name, role: item.role, area: item.role, status: !!item.model_id && !!item.provider_connection_id,
+        metric: item.model_id && item.provider_connection_id ? 'Pronto para conversar' : 'Configuração pendente', metricLabel: 'Estado do agente', tasksToday: 0,
+        description: item.role, details: item.instructions, icon: 'Bot', model: item.model_id || '',
+        temperature: 0.2, lastActive: '—', systemPrompt: item.instructions, installedSkills: item.installedSkills || []
+      })));
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [currentTab]);
+  const displayedChatAgents = [...agents, ...configuredChatAgents.filter(item => !agents.some(existing => existing.id === item.id))];
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [platformAdminSettings, setPlatformAdminSettings] = useState(() => {
@@ -1901,7 +1920,7 @@ export default function App() {
   const [swarmLogs, setSwarmLogs] = useState<Array<{ agent: string; text: string; time: string; type: 'system' | 'message' }>>([
     { agent: 'System', text: 'Enxame de Agentes Autônomos (Swarm Mode) pronto para cooperação multi-agente.', time: 'Agora', type: 'system' }
   ]);
-  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
+  const [geminiApiKey] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_gemini_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
   });
 
@@ -1912,24 +1931,24 @@ export default function App() {
   const [expandedLogIds, setExpandedLogIds] = useState<Record<string, boolean>>({});
 
   // Multi-Provider AI Routing and Execution States
-  const [activeProvider, setActiveProvider] = useState<string>(() => {
+  const [activeProvider] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_active_provider') || 'gemini';
   });
-  const [openaiApiKey, setOpenaiApiKey] = useState<string>(() => {
+  const [openaiApiKey] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_openai_key') || '';
   });
-  const [anthropicApiKey, setAnthropicApiKey] = useState<string>(() => {
+  const [anthropicApiKey] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_anthropic_key') || '';
   });
-  const [ollamaEndpoint, setOllamaEndpoint] = useState<string>(() => {
+  const [ollamaEndpoint] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_ollama_endpoint') || 'http://localhost:11434';
   });
 
   // Budget Guard States
-  const [monthlyBudgetLimit, setMonthlyBudgetLimit] = useState<number>(() => {
+  const [monthlyBudgetLimit] = useState<number>(() => {
     return Number(persistentStorage.getItem('lyriq_budget_limit')) || 100;
   });
-  const [budgetGuardHardLimit, setBudgetGuardHardLimit] = useState<boolean>(() => {
+  const [budgetGuardHardLimit] = useState<boolean>(() => {
     return persistentStorage.getItem('lyriq_budget_hard_limit') !== 'false';
   });
   const [apiExpenditureToday, setApiExpenditureToday] = useState<number>(() => {
@@ -2273,190 +2292,6 @@ export default function App() {
   const [ollamaModel, setOllamaModel] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_ollama_model') || 'llama3';
   });
-
-  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'diagnostics'>('general');
-  const [isDiagnosing, setIsDiagnosing] = useState(false);
-  const [diagnosticsLogs, setDiagnosticsLogs] = useState<string[]>([]);
-  const [diagnosticsResult, setDiagnosticsResult] = useState<'passed' | 'failed' | 'blocked' | null>(null);
-  const [diagnosticsStatus, setDiagnosticsStatus] = useState({
-    backend: 'Unknown',
-    database: 'Unknown',
-    storage: 'Unknown',
-    vectorDb: 'Unknown',
-    provider: 'Unknown',
-    models: 'Unknown',
-    mainAgent: 'Unknown'
-  });
-
-  const handleRunFullDiagnostics = async () => {
-    setIsDiagnosing(true);
-    setDiagnosticsResult(null);
-    setDiagnosticsLogs([]);
-    
-    const logMsg = (msg: string) => {
-      setDiagnosticsLogs(prev => [...prev, `[${new Date().toLocaleTimeString('pt-BR')}] ${msg}`]);
-    };
-
-    logMsg('Iniciando varredura geral do Agent Center...');
-    
-    let backendOk = false;
-    let databaseOk = false;
-    let storageOk = false;
-    let vectorDbOk = false;
-    let providerOk = false;
-    let modelsOk = false;
-    let mainAgentOk = false;
-
-    // 1. Testa Backend
-    logMsg('Testando conectividade com o backend REST na porta 5000...');
-    try {
-      const res = await fetch('/api/health');
-      if (res.status === 200) {
-        const body = await res.json();
-        if (body.ok) {
-          backendOk = true;
-          logMsg('✅ Backend online e respondendo na porta 5000.');
-          
-          const checks = body.data.checks || {};
-          databaseOk = checks.database === 'healthy';
-          storageOk = checks.storage === 'healthy';
-          vectorDbOk = checks.vectorDb === 'healthy';
-          
-          logMsg(`Banco de dados: ${databaseOk ? '✅ Conectado' : '❌ Falhou'}`);
-          logMsg(`Armazenamento: ${storageOk ? '✅ Ativo' : '❌ Falhou'}`);
-          logMsg(`Vector DB (RAG): ${vectorDbOk ? '✅ Ativo' : '❌ Falhou'}`);
-        } else {
-          logMsg('❌ Backend retornou erro na resposta de saúde.');
-        }
-      } else {
-        logMsg(`❌ Backend retornou HTTP status ${res.status}.`);
-      }
-    } catch (err: any) {
-      logMsg(`❌ Falha de conexão física com o backend: ${err.message}`);
-    }
-
-    // 2. Testa Provider
-    logMsg('Verificando conexões de provedores ativas...');
-    try {
-      const res = await fetch('/api/providers');
-      const body = await res.json();
-      if (body.ok && body.data.length > 0) {
-        providerOk = body.data.some((p: any) => p.status === 'valid');
-        logMsg(`✅ Provedor validado: ${providerOk ? 'Sim' : 'Não configurado'}`);
-      } else {
-        logMsg('❌ Nenhum provedor de IA cadastrado ou validado no banco.');
-      }
-    } catch (err: any) {
-      logMsg(`❌ Erro ao listar provedores: ${err.message}`);
-    }
-
-    // 3. Testa Modelos
-    logMsg('Atualizando catálogo de modelos...');
-    try {
-      const res = await fetch('/api/models');
-      const body = await res.json();
-      if (body.ok && body.data.length > 0) {
-        modelsOk = true;
-        logMsg(`✅ Catálogo de modelos carregado: ${body.data.length} modelos disponíveis.`);
-      } else {
-        logMsg('❌ Nenhum modelo de chat disponível no catálogo.');
-      }
-    } catch (err: any) {
-      logMsg(`❌ Erro ao ler modelos: ${err.message}`);
-    }
-
-    // 4. Testa modelo selecionado
-    const selectedModel = activeProvider === 'gemini' ? geminiModel :
-                          activeProvider === 'openai' ? openaiModel :
-                          activeProvider === 'anthropic' ? anthropicModel : ollamaModel;
-    logMsg(`Testando tempo de resposta do modelo selecionado: ${selectedModel || 'Nenhum'}...`);
-    if (selectedModel) {
-      try {
-        const res = await fetch(`/api/providers/${activeProvider}/test-model`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workspaceId: 'workspace_123',
-            modelId: selectedModel,
-            prompt: 'healthcheck'
-          })
-        });
-        const body = await res.json();
-        if (body.ok) {
-          logMsg(`✅ Modelo disponível no provider. Latência estimada: ${body.data.latencyMs}ms`);
-        } else {
-          logMsg(`❌ Teste de modelo falhou: ${body.error ? body.error.message : 'Sem resposta'}`);
-        }
-      } catch (err: any) {
-        logMsg(`❌ Erro ao testar modelo: ${err.message}`);
-      }
-    } else {
-      logMsg('⚠️ Nenhum modelo selecionado para testar.');
-    }
-
-    // 5. Testa Main Agent
-    logMsg('Verificando agente coordenador principal...');
-    let activeAgentId = '';
-    try {
-      const res = await fetch('/api/agents');
-      const body = await res.json();
-      if (body.ok) {
-        const mainAgent = body.data.find((a: any) => a.type === 'main');
-        if (mainAgent) {
-          activeAgentId = mainAgent.id;
-          mainAgentOk = mainAgent.status === 'ready_to_test' || mainAgent.status === 'active';
-          logMsg(`✅ Agente principal encontrado: "${mainAgent.name}" (${mainAgent.role}). Status: ${mainAgent.status}`);
-        } else {
-          logMsg('❌ Agente coordenador principal não configurado ou criado.');
-        }
-      }
-    } catch (err: any) {
-      logMsg(`❌ Erro ao obter informações dos agentes: ${err.message}`);
-    }
-
-    // 6. Testa chat com prompt curto
-    if (activeAgentId && providerOk) {
-      logMsg('Testando pipeline de chat com prompt de validação rápida...');
-      try {
-        const res = await fetch(`/api/agents/${activeAgentId}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workspaceId: 'workspace_123',
-            sessionId: 'session_diagnostic_123',
-            message: 'ping'
-          })
-        });
-        const body = await res.json();
-        if (body.ok) {
-          logMsg(`✅ Chat respondendo perfeitamente: "${body.data.content}"`);
-        } else {
-          logMsg(`❌ Pipeline de chat falhou: ${body.error ? body.error.message : 'Sem resposta'}`);
-        }
-      } catch (err: any) {
-        logMsg(`❌ Erro no pipeline de chat: ${err.message}`);
-      }
-    } else {
-      logMsg('⚠️ Teste de chat ignorado: Agente ou provedor ausente.');
-    }
-
-    // Update state statuses
-    setDiagnosticsStatus({
-      backend: backendOk ? 'healthy' : 'offline',
-      database: databaseOk ? 'healthy' : 'failed',
-      storage: storageOk ? 'healthy' : 'failed',
-      vectorDb: vectorDbOk ? 'healthy' : 'failed',
-      provider: providerOk ? 'valid' : 'invalid',
-      models: modelsOk ? 'ready' : 'failed',
-      mainAgent: mainAgentOk ? 'active' : 'draft'
-    });
-
-    const passed = backendOk && databaseOk && providerOk && mainAgentOk;
-    setDiagnosticsResult(passed ? 'passed' : 'failed');
-    setIsDiagnosing(false);
-    
-    logMsg(`Diagnostics concluído. Resultado final: ${passed ? 'CONCLUÍDO COM SUCESSO' : 'ATENÇÃO: FALHAS DETECTADAS'}`);
-  };
 
   useEffect(() => {
     persistentStorage.setItem('lyriq_gemini_model', geminiModel);
@@ -7746,7 +7581,8 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
         <div className="flex-1 flex overflow-hidden">
           
           {/* SIDEBAR */}
-          <aside className="w-64 border-r border-slate-200/60 bg-white flex flex-col shrink-0">
+          {mobileNavOpen && <button type="button" aria-label="Fechar navegação" onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-40 bg-slate-950/45 md:hidden" />}
+          <aside className={`${mobileNavOpen ? 'fixed inset-y-0 left-0 z-50 flex shadow-2xl' : 'hidden md:flex'} w-64 border-r border-slate-200/60 bg-white flex-col shrink-0`}>
             {/* Header info */}
             <div className="h-16 px-6 border-b border-slate-200/60 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
@@ -7970,8 +7806,10 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             
             {/* Topbar navigation metrics */}
-            <header className="h-16 px-8 border-b border-slate-200/60 bg-white flex items-center justify-between shrink-0 z-10">
-              <div className="relative w-96">
+            <header className="h-16 px-4 md:px-8 border-b border-slate-200/60 bg-white flex items-center justify-between shrink-0 z-10">
+              <button type="button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir navegação" className="rounded-lg p-2 text-slate-800 hover:bg-slate-100 md:hidden"><Menu className="h-5 w-5" /></button>
+              <span className="text-sm font-bold text-slate-950 md:hidden">Agent Center</span>
+              <div className="relative hidden w-96 md:block">
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
@@ -8016,7 +7854,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
             </header>
 
             {/* Active view component render */}
-            <div className="flex-1 p-8 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto p-4 md:p-8">
 
               {/* 0. SETUP CONSOLE (WIZARD FOR NON-UNLOCKED WORKSPACES) */}
               {currentTab === 'setup_console' && !isDashboardUnlocked && (
@@ -8932,7 +8770,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Equipe Operacional</span>
                       </div>
                       <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-                        {agents.map((agent) => {
+                        {displayedChatAgents.map((agent) => {
                           const AgentIcon = getIconComponent(agent.icon);
                           const isSelected = selectedChatAgentId === agent.id;
                           const messagesList = chatMessages[agent.id] || [];
@@ -8972,9 +8810,10 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                     {/* Right Pane - Chat Console */}
                     {chatModeActive === 'single' ? (
                       (() => {
-                        const activeChatAgent = agents.find(a => a.id === selectedChatAgentId);
+                        const activeChatAgent = displayedChatAgents.find(a => a.id === selectedChatAgentId);
                         if (!activeChatAgent) return null;
                         const chatHistory = chatMessages[selectedChatAgentId] || [];
+                        const isConfiguredAgent = configuredChatAgents.some(agent => agent.id === selectedChatAgentId);
 
                         return (
                           <div className="flex-1 flex flex-col justify-between h-full bg-white min-w-0">
@@ -8993,15 +8832,15 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                                   <span className="text-[10px] text-slate-400">{activeChatAgent.role} • Módulo {activeChatAgent.model}</span>
                                   <span className="h-1.5 w-px bg-slate-200"></span>
                                   <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${geminiApiKey.trim() ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-650'}`}>
-                                    {geminiApiKey.trim() || (onboardingSelectedProvider === 'gemini' && onboardingApiKeyValidated)
-                                      ? '✨ Gemini LLM Real Ativo'
-                                      : '🤖 Modo Simulação Local'}
+                                    {isConfiguredAgent ? 'Modelo configurado' : geminiApiKey.trim() || (onboardingSelectedProvider === 'gemini' && onboardingApiKeyValidated)
+                                      ? 'Gemini configurado'
+                                      : 'Modelo não configurado'}
                                   </span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {getAgentSkills(activeChatAgent.id).map(skill => (
+                                  {(isConfiguredAgent ? activeChatAgent.installedSkills || [] : getAgentSkills(activeChatAgent.id)).map(skill => (
                                     <span key={skill} className="px-1.5 py-0.5 rounded bg-slate-100 text-[8px] font-semibold text-slate-500 border border-slate-200/50">
-                                      ⚙️ {skill}
+                                      {({ 'skill-code': 'Programação', 'skill-automation': 'Automações', 'skill-research': 'Pesquisa', 'skill-telegram': 'Telegram' } as Record<string, string>)[skill] || skill}
                                     </span>
                                   ))}
                                 </div>
@@ -9229,11 +9068,11 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
                             {/* Message Input Box */}
                             <div className="p-4 border-t border-slate-100 bg-white shrink-0">
-                              {(!providers.some(p => p.status === 'valid')) ? (
+                              {(!isConfiguredAgent && !providers.some(p => p.status === 'valid')) ? (
                                 <div className="text-center py-2.5 bg-red-50/50 border border-red-100 rounded-lg text-xs text-red-700 font-sans">
                                   ⚠️ Chat bloqueado: Provedor de API inválido ou não configurado nas Configurações.
                                 </div>
-                              ) : (!workspaceModelPreset) ? (
+                              ) : (!isConfiguredAgent && !workspaceModelPreset) ? (
                                 <div className="text-center py-2.5 bg-amber-50/50 border border-amber-100 rounded-lg text-xs text-amber-800 font-sans">
                                   ⚠️ Chat bloqueado: Nenhum modelo de IA selecionado para o workspace nas Configurações.
                                 </div>
@@ -12656,128 +12495,13 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
-              {/* 1.19. APP: CONEXÃO DO MODELO COM TELEGRAM E BOTFATHER (PDF Specification) */}
               {currentTab === 'channel_telegram' && (
-                <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200 font-sans">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 bg-sky-500/10 text-sky-700 text-[10px] font-bold rounded uppercase tracking-wider font-mono">TELEGRAM BOTFATHER INTEGRATION</span>
-                        <span className="text-[10px] text-slate-400">| Webhook & Session Router</span>
-                      </div>
-                      <h1 className="text-xl font-bold text-slate-950 tracking-tight mt-1">Conexão Telegram & BotFather</h1>
-                      <p className="text-xs text-slate-500 mt-1">Conecte seu bot criado no @BotFather para conversar diretamente com o agente de IA pelo Telegram com aprovação humana.</p>
-                    </div>
-                  </div>
-
-                  {/* Step-by-Step Onboarding Wizard Card */}
-                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
-                    <div className="border-b border-slate-100 pb-3">
-                      <h2 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider">Passo a Passo de Conexão do Bot</h2>
-                      <p className="text-xs text-slate-500 mt-0.5 font-sans">Siga os passos abaixo para criar o bot no Telegram e parear com a plataforma.</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-sans">
-                      <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200/60">
-                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white font-mono font-bold flex items-center justify-center text-[11px]">1</span>
-                        <h3 className="font-bold text-slate-900">Abra o @BotFather</h3>
-                        <p className="text-slate-500 text-[11px]">No Telegram, busque por <strong>@BotFather</strong> (bot oficial verificado) e inicie uma conversa.</p>
-                      </div>
-
-                      <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200/60">
-                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white font-mono font-bold flex items-center justify-center text-[11px]">2</span>
-                        <h3 className="font-bold text-slate-900">Crie o Bot (/newbot)</h3>
-                        <p className="text-slate-500 text-[11px]">Envie o comando <code>/newbot</code>, defina o nome público (ex: Bóris Lyriq) e username (ex: boris_lyriq_bot).</p>
-                      </div>
-
-                      <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200/60">
-                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white font-mono font-bold flex items-center justify-center text-[11px]">3</span>
-                        <h3 className="font-bold text-slate-900">Copie o Token</h3>
-                        <p className="text-slate-500 text-[11px]">Copie o HTTP API Token fornecido pelo BotFather e cole no campo de validação abaixo.</p>
-                      </div>
-                    </div>
-
-                    {/* Token Input Form */}
-                    <div className="bg-slate-900 rounded-xl p-5 text-white space-y-4 font-mono">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold uppercase tracking-wider text-sky-400">Token de Autenticação do BotFather</span>
-                        <span className="text-[10px] text-slate-400">Proteção com Fingerprint & Secret Vault</span>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <input
-                          type="password"
-                          defaultValue="8655720761:AAExemploDeTokenMuitoSecreto12345"
-                          placeholder="Cole aqui o token fornecido pelo @BotFather..."
-                          className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-sky-500"
-                        />
-                        <button
-                          onClick={() => addToast('Token do Telegram validado com sucesso via getMe! Fingerprint: 8655720761:...345', 'success')}
-                          className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded text-xs transition"
-                        >
-                          ⚡ Validar Bot (getMe)
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Connected Bots List */}
-                  <div className="space-y-4 font-mono">
-                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                      <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Bots Ativos no Workspace</h2>
-                      <span className="text-[10.5px] text-slate-500">Conexões Webhook & Polling</span>
-                    </div>
-
-                    {/* Active Telegram Bot Card */}
-                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-xs font-bold text-slate-950">@boris_lyriq_bot (Bóris Lyriq)</h3>
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-bold uppercase">WEBHOOK ACTIVE</span>
-                          </div>
-                          <span className="text-[11px] text-slate-500 block mt-1 font-mono">Bot ID: 8655720761 | Fingerprint: 8655720761:...345</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400">Privacidade em Grupos: ON</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg text-xs font-mono">
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase block">Agente Vinculado:</span>
-                          <span className="font-semibold text-indigo-600">Agente Principal (Bóris)</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase block">Remetentes Autorizados:</span>
-                          <span className="font-semibold text-slate-800">Augusto Weymar (Owner)</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase block">Última Mensagem:</span>
-                          <span className="font-semibold text-emerald-600">HTTP 200 (há 2 min)</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                        <span className="text-[10.5px] text-slate-500 font-sans">Comandos suportados: /start, /help, /status, /reset.</span>
-                        <div className="flex gap-2 font-mono">
-                          <button
-                            onClick={() => addToast('Abra o Telegram em @boris_lyriq_bot e envie /start para testar.', 'info')}
-                            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded transition"
-                          >
-                            💬 Testar no Telegram (/start)
-                          </button>
-                          <button
-                            onClick={() => addToast('Conexão do Telegram desconectada.', 'info')}
-                            className="px-3 py-1.5 border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold rounded transition"
-                          >
-                            Desconectar Bot
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <div className="max-w-3xl rounded-xl border border-sky-200 bg-white p-8">
+                  <h1 className="text-2xl font-bold text-slate-950">Telegram</h1>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">Conecte um bot real e escolha o agente que atenderá neste canal. A configuração fica dentro do agente para manter skills, conhecimento e permissões juntos.</p>
+                  <button type="button" onClick={() => setCurrentTab('agents')} className="mt-6 rounded-lg bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-900">Configurar Telegram nos agentes</button>
                 </div>
               )}
-
               {/* WHATSAPP BUSINESS V1 INTEGRATION TAB */}
               {currentTab === 'channel_whatsapp' && (
                 <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200 font-sans">
@@ -16624,548 +16348,8 @@ Regras duras:
                 </div>
               )}
 
-              {/* 9. APP: CONFIGURAÇÕES DA EMPRESA */}
-              {currentTab === 'settings' && companyProfile.setupComplete && (
-                <div className="space-y-6 max-w-6xl">
-                  {/* Navigation sub-tabs */}
-                  <div className="flex gap-2 border-b border-slate-100 pb-2">
-                    <button
-                      onClick={() => setSettingsSubTab('general')}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${settingsSubTab === 'general' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                      Configurações Gerais
-                    </button>
-                    <button
-                      onClick={() => setCurrentTab('pricing')}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-500 hover:bg-slate-50"
-                    >
-                      Planos e Pagamento
-                    </button>
-                    <button
-                      onClick={() => setCurrentTab('providers')}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-500 hover:bg-slate-50"
-                    >
-                      Uso e Orçamento
-                    </button>
-                    <button
-                      onClick={() => setCurrentTab('workspace_settings')}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-500 hover:bg-slate-50"
-                    >
-                      Workspace e Equipe
-                    </button>
-                    <button
-                      onClick={() => setSettingsSubTab('diagnostics')}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${settingsSubTab === 'diagnostics' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                      Diagnostics Panel
-                    </button>
-                  </div>
-
-                  {settingsSubTab === 'general' && (
-                    <>
-                      <div>
-                        <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Configurações Gerais</h1>
-                        <p className="text-xs text-slate-400 mt-0.5">Revise chaves de API locais, altere informações do perfil e gerencie usuários.</p>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm space-y-3">
-                      <span className="text-xs font-bold text-slate-950 block">Credenciais e API</span>
-                      
-                      <div className="space-y-2">
-                        <label className="block text-[10px] font-semibold text-slate-500">Token Global Lyriq</label>
-                        <input
-                          type="password"
-                          readOnly
-                          value="••••••••••••••••••••••••••••"
-                          className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-md text-xs"
-                        />
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText('lq-key-auth-live-db');
-                            addToast('Chave de API copiada.', 'success');
-                          }}
-                          className="w-full py-2 bg-slate-950 text-white rounded text-xs font-semibold"
-                        >
-                          Copiar Chave
-                        </button>
-                        
-                        <div className="space-y-2 pt-3 border-t border-slate-100">
-                          <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Provedor de IA Ativo</label>
-                          <select
-                            value={activeProvider}
-                            onChange={(e) => setActiveProvider(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
-                          >
-                            <option value="gemini">Google Gemini API (1.5-flash)</option>
-                            <option value="openai">OpenAI GPT (gpt-4o-mini)</option>
-                            <option value="anthropic">Anthropic Claude (claude-3-5-sonnet)</option>
-                            <option value="ollama">Ollama / Local LLM (Custom Endpoint)</option>
-                          </select>
-                        </div>
-
-                        {activeProvider === 'gemini' && (
-                          <div className="space-y-3 pt-2">
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Chave de API Gemini (Google)</label>
-                              <input
-                                type="password"
-                                value={geminiApiKey}
-                                onChange={(e) => setGeminiApiKey(e.target.value)}
-                                placeholder="AI Studio API Key"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                              <a
-                                href="https://aistudio.google.com/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[9px] text-indigo-650 hover:underline block font-semibold"
-                              >
-                                Obter chave gratuita no Google AI Studio ↗
-                              </a>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nome do Modelo (Gemini)</label>
-                              <input
-                                type="text"
-                                value={geminiModel}
-                                onChange={(e) => setGeminiModel(e.target.value)}
-                                placeholder="gemini-1.5-flash"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {activeProvider === 'openai' && (
-                          <div className="space-y-3 pt-2">
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Chave de API OpenAI</label>
-                              <input
-                                type="password"
-                                value={openaiApiKey}
-                                onChange={(e) => setOpenaiApiKey(e.target.value)}
-                                placeholder="sk-..."
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nome do Modelo (OpenAI)</label>
-                              <input
-                                type="text"
-                                value={openaiModel}
-                                onChange={(e) => setOpenaiModel(e.target.value)}
-                                placeholder="gpt-4o-mini"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {activeProvider === 'anthropic' && (
-                          <div className="space-y-3 pt-2">
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Chave de API Anthropic Claude</label>
-                              <input
-                                type="password"
-                                value={anthropicApiKey}
-                                onChange={(e) => setAnthropicApiKey(e.target.value)}
-                                placeholder="sk-ant-..."
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nome do Modelo (Anthropic)</label>
-                              <input
-                                type="text"
-                                value={anthropicModel}
-                                onChange={(e) => setAnthropicModel(e.target.value)}
-                                placeholder="claude-3-5-sonnet-20241022"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {activeProvider === 'ollama' && (
-                          <div className="space-y-3 pt-2">
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Endpoint Ollama Local</label>
-                              <input
-                                type="text"
-                                value={ollamaEndpoint}
-                                onChange={(e) => setOllamaEndpoint(e.target.value)}
-                                placeholder="http://localhost:11434"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nome do Modelo (Ollama)</label>
-                              <input
-                                type="text"
-                                value={ollamaModel}
-                                onChange={(e) => setOllamaModel(e.target.value)}
-                                placeholder="llama3"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                              <span className="text-[8px] text-slate-400 block leading-tight pt-1">
-                                Certifique-se de que o Ollama está rodando localmente na sua máquina (`ollama run llama3`).
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                        <button
-                          onClick={() => {
-                            persistentStorage.clear();
-                            addToast('Todo o banco local foi reiniciado com sucesso! Recarregando...', 'success');
-                            setTimeout(() => window.location.reload(), 1500);
-                          }}
-                          className="w-full py-2 border border-red-200 hover:bg-red-50 text-red-600 rounded text-xs font-semibold mt-2 transition"
-                        >
-                          Resetar Banco de Dados
-                        </button>
-
-                        <div className="space-y-3.5 pt-4 border-t border-slate-100 mt-4">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Budget Guard 🛡️</span>
-                            <span className="text-[9px] font-mono bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
-                              Gasto: ${apiExpenditureToday.toFixed(2)}
-                            </span>
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[10px] font-semibold text-slate-500">
-                              <span>Teto de Gasto Mensal</span>
-                              <span className="font-mono font-bold">${monthlyBudgetLimit} USD</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="10"
-                              max="1000"
-                              step="10"
-                              value={monthlyBudgetLimit}
-                              onChange={(e) => setMonthlyBudgetLimit(parseInt(e.target.value))}
-                              className="w-full accent-slate-900"
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-between pt-1">
-                            <div className="flex flex-col text-left">
-                              <span className="text-[10px] font-bold text-slate-800">Bloqueio Rígido (Hard Limit)</span>
-                              <span className="text-[8px] text-slate-400 leading-tight">Travar queries se exceder o orçamento</span>
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={budgetGuardHardLimit}
-                              onChange={(e) => setBudgetGuardHardLimit(e.target.checked)}
-                              className="w-4 h-4 rounded text-slate-950 border-slate-300 focus:ring-0 accent-slate-950"
-                            />
-                          </div>
-
-                          <div className="space-y-2 pt-4 border-t border-slate-100 mt-4 text-left">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tema do Sistema 🎨</span>
-                            <div className="grid grid-cols-2 gap-2 pt-1.5 text-[9px] font-semibold text-slate-700">
-                              <button
-                                type="button"
-                                onClick={() => { setActiveTheme('glassmorphism'); handleLogAuditEvent('Lyriq Theme Manager', 'Aparência alterada para Glassmorphism Slate', 'low'); }}
-                                className={`p-2 border rounded-lg text-center transition ${activeTheme === 'glassmorphism' ? 'border-indigo-600 bg-indigo-50/30 text-indigo-700 font-bold' : 'border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                🔗 Glassmorphism
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setActiveTheme('cyberpunk'); handleLogAuditEvent('Lyriq Theme Manager', 'Aparência alterada para Midnight Cyberpunk', 'low'); }}
-                                className={`p-2 border rounded-lg text-center transition ${activeTheme === 'cyberpunk' ? 'border-purple-500 bg-purple-50/30 text-purple-700 font-bold' : 'border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                🌌 Cyberpunk
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setActiveTheme('emerald'); handleLogAuditEvent('Lyriq Theme Manager', 'Aparência alterada para Emerald Forest', 'low'); }}
-                                className={`p-2 border rounded-lg text-center transition ${activeTheme === 'emerald' ? 'border-emerald-600 bg-emerald-50/30 text-emerald-700 font-bold' : 'border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                🍃 Emerald Forest
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setActiveTheme('light'); handleLogAuditEvent('Lyriq Theme Manager', 'Aparência alterada para Minimal Light', 'low'); }}
-                                className={`p-2 border rounded-lg text-center transition ${activeTheme === 'light' ? 'border-slate-400 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                ❄️ Minimal Light
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5">
-                      <span className="text-xs font-semibold text-slate-900 block mb-4">Equipe do Sistema</span>
-                      <div className="divide-y divide-slate-100 text-xs">
-                        {team.map((member, i) => (
-                          <div key={i} className="py-2 flex justify-between">
-                            <div>
-                              <span className="font-semibold text-slate-900 block">{member.name}</span>
-                              <span className="text-[10px] text-slate-400">{member.email}</span>
-                            </div>
-                            <span className="text-slate-500 font-medium self-center">{member.role}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Compliance Audit Ledger Widget */}
-                      <div className="pt-6 border-t border-slate-100 mt-6 text-left space-y-3">
-                        <div>
-                          <span className="text-xs font-bold text-slate-900 block">Cofre de Conformidade & Auditoria (Audit Vault) 🛡️</span>
-                          <span className="text-[9px] text-slate-400 block mt-0.5">Assinaturas criptográficas SHA-256 e análise de risco dos agentes de IA</span>
-                        </div>
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                          {auditLogs.slice(0, 10).map((log) => (
-                            <div key={log.id} className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] space-y-1 hover:bg-slate-100/60 transition">
-                              <div className="flex justify-between items-center font-bold text-slate-900">
-                                <span>{log.agent}</span>
-                                <span className={`px-1.5 py-0.2 rounded text-[8px] uppercase tracking-wider ${
-                                  log.riskLevel === 'high' ? 'bg-red-50 text-red-700 border border-red-100' :
-                                  log.riskLevel === 'medium' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                                  'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                }`}>
-                                  {log.riskLevel}
-                                </span>
-                              </div>
-                              <p className="text-slate-600 text-[9.5px] leading-tight">{log.action}</p>
-                              <div className="flex justify-between items-center text-[8px] text-slate-400 font-mono">
-                                <span className="truncate max-w-[200px]">SHA-256: {log.hash}</span>
-                                <span>{log.timestamp.split(' ')[1] || log.timestamp}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Column 3: Observabilidade & Sandbox Lab */}
-                    <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5 space-y-4 text-left">
-                      <div>
-                        <span className="text-xs font-bold text-slate-900 block">Observabilidade & Sandbox Lab 🔬</span>
-                        <span className="text-[9px] text-slate-400 block mt-0.5">Simulação de periféricos externos, browser e mídias</span>
-                      </div>
-
-                      <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg space-y-1.5 text-[9px]">
-                        <span className="font-bold text-slate-500 uppercase tracking-wider block">Status do Runtime</span>
-                        <div className="grid grid-cols-2 gap-2 text-slate-700">
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span>IA Gateway: Ativo</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span>Fila Webhook: 200 OK</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Nodes Externos (Execução Remota)</span>
-                        <div className="flex gap-2">
-                          <input 
-                            type="password" 
-                            readOnly 
-                            value="lq-node-token-8273" 
-                            className="flex-1 px-2.5 py-1 border border-slate-200 bg-slate-50 rounded text-[9px] font-mono"
-                          />
-                          <button 
-                            onClick={() => addToast('Pareamento de Node iniciado! Porta 8080 aguardando handshake...', 'info')}
-                            className="px-2 py-1 bg-slate-950 text-white rounded text-[8px] font-semibold"
-                          >
-                            Parear
-                          </button>
-                        </div>
-                        <div className="text-[8px] text-slate-400 font-mono">Status: 1 Node conectado (local-docker-worker)</div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Automação de Navegador (Headless)</span>
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" 
-                            placeholder="https://example.com" 
-                            defaultValue="https://vitalis-pediatria.com.br"
-                            className="flex-1 px-2.5 py-1 border border-slate-200 rounded text-[9px]"
-                          />
-                          <button 
-                            onClick={() => addToast('Browser headless executando em background. Logs enviados ao terminal.', 'success')}
-                            className="px-2 py-1 bg-indigo-600 text-white rounded text-[8px] font-semibold"
-                          >
-                            Abrir Site
-                          </button>
-                        </div>
-                        <div className="p-2 bg-slate-950 text-[8px] text-slate-305 font-mono rounded h-16 overflow-y-auto space-y-0.5">
-                          <div>[15:14:02] browser.open("https://vitalis...")</div>
-                          <div>[15:14:03] browser.extract_data("pediatras_disponiveis")</div>
-                          <div>[15:14:04] browser.screenshot() saved as: proof.png</div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Processador de Mídias e Áudio</span>
-                        <div className="grid grid-cols-2 gap-2 text-[8px] font-semibold">
-                          <button 
-                            onClick={() => addToast('Áudio transcrito: "Gostaria de agendar para amanhã às 14h".', 'info')}
-                            className="p-1.5 border border-slate-200 hover:bg-slate-50 rounded text-center"
-                          >
-                            🎙️ Transcrever Áudio
-                          </button>
-                          <button 
-                            onClick={() => addToast('Imagem comercial gerada sob demanda. Arquivo salvo na memória.', 'success')}
-                            className="p-1.5 border border-slate-200 hover:bg-slate-50 rounded text-center"
-                          >
-                            🖼️ Gerar Imagem IA
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  </>
-                  )}
-
-                  {settingsSubTab === 'diagnostics' && (
-                    <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Diagnostics Panel</h1>
-                          <p className="text-xs text-slate-400 mt-0.5 font-medium">Diagnose connections, database write states, active providers, and execution trace logs.</p>
-                        </div>
-                        
-                        <button
-                          onClick={handleRunFullDiagnostics}
-                          disabled={isDiagnosing}
-                          className="px-4 py-2 bg-slate-950 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-semibold rounded-md shadow-sm transition flex items-center gap-1.5"
-                        >
-                          {isDiagnosing ? (
-                            <>
-                              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                              Rodando...
-                            </>
-                          ) : 'Run Full Diagnostic'}
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Status Card Grid */}
-                        <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm space-y-4">
-                          <span className="text-xs font-bold text-slate-950 block">Status de Componentes</span>
-                          
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Servidor Backend:</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.backend === 'healthy' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.backend}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Banco de Dados (Local):</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.database === 'healthy' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.database}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Armazenamento Local (Storage):</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.storage === 'healthy' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.storage}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Vector DB (RAG):</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.vectorDb === 'healthy' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.vectorDb}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Provedor Conectado:</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.provider === 'valid' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.provider}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Catálogo de Modelos:</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.models === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.models}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-slate-500 font-medium">Main Agent Coordenador:</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.mainAgent === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.mainAgent}
-                              </span>
-                            </div>
-                          </div>
-
-                          {diagnosticsResult && (
-                            <div className={`p-3 rounded-lg border text-xs font-semibold ${diagnosticsResult === 'passed' ? 'bg-emerald-50/50 border-emerald-200 text-emerald-800' : 'bg-rose-50/50 border-rose-200 text-rose-800'}`}>
-                              {diagnosticsResult === 'passed' 
-                                ? '🎉 Todos os sistemas passaram nos testes de diagnóstico.'
-                                : '❌ Diagnóstico apontou falhas críticas de infraestrutura ou modelo.'}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Console & Audit log outputs */}
-                        <div className="lg:col-span-2 space-y-4">
-                          {/* Terminal Logs */}
-                          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col h-64">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Live Diagnostic Console</span>
-                            <div className="flex-1 overflow-y-auto font-mono text-[10px] text-emerald-400 space-y-1">
-                              {diagnosticsLogs.length === 0 ? (
-                                <div className="text-slate-500 italic">Nenhum teste de diagnóstico em andamento. Clique em "Run Full Diagnostic" acima.</div>
-                              ) : (
-                                diagnosticsLogs.map((l, idx) => <div key={idx}>{l}</div>)
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Audit events list */}
-                          <div className="bg-white border border-slate-200/60 rounded-xl p-4 shadow-sm space-y-2">
-                            <span className="text-xs font-bold text-slate-950 block">Últimos Eventos de Auditoria (Runtime Logs)</span>
-                            <div className="max-h-60 overflow-y-auto text-[10px] border border-slate-100 rounded-md">
-                              <table className="w-full text-left">
-                                <thead className="bg-slate-50 border-b border-slate-100">
-                                  <tr>
-                                    <th className="p-2 font-semibold text-slate-500">Timestamp</th>
-                                    <th className="p-2 font-semibold text-slate-500">Event</th>
-                                    <th className="p-2 font-semibold text-slate-500">Status</th>
-                                    <th className="p-2 font-semibold text-slate-500">Duration</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50 font-mono">
-                                  {timelineLogs.length === 0 ? (
-                                    <tr>
-                                      <td colSpan={4} className="p-4 text-center text-slate-400 italic">Sem logs operacionais salvos.</td>
-                                    </tr>
-                                  ) : (
-                                    timelineLogs.slice(0, 50).map((log: any, idx) => (
-                                      <tr key={idx}>
-                                        <td className="p-2 text-slate-400">{new Date(log.created_at || Date.now()).toLocaleTimeString()}</td>
-                                        <td className="p-2 text-slate-700 font-semibold">{log.event}</td>
-                                        <td className="p-2">
-                                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${log.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : log.status === 'failed' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>
-                                            {log.status}
-                                          </span>
-                                        </td>
-                                        <td className="p-2 text-slate-500">{log.duration_ms || log.durationMs || 0}ms</td>
-                                      </tr>
-                                    ))
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                </div>
-              )}
+              {/* 9. APP: CONFIGURAÇÕES */}
+              {currentTab === 'settings' && companyProfile.setupComplete && <SettingsWorkspace companyName={companyProfile.name} onOpenProviders={() => setCurrentTab('providers')} onOpenAgents={() => setCurrentTab('agents')} />}
 
               {/* 10. APP: ONBOARDING WIZARD */}
               {currentTab === 'onboarding' && !isDashboardUnlocked && (
