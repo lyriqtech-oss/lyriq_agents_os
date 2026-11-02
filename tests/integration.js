@@ -273,6 +273,12 @@ setTimeout(async () => {
       body: JSON.stringify({ workspaceId: 'workspace_123', prompt: 'Crie uma página de apresentação.', files: { 'index.html': '<h1>Oi</h1>', 'styles.css': '', 'script.js': '' } })
     });
     assert.strictEqual(codeAssistWithoutRealProvider.status, 400);
+    const unavailableCodeModel = await fetch(`${baseUrl}/code/assist`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', mode: 'create', modelId: 'model-not-in-connection', prompt: 'Crie uma página de apresentação.', files: { 'index.html': '<h1>Oi</h1>', 'styles.css': '', 'script.js': '' } })
+    });
+    assert.strictEqual(unavailableCodeModel.status, 400);
+    assert.strictEqual((await unavailableCodeModel.json()).error.code, 'CODE_MODEL_INVALID');
     const codeAssistError = await codeAssistWithoutRealProvider.json();
     assert.strictEqual(codeAssistError.error.code, 'CODE_PROVIDER_REQUIRED');
     console.log('✅ Code assistant requires a real provider and does not pretend to edit files.');
