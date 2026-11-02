@@ -2,8 +2,16 @@ import assert from 'assert';
 import { selectOrchestrationAgents, orchestrateMultiAgentTask } from '../src/services/main_chat_service.js';
 import { getModelsForProvider } from '../providersCatalog.js';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
+import { reviewGeneratedDesign } from '../src/services/code_design_quality.js';
 
 console.log('=== RUNNING UNIT TESTS ===');
+
+const weakDesign = reviewGeneratedDesign({ creating: true, appProject: true, html: '<header>Agenda 🗓️</header><main><form></form></main>', css: 'body { place-items: center } .container { max-width: 600px; margin: 0 auto; box-shadow: 0 8px 30px #0002; }', script: '' });
+assert.ok(weakDesign.some(issue => issue.includes('emojis')));
+assert.ok(weakDesign.some(issue => issue.includes('coluna estreita')));
+assert.ok(weakDesign.some(issue => issue.includes('formulário')));
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: false, appProject: true, html: '', css: '', script: '' }), []);
+console.log('✅ Code design quality gate rejects generic app layouts and fake forms.');
 
 assert.strictEqual(PLAN_CATALOG.personal.pro.priceCents, 4990);
 assert.strictEqual(PLAN_CATALOG.business.max.priceCents, 59990);

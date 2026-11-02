@@ -12,6 +12,9 @@
 .code-chat-message.user{align-self:flex-end;background:#153746;color:white}
 .code-chat-message strong{display:block;margin-bottom:4px;font-size:10px;letter-spacing:.04em;text-transform:uppercase;opacity:.7}
 .code-chat-message p{margin:0}
+.code-chat-thinking{border:1px solid #b8e6e9;background:#ecf8f8;animation:code-thinking 1.7s ease-in-out infinite}
+@keyframes code-thinking{50%{background:#dcf3f3;border-color:#54bcca}}
+@media(prefers-reduced-motion:reduce){.code-chat-thinking{animation:none}}
 .code-builder-model-badge{font-size:10px;color:#317580;background:#e8f5f4;padding:5px 7px;border-radius:6px;overflow-wrap:anywhere}
 .code-builder-mode{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;border-radius:9px;background:#eef3f4}
 .code-builder-mode button{border:0;border-radius:7px;padding:9px 8px;background:transparent;color:#5f7381;font-size:12px;font-weight:650;cursor:pointer}

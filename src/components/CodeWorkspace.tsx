@@ -11,6 +11,7 @@ const HISTORY_KEY = 'agent-center-code-history-v1';
 const PROJECT_ID_KEY = 'agent-center-code-project-id-v1';
 const PROJECT_TYPE_KEY = 'agent-center-code-project-type-v1';
 const CONVERSATION_KEY = 'agent-center-code-conversation-v1';
+const MODEL_KEY = 'agent-center-code-model-v1';
 type ConversationMessage = { role: 'user' | 'agent'; text: string };
 function loadConversation(): ConversationMessage[] {
   try { const saved = JSON.parse(localStorage.getItem(CONVERSATION_KEY) || '[]'); return Array.isArray(saved) ? saved.filter(item => (item?.role === 'user' || item?.role === 'agent') && typeof item.text === 'string').slice(-20) : []; }
@@ -22,7 +23,7 @@ function inferProjectType(prompt: string, currentType: 'site' | 'app', creating:
 }
 const STARTER_FILES: ProjectFiles = {
   'index.html': '<main class="card">\n  <span class="eyebrow">Agent Center</span>\n  <h1>Seu projeto começa aqui.</h1>\n  <p>Edite os arquivos ao lado. A prévia aparece automaticamente.</p>\n  <button id="hello">Testar interação</button>\n</main>',
-  'styles.css': 'body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1220; color: #f8fafc; font-family: Inter, Arial, sans-serif; }\n.card { max-width: 520px; padding: 48px; }\n.eyebrow { color: #22d3ee; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }\nh1 { font-size: clamp(32px, 5vw, 56px); line-height: 1.05; letter-spacing: -.04em; }\np { color: #cbd5e1; line-height: 1.6; }\nbutton { margin-top: 16px; padding: 12px 18px; border: 0; border-radius: 10px; background: #22d3ee; color: #082f49; font-weight: 700; cursor: pointer; }',
+  'styles.css': 'body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1220; color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; }\n.card { max-width: 520px; padding: 48px; }\n.eyebrow { color: #22d3ee; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }\nh1 { font-size: clamp(32px, 5vw, 56px); line-height: 1.05; letter-spacing: -.04em; }\np { color: #cbd5e1; line-height: 1.6; }\nbutton { margin-top: 16px; padding: 12px 18px; border: 0; border-radius: 10px; background: #22d3ee; color: #082f49; font-weight: 700; cursor: pointer; }',
   'script.js': 'document.querySelector("#hello")?.addEventListener("click", () => {\n  document.querySelector("#hello").textContent = "Funcionou!";\n});'
 };
 
@@ -52,7 +53,8 @@ function buildPreview(files: ProjectFiles, page = 'index.html'): string {
   const css = Object.entries(files).filter(([name]) => name.endsWith('.css')).map(([, content]) => content).join('\n');
   const js = Object.entries(files).filter(([name]) => name.endsWith('.js')).map(([, content]) => content).join('\n');
   const bridge = `var originalAddEventListener=document.addEventListener.bind(document);document.addEventListener=function(type,listener,options){if(type==='DOMContentLoaded'&&document.readyState!=='loading'){queueMicrotask(function(){listener(new Event(type))});return}originalAddEventListener(type,listener,options)};function sendForm(form){if(form.checkValidity())form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));else form.reportValidity()}document.addEventListener('click',function(event){var button=event.target.closest?.('button[type="submit"]');if(button&&button.form){event.preventDefault();sendForm(button.form)}},true);document.addEventListener('keydown',function(event){if(event.key==='Enter'&&event.target.matches?.('form input:not([type="textarea"])')){event.preventDefault();sendForm(event.target.form)}},true);window.AgentCenter={data:{}};['list','create','update','remove'].forEach(function(action){window.AgentCenter.data[action]=function(collection,a,b){return new Promise(function(resolve,reject){var requestId=Math.random().toString(36).slice(2)+Date.now();var timer=setTimeout(function(){window.removeEventListener('message',onReply);reject(new Error('O backend demorou para responder.'))},10000);function onReply(event){if(event.source!==window.parent||event.data?.source!=='agent-center-data-result'||event.data.requestId!==requestId)return;clearTimeout(timer);window.removeEventListener('message',onReply);event.data.ok?resolve(event.data.data):reject(new Error(event.data.error||'Falha nos dados'))}window.addEventListener('message',onReply);window.parent.postMessage({source:'agent-center-data',requestId:requestId,action:action,collection:collection,id:action==='update'||action==='remove'?a:undefined,record:action==='create'?a:action==='update'?b:undefined},'*')})}});`;
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>${css.replace(/<\/style/gi, '<\\/style')}</style><script>${bridge}window.addEventListener('error',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:event.message},'*')});window.addEventListener('unhandledrejection',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:String(event.reason)},'*')});<\/script></head><body>${html}<script>${js.replace(/<\/script/gi, '<\\/script')}<\/script></body></html>`;
+  const audit = `window.addEventListener('load',function(){var h=document.querySelector('h1');if(!h)return;function rgb(v){var m=v.match(/[\\d.]+/g);return m&&m.length>=3?m.slice(0,3).map(Number):null}function luminance(c){var n=c.map(v=>{v=v/255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*n[0]+.7152*n[1]+.0722*n[2]}var color=rgb(getComputedStyle(h).color),node=h,bg=null;while(node){var s=getComputedStyle(node);if(s.backgroundImage!=='none')break;if(s.backgroundColor&&!/rgba?\\([^)]*,\\s*0\\s*\\)$/.test(s.backgroundColor)){bg=rgb(s.backgroundColor);if(bg)break}node=node.parentElement}if(color&&bg){var a=luminance(color),b=luminance(bg),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);if(ratio<3)window.parent.postMessage({source:'agent-center-preview',type:'audit',issues:['O título principal tem pouco contraste com o fundo.']},'*')}});`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>${css.replace(/<\/style/gi, '<\\/style')}</style><script>${bridge}window.addEventListener('error',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:event.message},'*')});window.addEventListener('unhandledrejection',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:String(event.reason)},'*')});${audit}<\/script></head><body>${html}<script>${js.replace(/<\/script/gi, '<\\/script')}<\/script></body></html>`;
 }
 
 export default function CodeWorkspace() {
@@ -66,6 +68,7 @@ export default function CodeWorkspace() {
   const [agentBusy, setAgentBusy] = useState(false);
   const [agentError, setAgentError] = useState('');
   const [previewError, setPreviewError] = useState('');
+  const [previewIssues, setPreviewIssues] = useState<string[]>([]);
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [previewPage, setPreviewPage] = useState('index.html');
   const [expandedPreview, setExpandedPreview] = useState(false);
@@ -107,7 +110,10 @@ export default function CodeWorkspace() {
       const preferred = valid.find((item: ProviderConnection) => item.provider === 'gemini') || valid[0];
       if (preferred) {
         setProviderId(preferred.id);
-        setModelId(preferred.selected_chat_model || '');
+        const available = (preferred.available_models || []).map((item: string | { id: string }) => typeof item === 'string' ? item : item.id);
+        const savedModel = localStorage.getItem(MODEL_KEY);
+        const qualityModel = preferred.provider === 'gemini' && available.includes('gemini-2.5-pro') ? 'gemini-2.5-pro' : preferred.selected_chat_model || '';
+        setModelId(savedModel && available.includes(savedModel) ? savedModel : qualityModel);
       }
     }).catch(() => setAgentError('Não foi possível carregar os modelos. Verifique a API local.'));
   }, []);
@@ -123,6 +129,7 @@ export default function CodeWorkspace() {
     const onMessage = (event: MessageEvent) => {
       if (event.source !== previewRef.current?.contentWindow && event.source !== expandedPreviewRef.current?.contentWindow) return;
       if (event.data?.source === 'agent-center-preview' && event.data.type === 'error') setPreviewError(String(event.data.message).slice(0, 500));
+      if (event.data?.source === 'agent-center-preview' && event.data.type === 'audit' && Array.isArray(event.data.issues)) setPreviewIssues(event.data.issues.map((issue: unknown) => String(issue).slice(0, 200)).slice(0, 3));
       if (event.data?.source !== 'agent-center-data') return;
       const { requestId, action, collection, id, record } = event.data;
       if (typeof requestId !== 'string' || !['list', 'create', 'update', 'remove'].includes(action) || !/^[a-z][a-z0-9_]{1,31}$/.test(collection || '') || (id && !/^[a-zA-Z0-9_-]{8,80}$/.test(id))) return;
@@ -188,6 +195,8 @@ export default function CodeWorkspace() {
 
   const requestProposal = async () => {
     setAgentError('');
+    setPreviewError('');
+    setPreviewIssues([]);
     setProposal(null);
     setAgentBusy(true);
     const prompt = agentPrompt.trim();
@@ -204,6 +213,7 @@ export default function CodeWorkspace() {
       const body = await response.json();
       if (!response.ok || !body.ok) throw new Error(body.error?.message || 'O agente não conseguiu preparar a alteração.');
       setProposal(body.data);
+      if (body.data.model && body.data.model !== modelId) { setModelId(body.data.model); localStorage.setItem(MODEL_KEY, body.data.model); }
       setProposalMode(requestedMode);
       setProposalType(requestedType);
       setConversation(previous => [...previous, { role: 'agent' as const, text: body.data.summary }].slice(-20));
@@ -216,8 +226,31 @@ export default function CodeWorkspace() {
     }
   };
 
+  const repairProposal = async () => {
+    if (!proposal || (!previewError && !previewIssues.length)) return;
+    setAgentBusy(true);
+    setAgentError('');
+    const brokenFiles = { ...shownFiles };
+    try {
+      const response = await fetch('/api/code/assist', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: 'workspace_123', prompt: `Corrija os problemas da prévia: ${[previewError, ...previewIssues].filter(Boolean).join(' ')}. Mantenha o projeto e a direção visual. Verifique contraste, seletores DOM, inicialização e chamadas de dados.`, files: brokenFiles, mode: 'edit', projectType: proposalType, providerConnectionId: providerId, modelId })
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw new Error(body.error?.message || 'Não foi possível corrigir a prévia.');
+      const repairedFiles = { ...brokenFiles, ...Object.fromEntries((body.data.changes as CodeProposal['changes']).map(change => [change.name, change.after])) };
+      const changes = Object.entries(repairedFiles).filter(([name, content]) => content !== files[name]).map(([name, after]) => ({ name, before: files[name], after }));
+      setProposal({ ...body.data, summary: `Prévia corrigida: ${body.data.summary}`, changes });
+      setPreviewError('');
+      setPreviewIssues([]);
+      setStatus('Correção gerada. Revise a prévia antes de aplicar.');
+    } catch (error: any) { setAgentError(error.message || 'Falha ao corrigir a prévia.'); }
+    finally { setAgentBusy(false); }
+  };
+
   const applyProposal = () => {
     if (!proposal) return;
+    if (previewError || previewIssues.length) { setAgentError('A prévia apresentou um problema. Corrija antes de aplicar.'); return; }
     if (proposal.changes.some(change => files[change.name] !== change.before)) {
       setAgentError('Os arquivos mudaram após a proposta. Gere uma nova proposta antes de aplicar.');
       setProposal(null);
@@ -274,10 +307,11 @@ export default function CodeWorkspace() {
           </div>
           <span className="code-builder-model-badge">{selectedProvider ? `${selectedProvider.provider} · ${modelId}` : 'Conecte um modelo'}</span>
         </div>
-        <div className="code-chat-feed" aria-label="Conversa do projeto">{conversation.length ? conversation.map((message, index) => <div key={index} className={`code-chat-message ${message.role}`}><strong>{message.role === 'user' ? 'Você' : 'Agent Center'}</strong><p>{message.text}</p></div>) : <div className="code-chat-empty"><Sparkles className="h-5 w-5" /><strong>O que vamos criar?</strong><p>Conte sua ideia em linguagem natural. Se precisar guardar dados, o agente prepara isso no projeto.</p></div>}</div>
+        <div className="code-chat-feed" aria-label="Conversa do projeto">{conversation.length ? conversation.map((message, index) => <div key={index} className={`code-chat-message ${message.role}`}><strong>{message.role === 'user' ? 'Você' : 'Agent Center'}</strong><p>{message.text}</p></div>) : <div className="code-chat-empty"><Sparkles className="h-5 w-5" /><strong>O que vamos criar?</strong><p>Conte sua ideia em linguagem natural. Se precisar guardar dados, o agente prepara isso no projeto.</p></div>}{agentBusy && <div className="code-chat-message agent code-chat-thinking" role="status"><strong>Agent Center</strong><p>Definindo direção visual e construindo a prévia<span aria-hidden="true">…</span></p></div>}</div>
         {projectType === 'app' && backendStatus && <p className="text-xs text-slate-500">{backendStatus}</p>}
         <textarea aria-label="Mensagem para o agente de código" value={agentPrompt} onChange={event => setAgentPrompt(event.target.value)} rows={2} placeholder="Descreva o que quer criar ou peça uma mudança..." className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" />
-        <div className="code-builder-submit"><div><label htmlFor="code-model">Modelo</label><select id="code-model" value={modelId} onChange={event => setModelId(event.target.value)}>{availableModels.map(name => <option key={name} value={name}>{name}</option>)}</select></div><button type="button" onClick={requestProposal} disabled={agentBusy || agentPrompt.trim().length < 10 || !providerId || !modelId} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{agentBusy ? 'Criando...' : <><ArrowUp className="h-4 w-4" /> Enviar</>}</button></div>
+        <div className="code-builder-submit"><div><label htmlFor="code-model">Modelo</label><select id="code-model" value={modelId} onChange={event => { setModelId(event.target.value); localStorage.setItem(MODEL_KEY, event.target.value); }}>{availableModels.map(name => <option key={name} value={name}>{name}</option>)}</select></div><button type="button" onClick={requestProposal} disabled={agentBusy || agentPrompt.trim().length < 10 || !providerId || !modelId} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{agentBusy ? 'Criando...' : <><ArrowUp className="h-4 w-4" /> Enviar</>}</button></div>
+        {modelId === 'gemini-2.5-pro' && <p className="code-builder-hint">Modelo escolhido para melhor qualidade visual; usa mais cota da sua API.</p>}
         {agentError && <p role="alert" className="mt-2 text-xs text-red-700">{agentError}</p>}
         {proposal && <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
           <p className="text-sm font-semibold text-slate-900">{proposal.summary}</p>
@@ -289,11 +323,12 @@ export default function CodeWorkspace() {
               <div><p className="mb-1 font-semibold text-slate-600">Depois</p><pre className="max-h-48 overflow-auto rounded bg-slate-100 p-2 whitespace-pre-wrap">{change.after}</pre></div>
             </div>
           </details>)}
-          <div className="flex gap-2"><button type="button" onClick={applyProposal} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950">Aplicar mudanças</button><button type="button" onClick={() => setProposal(null)} className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">Descartar</button></div>
+          {(previewError || previewIssues.length > 0) && <p role="alert" className="text-xs text-red-700">A prévia precisa de ajuste: {[previewError, ...previewIssues].filter(Boolean).join(' ')}</p>}
+          <div className="flex flex-wrap gap-2"><button type="button" onClick={applyProposal} disabled={!!previewError || !!previewIssues.length || agentBusy} className="rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 disabled:cursor-not-allowed disabled:opacity-40">Aplicar mudanças</button>{(previewError || previewIssues.length > 0) && <button type="button" onClick={repairProposal} disabled={agentBusy} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-40">Corrigir com agente</button>}<button type="button" onClick={() => { setProposal(null); setPreviewError(''); setPreviewIssues([]); }} className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700">Descartar</button></div>
         </div>}
       </section>
       <div className={`code-builder-workspace ${view === 'code' ? 'show-code' : ''}`}>
-        <div className="code-builder-tabs"><div role="tablist" aria-label="Visualização do projeto"><button role="tab" aria-selected={view === 'preview'} className={view === 'preview' ? 'active' : ''} onClick={() => setView('preview')}>Prévia</button><button role="tab" aria-selected={view === 'code'} className={view === 'code' ? 'active' : ''} onClick={() => setView('code')}>Código</button></div><span>{previewError ? 'Erro no JavaScript' : 'Prévia local · salva automaticamente'}</span></div>
+        <div className="code-builder-tabs"><div role="tablist" aria-label="Visualização do projeto"><button role="tab" aria-selected={view === 'preview'} className={view === 'preview' ? 'active' : ''} onClick={() => setView('preview')}>Prévia</button><button role="tab" aria-selected={view === 'code'} className={view === 'code' ? 'active' : ''} onClick={() => setView('code')}>Código</button></div><span>{previewError || previewIssues.length ? 'Prévia precisa de ajuste' : 'Prévia local · salva automaticamente'}</span></div>
         {view === 'code' && <>
         <aside className="border-b border-slate-800 p-4 text-slate-200 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between">
