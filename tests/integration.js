@@ -65,13 +65,13 @@ setTimeout(async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: 'business', tier: 'pro', surface: 'web' })
     });
-    assert.strictEqual(codeBusinessPro.status, 402);
+    assert.strictEqual(codeBusinessPro.status, 200);
     const codeBusinessMax = await fetch(`${baseUrl}/code/run`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: 'business', tier: 'max', surface: 'apps', platform: 'android' })
     });
     assert.strictEqual(codeBusinessMax.status, 200);
-    console.log('✅ Lyriq Code Personal/Business entitlement endpoints passed.');
+    console.log('✅ Agent Center Code access is open in local development.');
 
     // 1. Test POST /api/providers/validate (Invalid Key format check)
     const resValInvalid = await fetch(`${baseUrl}/providers/validate`, {

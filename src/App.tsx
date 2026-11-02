@@ -841,6 +841,7 @@ export default function App() {
   };
 
   const hasPlanAccess = (userPlan: string = 'free', tabOrFeature: string): boolean => {
+    if (import.meta.env.DEV) return true;
     const reqPlan = FEATURE_PLAN_REQUIREMENTS[tabOrFeature] || 'free';
     const userLevel = PLAN_LEVELS[userPlan.toLowerCase()] || 1;
     const reqLevel = PLAN_LEVELS[reqPlan] || 1;
@@ -7787,14 +7788,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
 
               <button
-                onClick={() => {
-                  const tier = companyProfile.plan || currentUser?.plan || onboardingPlan || 'free';
-                  if (hasCodeAccess(workspaceMode, tier)) setCurrentTab('code');
-                  else {
-                    setLockedFeatureName('Lyriq Code Business Max');
-                    setIsUpgradeModalOpen(true);
-                  }
-                }}
+                onClick={() => setCurrentTab('code')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'code' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
@@ -7803,9 +7797,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   <Code2 className="w-4 h-4 shrink-0 text-cyan-600" />
                   <span>Agent Center Code</span>
                 </div>
-                <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${workspaceMode === 'business' ? 'bg-amber-50 text-amber-700' : 'bg-cyan-50 text-cyan-700'}`}>
-                  {workspaceMode === 'business' ? 'MAX+' : 'PERSONAL'}
-                </span>
+                {import.meta.env.DEV && <span className="px-1.5 py-0.5 rounded-full bg-cyan-50 text-[8px] font-bold text-cyan-700">LIVRE</span>}
               </button>
 
               <button
@@ -8515,7 +8507,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               {/* 1. APP: EXECUTIVE DASHBOARD */}
               {currentTab === 'code' && (
-                !hasCodeAccess(workspaceMode, companyProfile.plan || currentUser?.plan || onboardingPlan || 'free') ? (
+                !import.meta.env.DEV && !hasCodeAccess(workspaceMode, companyProfile.plan || currentUser?.plan || onboardingPlan || 'free') ? (
                   <div className="m-auto max-w-lg rounded-2xl bg-white p-8 text-center">
                     <Lock className="mx-auto h-10 w-10 text-amber-500" />
                     <h1 className="mt-4 text-xl font-bold text-slate-950">Agent Center Code não está incluído no seu plano</h1>
