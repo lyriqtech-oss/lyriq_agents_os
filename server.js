@@ -1678,7 +1678,7 @@ const executeAgentFlow = async (automationId, source = 'manual', input = '') => 
       previousOutput = redactSecrets(runOutputGuard(answer)).slice(0, 12000);
       stepResults.push({ stepId: step.id, type: 'agent_task', agentId: agent.id, agentName: agent.name, output: previousOutput });
     }
-    const run = { id: `autorun-${crypto.randomUUID()}`, automationId: auto.id, status: error ? 'failed' : stopped ? 'stopped' : 'completed', source, startedAt, finishedAt: new Date().toISOString(), steps: stepResults, error, creditsUsed: null };
+    const run = { id: `autorun-${crypto.randomUUID()}`, automationId: auto.id, status: error ? 'failed' : stopped ? 'stopped' : 'completed', source, input: String(input || '').slice(0, 8000), startedAt, finishedAt: new Date().toISOString(), steps: stepResults, error, creditsUsed: null };
     const freshDb = readDb();
     freshDb.automationRuns ||= [];
     freshDb.automationRuns.push(run);
@@ -3889,7 +3889,11 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (auto.kind === 'agent_flow') {
-        const result = await executeAgentFlow(auto.id, 'manual');
+        const body = await parseBody(req);
+        if (typeof body.input !== 'string' && body.input !== undefined || String(body.input || '').length > 8000) {
+          return sendError(res, 400, 'AUTOMATION_INPUT_INVALID', 'A entrada deve ter até 8.000 caracteres.', 'Reduza o texto do teste.', 'blocking', null, reqId);
+        }
+        const result = await executeAgentFlow(auto.id, 'manual', body.input || '');
         if (result.busy) return sendError(res, 409, 'AUTOMATION_BUSY', 'Esta automação já está em execução.', 'Aguarde a execução atual.', 'blocking', null, reqId);
         if (result.limit) return sendError(res, 429, 'AUTOMATION_MONTHLY_LIMIT', 'O limite mensal de execuções deste fluxo foi atingido.', 'Aguarde o próximo mês ou ajuste o limite.', 'blocking', null, reqId);
         return sendSuccess(res, { triggered: true, automation: result.automation, run: result.run }, reqId);

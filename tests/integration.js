@@ -224,14 +224,17 @@ setTimeout(async () => {
     });
     assert.strictEqual(flowResponse.status, 200);
     const flow = (await flowResponse.json()).data;
-    const flowRunResponse = await fetch(`${baseUrl}/automations/${flow.id}/trigger`, { method: 'POST' });
+    const flowRunResponse = await fetch(`${baseUrl}/automations/${flow.id}/trigger`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: 'Teste manual com uma pergunta nova.' }) });
     assert.strictEqual(flowRunResponse.status, 200);
     const flowRun = (await flowRunResponse.json()).data.run;
     assert.strictEqual(flowRun.status, 'failed');
+    assert.strictEqual(flowRun.input, 'Teste manual com uma pergunta nova.');
     assert.strictEqual(flowRun.creditsUsed, null);
     assert.ok(flowRun.error.includes('modelo real'));
     const flowHistory = await fetch(`${baseUrl}/automations/${flow.id}/runs`).then(response => response.json());
     assert.ok(flowHistory.data.some(run => run.id === flowRun.id));
+    const oversizedInput = await fetch(`${baseUrl}/automations/${flow.id}/trigger`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: 'a'.repeat(8001) }) });
+    assert.strictEqual(oversizedInput.status, 400);
     console.log('✅ Agent automation saves runs and reports a missing real model instead of a fake success.');
     const scheduledFlow = await fetch(`${baseUrl}/automations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'agent_flow', workspaceId: 'workspace_123', name: 'Fluxo agendado', trigger: { type: 'interval', minutes: 5 }, steps: [{ id: 's1', type: 'agent_task', agentId: savedSpecialist.id, instruction: 'Resuma as informações disponíveis.' }, { id: 'c1', type: 'condition', contains: 'aprovado', onFalse: 'stop' }] }) }).then(response => response.json());
     assert.strictEqual(scheduledFlow.data.status, 'draft');

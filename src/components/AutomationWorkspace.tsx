@@ -9,7 +9,7 @@ type Step = AgentStep | ConditionStep;
 type Trigger = { type: 'manual' | 'webhook' | 'interval'; minutes?: number };
 type Flow = { id: string; kind: string; name: string; description: string; status: string; trigger: Trigger; steps: Step[]; nextRunAt?: string | null };
 type RunStep = { stepId: string; type?: string; agentName?: string; output: string; skipped?: boolean; matched?: boolean };
-type Run = { id: string; status: string; source?: string; startedAt: string; error?: string; steps?: RunStep[] };
+type Run = { id: string; status: string; source?: string; input?: string; startedAt: string; error?: string; steps?: RunStep[] };
 const agentStep = (agentId = ''): AgentStep => ({ id: crypto.randomUUID(), type: 'agent_task', agentId, instruction: '' });
 const conditionStep = (): ConditionStep => ({ id: crypto.randomUUID(), type: 'condition', contains: '', onFalse: 'stop' });
 const tokenKey = (id: string) => `agent-center-hook-token-${id}`;
@@ -25,6 +25,7 @@ export default function AutomationWorkspace() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [testInput, setTestInput] = useState('');
   const savedFlow = useMemo(() => flows.find(flow => flow.id === draft?.id), [flows, draft?.id]);
   const changed = !!draft?.id && JSON.stringify({ name: draft.name, description: draft.description, trigger: draft.trigger, steps: draft.steps }) !== JSON.stringify({ name: savedFlow?.name, description: savedFlow?.description, trigger: savedFlow?.trigger, steps: savedFlow?.steps });
 
@@ -97,7 +98,7 @@ export default function AutomationWorkspace() {
     if (!draft?.id || changed) { setError('Salve as alterações antes de executar.'); return; }
     setBusy(true); setError(''); setNotice('');
     try {
-      const response = await fetch(`/api/automations/${draft.id}/trigger`, { method: 'POST' });
+      const response = await fetch(`/api/automations/${draft.id}/trigger`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: testInput }) });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error?.message || 'Não foi possível executar o fluxo.');
       setRuns(previous => [result.data.run, ...previous]);
@@ -160,7 +161,7 @@ export default function AutomationWorkspace() {
           {step?.type === 'agent_task' && <><label>Agente<select value={step.agentId} onChange={event => updateStep({ agentId: event.target.value })}><option value="">Escolha um agente</option>{agents.map(agent => <option key={agent.id} value={agent.id}>{agent.name}{agent.model_id ? '' : ' · sem modelo'}</option>)}</select></label><label>Instrução<textarea rows={5} value={step.instruction} onChange={event => updateStep({ instruction: event.target.value })} placeholder="Descreva a tarefa que este agente deve executar."/></label><p className="auto-help">A resposta desta etapa segue como contexto para a próxima.</p></>}
           {step?.type === 'condition' && <><label>Continuar se a resposta contiver<input value={step.contains} onChange={event => updateStep({ contains: event.target.value })} placeholder="Ex.: aprovado"/></label><label>Se não contiver<select value={step.onFalse} onChange={event => updateStep({ onFalse: event.target.value as 'stop' | 'skip_next' })}><option value="stop">Parar o fluxo</option><option value="skip_next">Pular o próximo agente</option></select></label><p className="auto-help">A condição verifica o texto da resposta anterior, sem fazer outra chamada de IA.</p></>}
         </section></div>
-        <section className="auto-runs"><h3>Execuções recentes</h3>{runs.length === 0 ? <p>Nenhuma execução ainda. Salve e execute o fluxo para ver os resultados.</p> : runs.map(item => <div className="auto-run" key={item.id}><div><strong className={item.status === 'failed' ? 'failed' : 'success'}>{item.status === 'completed' ? 'Concluída' : item.status === 'stopped' ? 'Parada pela condição' : 'Falhou'}</strong><time>{new Date(item.startedAt).toLocaleString('pt-BR')} · {item.source || 'manual'}</time></div>{item.error && <p role="alert">{item.error}</p>}{item.steps?.map(result => <details key={result.stepId}><summary>{result.agentName || (result.type === 'condition' ? 'Condição' : 'Etapa')} · ver resultado</summary><pre>{result.output}</pre></details>)}</div>)}</section>
+        <section className="auto-runs"><h3>Teste ao vivo</h3><p>Escreva uma entrada para o primeiro agente e clique em “Executar agora”. Cada execução chama o modelo configurado e aparece abaixo.</p><label className="auto-test-label" htmlFor="auto-test-input">Entrada do teste</label><textarea id="auto-test-input" className="auto-test-input" value={testInput} onChange={event => setTestInput(event.target.value)} maxLength={8000} rows={3} placeholder="Ex.: Responda com uma saudação curta em português e diga a data de hoje."/><div className="auto-test-actions"><span>{testInput.length}/8.000 caracteres</span><button className="auto-primary" disabled={busy || !draft.id || changed} onClick={run}><CirclePlay size={16}/>{busy ? 'Executando com IA...' : 'Executar teste ao vivo'}</button></div><h3>Execuções recentes</h3>{runs.length === 0 ? <p>Nenhuma execução ainda. Salve e execute o fluxo para ver os resultados.</p> : runs.map(item => <div className="auto-run" key={item.id}><div><strong className={item.status === 'failed' ? 'failed' : 'success'}>{item.status === 'completed' ? 'Concluída' : item.status === 'stopped' ? 'Parada pela condição' : 'Falhou'}</strong><time>{new Date(item.startedAt).toLocaleString('pt-BR')} · {item.source || 'manual'}</time></div>{item.input && <p className="auto-run-input"><strong>Entrada:</strong> {item.input}</p>}{item.error && <p role="alert">{item.error}</p>}{item.steps?.map(result => <details key={result.stepId} open={item.id === runs[0]?.id}><summary>{result.agentName || (result.type === 'condition' ? 'Condição' : 'Etapa')} · ver resultado</summary><pre>{result.output}</pre></details>)}</div>)}</section>
       </div></> : <div className="auto-welcome"><span><ShieldCheck size={28}/></span><h2>Crie seu primeiro fluxo</h2><p>Conecte tarefas, agentes e condições. Escolha quando executar.</p><button className="auto-primary" onClick={start}><Plus size={16}/> Novo fluxo</button></div>}</main></div>
   </div>;
 }
