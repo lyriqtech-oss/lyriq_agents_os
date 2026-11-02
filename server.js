@@ -24,6 +24,7 @@ import { CONSOLIDATED_TABLES_CATALOG, SPRINT_PLAN, MasterPromptGenerator, Consol
 import { MANDATORY_TEST_CASES, QAReportService } from './src/services/qa_report_service.js';
 import { FALLBACK_CATALOG, canUseModel, getModelsForProvider } from './providersCatalog.js';
 import { PLAN_CATALOG, hasCodeAccess } from './plansCatalog.js';
+import { validateCodeFiles, parseAppManifest, validateRecordInput } from './src/services/code_project_service.js';
 
 // Load environment variables from .env if present
 const dotenvPath = path.resolve('./.env');
@@ -1709,6 +1710,19 @@ const server = http.createServer(async (req, res) => {
     pathName = '/api/' + pathName.substring(8);
   }
 
+  if (pathName.startsWith('/api/code/projects/')) {
+    const origin = req.headers.origin;
+    if (origin) {
+      let allowed = false;
+      try { allowed = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(origin).hostname); } catch { /* invalid origin */ }
+      if (!allowed) {
+        res.writeHead(403, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, error: { code: 'CODE_LOCAL_ONLY', message: 'Origem não permitida para dados locais.' } }));
+        return;
+      }
+    }
+  }
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PATCH, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -3313,11 +3327,76 @@ const server = http.createServer(async (req, res) => {
     // ----------------------------------------------------
 
     // The coding agent proposes file changes; the browser applies them only after review.
+    const codeProjectMatch = pathName.match(/^\/api\/code\/projects\/([a-zA-Z0-9_-]{8,80})(?:\/collections\/([a-z][a-z0-9_]{1,31})(?:\/([a-zA-Z0-9_-]{8,80}))?)?$/);
+    if (codeProjectMatch) {
+      const remote = req.socket.remoteAddress || '';
+      if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remote)) {
+        return sendError(res, 403, 'CODE_LOCAL_ONLY', 'Projetos com dados estão disponíveis apenas no ambiente local.', '', 'blocking', null, reqId);
+      }
+      const [, projectId, collectionName, recordId] = codeProjectMatch;
+      const db = readDb();
+      db.codeProjects ||= [];
+      db.codeProjectRecords ||= [];
+      let project = db.codeProjects.find(item => item.id === projectId);
+      if (!collectionName && method === 'PUT') {
+        const body = await parseBody(req);
+        if (!validateCodeFiles(body.files)) return sendError(res, 400, 'CODE_FILES_INVALID', 'Os arquivos do projeto são inválidos.', '', 'blocking', null, reqId);
+        let manifest = null;
+        try { if (body.files['app.json']) manifest = parseAppManifest(body.files['app.json']); }
+        catch { return sendError(res, 400, 'APP_MANIFEST_INVALID', 'O app.json precisa definir coleções e campos válidos.', '', 'blocking', null, reqId); }
+        if (!project) {
+          project = { id: projectId, createdAt: new Date().toISOString() };
+          db.codeProjects.push(project);
+        }
+        project.files = body.files;
+        project.manifest = manifest;
+        project.updatedAt = new Date().toISOString();
+        writeDb(db);
+        return sendSuccess(res, { id: projectId, manifest, updatedAt: project.updatedAt }, reqId);
+      }
+      if (!project) return sendError(res, 404, 'CODE_PROJECT_NOT_FOUND', 'Projeto não encontrado.', '', 'blocking', null, reqId);
+      if (!collectionName && method === 'GET') return sendSuccess(res, project, reqId);
+      const collection = project.manifest?.collections.find(item => item.name === collectionName);
+      if (!collection) return sendError(res, 404, 'APP_COLLECTION_NOT_FOUND', 'Coleção não encontrada no app.json.', '', 'blocking', null, reqId);
+      const rows = db.codeProjectRecords.filter(item => item.projectId === projectId && item.collection === collectionName);
+      if (method === 'GET' && !recordId) return sendSuccess(res, rows.map(({ projectId: _projectId, collection: _collection, ...row }) => row), reqId);
+      if (method === 'POST' && !recordId) {
+        if (rows.length >= 500) return sendError(res, 409, 'APP_COLLECTION_LIMIT', 'Esta coleção atingiu o limite local de 500 registros.', '', 'blocking', null, reqId);
+        let fields;
+        try { fields = validateRecordInput(collection, await parseBody(req)); }
+        catch { return sendError(res, 400, 'APP_RECORD_INVALID', 'Os dados não correspondem aos campos do app.json.', '', 'blocking', null, reqId); }
+        const now = new Date().toISOString();
+        const row = { id: crypto.randomUUID(), projectId, collection: collectionName, ...fields, created_at: now, updated_at: now };
+        db.codeProjectRecords.push(row);
+        writeDb(db);
+        const { projectId: _projectId, collection: _collection, ...publicRow } = row;
+        return sendSuccess(res, publicRow, reqId);
+      }
+      const row = rows.find(item => item.id === recordId);
+      if (!row) return sendError(res, 404, 'APP_RECORD_NOT_FOUND', 'Registro não encontrado.', '', 'blocking', null, reqId);
+      if (method === 'PATCH') {
+        let fields;
+        try { fields = validateRecordInput(collection, await parseBody(req), true); }
+        catch { return sendError(res, 400, 'APP_RECORD_INVALID', 'Os dados não correspondem aos campos do app.json.', '', 'blocking', null, reqId); }
+        Object.assign(row, fields, { updated_at: new Date().toISOString() });
+        writeDb(db);
+        const { projectId: _projectId, collection: _collection, ...publicRow } = row;
+        return sendSuccess(res, publicRow, reqId);
+      }
+      if (method === 'DELETE') {
+        db.codeProjectRecords = db.codeProjectRecords.filter(item => item !== row);
+        writeDb(db);
+        return sendSuccess(res, { deleted: true }, reqId);
+      }
+      return sendError(res, 405, 'METHOD_NOT_ALLOWED', 'Método não permitido.', '', 'blocking', null, reqId);
+    }
+
     if (pathName === '/api/code/assist' && method === 'POST') {
       const body = await parseBody(req);
       const prompt = String(body.prompt || '').trim();
       const files = body.files;
-      const allowedFiles = ['index.html', 'styles.css', 'script.js'];
+      const appProject = body.projectType === 'app';
+      const allowedFiles = appProject ? ['index.html', 'styles.css', 'script.js', 'app.json'] : ['index.html', 'styles.css', 'script.js'];
       if (prompt.length < 10 || !files || typeof files !== 'object' ||
           allowedFiles.some(name => typeof files[name] !== 'string') ||
           allowedFiles.some(name => files[name].length > 100_000)) {
@@ -3336,7 +3415,7 @@ const server = http.createServer(async (req, res) => {
       if (!providerConn || !model || !key || key.startsWith('mock-')) {
         return sendError(res, 400, 'CODE_PROVIDER_REQUIRED', 'Conecte um provedor de IA real para usar o agente de código.', 'Configure e valide uma chave de API em Providers.', 'blocking', null, reqId);
       }
-      const systemPrompt = `Você é um engenheiro frontend e diretor de design construindo um site real dentro do Agent Center Code. Entregue código completo, funcional e visualmente cuidado. Responda SOMENTE JSON válido: {"summary":"o que foi criado","files":[{"name":"index.html","content":"arquivo completo"},{"name":"styles.css","content":"arquivo completo"},{"name":"script.js","content":"arquivo completo"}]}.
+      const systemPrompt = appProject ? `Você é um engenheiro de produto criando um app completo no Agent Center Code. Responda APENAS JSON válido com summary e files: index.html, styles.css, script.js e app.json, cada um com name e content completos. app.json deve conter {"name":"Nome do app","collections":[{"name":"tasks","fields":[{"name":"title","type":"text","required":true}]}]}. Use 1 a 5 coleções; cada campo tem name em snake_case, type text|number|boolean|date e required boolean. O backend persistente está disponível no navegador por AgentCenter.data.list(collection), .create(collection, record), .update(collection, id, record) e .remove(collection, id), todos retornando Promise. Implemente os formulários, carregamento, edição, exclusão, erros e estados vazios com dados reais usando essas funções. HTML é inserido no body; CSS e JS separados. Sem bibliotecas, rede externa ou backend arbitrário. Design responsivo a 375px e 1200px, hierarquia visual clara, foco acessível e @media no CSS. Não afirme que uma ação funcionou sem aguardar a Promise. Não inclua markdown.` : `Você é um engenheiro frontend e diretor de design construindo um site real dentro do Agent Center Code. Entregue código completo, funcional e visualmente cuidado. Responda SOMENTE JSON válido: {"summary":"o que foi criado","files":[{"name":"index.html","content":"arquivo completo"},{"name":"styles.css","content":"arquivo completo"},{"name":"script.js","content":"arquivo completo"}]}.
 Ambiente: HTML, CSS e JavaScript puros em um iframe isolado. O HTML é inserido no body; não escreva html/head/body. CSS e JS são injetados automaticamente. Não há build, bibliotecas externas, fontes remotas, imagens externas, links externos ou backend disponível na prévia. Use apenas os três arquivos permitidos. Nunca coloque código CSS/JS dentro do HTML.
 Qualidade obrigatória: interprete o objetivo e crie uma composição com identidade própria, hierarquia tipográfica clara, espaçamento consistente, boa leitura, contraste, estados de foco e hover, layout responsivo a 375px e 1200px e conteúdo relevante ao pedido. Para um site novo, projete uma página de largura total com cabeçalho, hero marcante, conteúdo organizado em seções e fechamento; use composição assimétrica, ritmo, escala e detalhes CSS específicos ao tema. A largura do conteúdo pode ser limitada, mas a página não deve parecer um cartão centralizado flutuando sobre outro fundo. Não use um wrapper branco arredondado com sombra para toda a página. Não use o mesmo modelo de cartões repetidos como estrutura principal. Se o pedido disser para alterar, preserve o que não foi pedido. Não invente preços, depoimentos, endereços ou promessas comerciais; quando faltarem dados, use conteúdo neutro ou identificável como exemplo. Controles interativos devem funcionar de verdade em JS e nunca prometer ações inexistentes (pedido, pagamento, envio, contato). Verifique mentalmente seletores HTML/JS, responsividade e se a página se sustenta sem imagens. Inclua no CSS regras de @media para telas pequenas.
 Antes de responder, revise se cada requisito do usuário está implementado, se a navegação e a interação fazem sentido e se os três arquivos funcionam juntos. Não inclua markdown, comentários explicativos fora do JSON ou arquivos adicionais.`;
@@ -3372,8 +3451,15 @@ Antes de responder, revise se cada requisito do usuário está implementado, se 
           const html = String(parsed.files.find(item => item.name === 'index.html')?.content || '');
           const css = String(parsed.files.find(item => item.name === 'styles.css')?.content || '');
           const script = String(parsed.files.find(item => item.name === 'script.js')?.content || '');
-          if (/(?:e-?mail|mensagem|pedido).{0,28}(?:enviad[oa]|realizad[oa]|confirmad[oa])/i.test(html + '\n' + script)) qualityIssues.push('a interface afirma que enviou uma mensagem ou concluiu um pedido sem backend para isso');
-          if (creating) {
+          try { new Function(script); } catch { qualityIssues.push('script.js contém erro de sintaxe; corrija o JavaScript completo'); }
+          if (appProject) {
+            const manifestFile = parsed.files.find(item => item.name === 'app.json');
+            try { parseAppManifest(typeof manifestFile?.content === 'string' ? manifestFile.content : JSON.stringify(manifestFile?.content)); }
+            catch { qualityIssues.push('app.json inválido; devolva content como string JSON com name e collections contendo fields válidos'); }
+            if (!/AgentCenter\.data\.(list|create|update|remove)/.test(script)) qualityIssues.push('script.js não usa AgentCenter.data para dados persistentes');
+          }
+          if (!appProject && /(?:e-?mail|mensagem|pedido).{0,28}(?:enviad[oa]|realizad[oa]|confirmad[oa])/i.test(html + '\n' + script)) qualityIssues.push('a interface afirma que enviou uma mensagem ou concluiu um pedido sem backend para isso');
+          if (creating && !appProject) {
             if (/body\s*\{[^}]*place-items\s*:\s*center/is.test(css) || /\.container\s*\{[^}]*(?:border-radius[^}]*box-shadow|box-shadow[^}]*border-radius)/is.test(css)) qualityIssues.push('a página inteira está dentro de um cartão centralizado; use seções de largura total e composição editorial');
             if (!/preç|valor|R\$|cardápio com preço/i.test(prompt) && /R\$\s*\d|\$\s*\d/.test(html)) qualityIssues.push('há preços inventados que o usuário não forneceu');
             if (/©\s*20\d\d|copyright\s*20\d\d/i.test(html)) qualityIssues.push('há um ano de copyright inventado');
@@ -3382,10 +3468,21 @@ Antes de responder, revise se cada requisito do usuário está implementado, se 
         }
         if (qualityIssues.length === 0) break;
       }
-      if (qualityIssues.length) return sendError(res, 502, 'CODE_DESIGN_REJECTED', 'O modelo repetiu um layout genérico ou inventou dados. Seu projeto foi preservado.', 'Tente outro modelo ou descreva a direção visual desejada.', 'blocking', null, reqId);
+      if (qualityIssues.length) return sendError(res, 502, appProject ? 'CODE_APP_INVALID' : 'CODE_DESIGN_REJECTED', appProject ? 'O modelo não entregou um app funcional com esquema de dados válido.' : 'O modelo repetiu um layout genérico ou inventou dados. Seu projeto foi preservado.', 'Tente outro modelo ou descreva a direção desejada.', 'blocking', null, reqId);
+      if (appProject) {
+        const manifestFile = parsed.files?.find(item => item.name === 'app.json');
+        if (manifestFile && typeof manifestFile.content !== 'string') manifestFile.content = JSON.stringify(manifestFile.content);
+      }
       const changes = Array.isArray(parsed.files) ? parsed.files.filter(item =>
         item && allowedFiles.includes(item.name) && typeof item.content === 'string' && item.content.length <= 100_000 && item.content !== files[item.name]
       ) : [];
+      if (appProject) {
+        try {
+          const manifestFile = parsed.files?.find(item => item.name === 'app.json');
+          parseAppManifest(manifestFile?.content);
+          if (!/AgentCenter\.data\.(list|create|update|remove)/.test(parsed.files?.find(item => item.name === 'script.js')?.content || '')) throw new Error('APP_DATA_MISSING');
+        } catch { return sendError(res, 502, 'CODE_APP_INVALID', 'O modelo não gerou um app com dados válidos.', 'Tente novamente ou escolha outro modelo.', 'blocking', null, reqId); }
+      }
       if (creating && (!allowedFiles.every(name => Array.isArray(parsed.files) && parsed.files.some(item => item.name === name && typeof item.content === 'string')) || !parsed.files.some(item => item.name === 'styles.css' && /@media/i.test(item.content)))) {
         return sendError(res, 502, 'CODE_RESPONSE_INCOMPLETE', 'A geração veio incompleta ou sem layout para celular.', 'Tente gerar novamente ou use um modelo mais capaz.', 'blocking', null, reqId);
       }

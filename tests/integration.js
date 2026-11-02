@@ -29,6 +29,33 @@ setTimeout(async () => {
   try {
     const baseUrl = `http://localhost:${testPort}/api`;
 
+    const projectId = 'project_test_fullstack';
+    const projectUrl = `${baseUrl}/code/projects/${projectId}`;
+    const projectFiles = {
+      'index.html': '<main>Tasks</main>',
+      'styles.css': 'body { color: black; }',
+      'script.js': 'AgentCenter.data.list("tasks")',
+      'app.json': JSON.stringify({ name: 'Tasks', collections: [{ name: 'tasks', fields: [{ name: 'title', type: 'text', required: true }, { name: 'done', type: 'boolean' }] }] })
+    };
+    const saveProject = await fetch(projectUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: projectFiles }) });
+    assert.strictEqual(saveProject.status, 200);
+    const collectionUrl = `${projectUrl}/collections/tasks`;
+    const invalidRecord = await fetch(collectionUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: true }) });
+    assert.strictEqual(invalidRecord.status, 400);
+    const createRecord = await fetch(collectionUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Primeira tarefa', done: false }) });
+    assert.strictEqual(createRecord.status, 200);
+    const created = (await createRecord.json()).data;
+    const listRecords = await fetch(collectionUrl);
+    assert.strictEqual((await listRecords.json()).data[0].title, 'Primeira tarefa');
+    const updateRecord = await fetch(`${collectionUrl}/${created.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: true }) });
+    assert.strictEqual((await updateRecord.json()).data.done, true);
+    const blockedOrigin = await fetch(collectionUrl, { headers: { Origin: 'https://evil.example' } });
+    assert.strictEqual(blockedOrigin.status, 403);
+    const deleteRecord = await fetch(`${collectionUrl}/${created.id}`, { method: 'DELETE' });
+    assert.strictEqual(deleteRecord.status, 200);
+    assert.deepStrictEqual((await (await fetch(collectionUrl)).json()).data, []);
+    console.log('✅ Code app backend CRUD and local origin guard passed.');
+
     const codePersonal = await fetch(`${baseUrl}/code/run`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: 'personal', tier: 'free', surface: 'web', prompt: 'Criar app web' })

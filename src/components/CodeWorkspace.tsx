@@ -8,6 +8,8 @@ type ProviderConnection = { id: string; provider: string; status: string; select
 
 const STORAGE_KEY = 'agent-center-code-workspace-v1';
 const HISTORY_KEY = 'agent-center-code-history-v1';
+const PROJECT_ID_KEY = 'agent-center-code-project-id-v1';
+const PROJECT_TYPE_KEY = 'agent-center-code-project-type-v1';
 const STARTER_FILES: ProjectFiles = {
   'index.html': '<main class="card">\n  <span class="eyebrow">Agent Center</span>\n  <h1>Seu projeto começa aqui.</h1>\n  <p>Edite os arquivos ao lado. A prévia aparece automaticamente.</p>\n  <button id="hello">Testar interação</button>\n</main>',
   'styles.css': 'body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1220; color: #f8fafc; font-family: Inter, Arial, sans-serif; }\n.card { max-width: 520px; padding: 48px; }\n.eyebrow { color: #22d3ee; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }\nh1 { font-size: clamp(32px, 5vw, 56px); line-height: 1.05; letter-spacing: -.04em; }\np { color: #cbd5e1; line-height: 1.6; }\nbutton { margin-top: 16px; padding: 12px 18px; border: 0; border-radius: 10px; background: #22d3ee; color: #082f49; font-weight: 700; cursor: pointer; }',
@@ -18,7 +20,7 @@ function loadFiles(): ProjectFiles {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     if (saved && typeof saved === 'object' && !Array.isArray(saved)) {
-      const entries = Object.entries(saved).filter(([name, content]) => /^[\w.-]+\.(html|css|js)$/.test(name) && typeof content === 'string');
+      const entries = Object.entries(saved).filter(([name, content]) => /^[\w.-]+\.(html|css|js|json)$/.test(name) && typeof content === 'string');
       if (entries.length > 0) return Object.fromEntries(entries) as ProjectFiles;
     }
   } catch {
@@ -38,7 +40,8 @@ function buildPreview(files: ProjectFiles, page = 'index.html'): string {
   const html = files[page] || '';
   const css = Object.entries(files).filter(([name]) => name.endsWith('.css')).map(([, content]) => content).join('\n');
   const js = Object.entries(files).filter(([name]) => name.endsWith('.js')).map(([, content]) => content).join('\n');
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>${css.replace(/<\/style/gi, '<\\/style')}</style><script>window.addEventListener('error',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:event.message},'*')});window.addEventListener('unhandledrejection',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:String(event.reason)},'*')});<\/script></head><body>${html}<script>${js.replace(/<\/script/gi, '<\\/script')}<\/script></body></html>`;
+  const bridge = `window.AgentCenter={data:{}};['list','create','update','remove'].forEach(function(action){window.AgentCenter.data[action]=function(collection,a,b){return new Promise(function(resolve,reject){var requestId=Math.random().toString(36).slice(2)+Date.now();var timer=setTimeout(function(){window.removeEventListener('message',onReply);reject(new Error('O backend demorou para responder.'))},10000);function onReply(event){if(event.source!==window.parent||event.data?.source!=='agent-center-data-result'||event.data.requestId!==requestId)return;clearTimeout(timer);window.removeEventListener('message',onReply);event.data.ok?resolve(event.data.data):reject(new Error(event.data.error||'Falha nos dados'))}window.addEventListener('message',onReply);window.parent.postMessage({source:'agent-center-data',requestId:requestId,action:action,collection:collection,id:action==='update'||action==='remove'?a:undefined,record:action==='create'?a:action==='update'?b:undefined},'*')})}});`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>${css.replace(/<\/style/gi, '<\\/style')}</style><script>${bridge}window.addEventListener('error',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:event.message},'*')});window.addEventListener('unhandledrejection',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:String(event.reason)},'*')});<\/script></head><body>${html}<script>${js.replace(/<\/script/gi, '<\\/script')}<\/script></body></html>`;
 }
 
 export default function CodeWorkspace() {
@@ -57,6 +60,9 @@ export default function CodeWorkspace() {
   const [expandedPreview, setExpandedPreview] = useState(false);
   const [view, setView] = useState<'preview' | 'code'>('preview');
   const [mode, setMode] = useState<'create' | 'edit'>(() => localStorage.getItem(STORAGE_KEY) ? 'edit' : 'create');
+  const [projectType, setProjectType] = useState<'site' | 'app'>(() => localStorage.getItem(PROJECT_TYPE_KEY) === 'app' ? 'app' : 'site');
+  const [projectId] = useState(() => { const id = localStorage.getItem(PROJECT_ID_KEY) || `project_${crypto.randomUUID()}`; localStorage.setItem(PROJECT_ID_KEY, id); return id; });
+  const [backendStatus, setBackendStatus] = useState('');
   const [providers, setProviders] = useState<ProviderConnection[]>([]);
   const [providerId, setProviderId] = useState('');
   const [modelId, setModelId] = useState('');
@@ -67,6 +73,18 @@ export default function CodeWorkspace() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
   }, [files]);
+  useEffect(() => { localStorage.setItem(PROJECT_TYPE_KEY, projectType); }, [projectType]);
+  useEffect(() => {
+    if (projectType !== 'app' || !files['app.json']) return;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/code/projects/${projectId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files }) });
+        const result = await response.json();
+        setBackendStatus(response.ok && result.ok ? 'Dados conectados e salvos neste computador' : result.error?.message || 'Revise o app.json');
+      } catch { setBackendStatus('Backend local indisponível'); }
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [files, projectId, projectType]);
   useEffect(() => {
     fetch('/api/providers').then(response => response.json()).then(result => {
       const valid = (Array.isArray(result.data) ? result.data : []).filter((item: ProviderConnection) => item.status === 'valid' && item.selected_chat_model);
@@ -88,11 +106,25 @@ export default function CodeWorkspace() {
   }, [files, dirty]);
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if ((event.source === previewRef.current?.contentWindow || event.source === expandedPreviewRef.current?.contentWindow) && event.data?.source === 'agent-center-preview' && event.data.type === 'error') setPreviewError(String(event.data.message).slice(0, 500));
+      if (event.source !== previewRef.current?.contentWindow && event.source !== expandedPreviewRef.current?.contentWindow) return;
+      if (event.data?.source === 'agent-center-preview' && event.data.type === 'error') setPreviewError(String(event.data.message).slice(0, 500));
+      if (event.data?.source !== 'agent-center-data') return;
+      const { requestId, action, collection, id, record } = event.data;
+      if (typeof requestId !== 'string' || !['list', 'create', 'update', 'remove'].includes(action) || !/^[a-z][a-z0-9_]{1,31}$/.test(collection || '') || (id && !/^[a-zA-Z0-9_-]{8,80}$/.test(id))) return;
+      const source = event.source as Window;
+      if (projectType !== 'app' || proposal && action !== 'list') {
+        source.postMessage({ source: 'agent-center-data-result', requestId, ok: false, error: 'Aplique a proposta antes de alterar os dados.' }, '*');
+        return;
+      }
+      const base = `/api/code/projects/${projectId}/collections/${collection}`;
+      const method = { list: 'GET', create: 'POST', update: 'PATCH', remove: 'DELETE' }[action as 'list' | 'create' | 'update' | 'remove'];
+      fetch(base + (id ? `/${id}` : ''), { method, headers: { 'Content-Type': 'application/json' }, ...(record ? { body: JSON.stringify(record) } : {}) })
+        .then(async response => { const result = await response.json(); source.postMessage({ source: 'agent-center-data-result', requestId, ok: response.ok && result.ok, data: result.data, error: result.error?.message }, '*'); })
+        .catch(() => source.postMessage({ source: 'agent-center-data-result', requestId, ok: false, error: 'Backend local indisponível' }, '*'));
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, []);
+  }, [projectId, projectType, proposal]);
   useEffect(() => {
     if (!expandedPreview) return;
     const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpandedPreview(false); };
@@ -104,7 +136,7 @@ export default function CodeWorkspace() {
     const name = window.prompt('Nome do arquivo (.html, .css ou .js):');
     if (name === null) return;
     const cleanName = name.trim();
-    if (!/^[\w.-]+\.(html|css|js)$/.test(cleanName) || cleanName.includes('..')) {
+    if (!/^[a-zA-Z0-9_-]+\.(html|css|js)$/.test(cleanName)) {
       setStatus('Use um nome simples terminado em .html, .css ou .js.');
       return;
     }
@@ -147,7 +179,7 @@ export default function CodeWorkspace() {
       const response = await fetch('/api/code/assist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspaceId: 'workspace_123', prompt: agentPrompt, files, mode, providerConnectionId: providerId, modelId })
+        body: JSON.stringify({ workspaceId: 'workspace_123', prompt: agentPrompt, files, mode, projectType, providerConnectionId: providerId, modelId })
       });
       const body = await response.json();
       if (!response.ok || !body.ok) throw new Error(body.error?.message || 'O agente não conseguiu preparar a alteração.');
@@ -199,7 +231,7 @@ export default function CodeWorkspace() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-bold text-slate-950"><Code2 className="h-5 w-5 text-cyan-600" /> Agent Center Code</h1>
-          <p className="mt-1 text-xs text-slate-600">Edite seu projeto web e veja a prévia automaticamente. Os arquivos ficam salvos neste navegador.</p>
+          <p className="mt-1 text-xs text-slate-600">Crie sites ou apps com dados. Edite os arquivos e teste na prévia.</p>
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={undo} disabled={!history.length} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">Desfazer versão</button>
@@ -216,9 +248,11 @@ export default function CodeWorkspace() {
           <span className="code-builder-model-badge">{selectedProvider ? `${selectedProvider.provider} · ${modelId}` : 'Conecte um modelo'}</span>
         </div>
         <div className="code-builder-mode" role="group" aria-label="Tipo de tarefa"><button type="button" className={mode === 'create' ? 'active' : ''} onClick={() => setMode('create')}>Criar projeto</button><button type="button" className={mode === 'edit' ? 'active' : ''} onClick={() => setMode('edit')}>Editar projeto</button></div>
+        <div className="code-builder-mode" role="group" aria-label="Tipo de projeto"><button type="button" className={projectType === 'site' ? 'active' : ''} onClick={() => setProjectType('site')}>Site</button><button type="button" className={projectType === 'app' ? 'active' : ''} onClick={() => { setProjectType('app'); setFiles(previous => ({ ...previous, 'app.json': previous['app.json'] || '{\n  "name": "Meu app",\n  "collections": [\n    { "name": "tasks", "fields": [\n      { "name": "title", "type": "text", "required": true },\n      { "name": "done", "type": "boolean", "required": false }\n    ] }\n  ]\n}' })); }}>App com dados</button></div>
+        {projectType === 'app' && <p className="mt-2 text-xs text-slate-600">Backend local com coleções definidas em app.json. {backendStatus}</p>}
         <textarea aria-label="Instrução para o agente de código" value={agentPrompt} onChange={event => setAgentPrompt(event.target.value)} rows={2} placeholder="Ex.: Transforme a página em um portfólio pessoal com botão de contato." className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" />
-        <p className="code-builder-hint">{mode === 'create' ? 'O novo site substitui o projeto atual somente depois da sua revisão.' : 'O agente mantém o site atual e altera o que você pedir.'}</p>
-        <div className="code-builder-submit"><div><label htmlFor="code-model">Modelo</label><select id="code-model" value={modelId} onChange={event => setModelId(event.target.value)}>{availableModels.map(name => <option key={name} value={name}>{name}</option>)}</select></div><button type="button" onClick={requestProposal} disabled={agentBusy || agentPrompt.trim().length < 10 || !providerId || !modelId} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{agentBusy ? 'Criando...' : <><ArrowUp className="h-4 w-4" /> Gerar site</>}</button></div>
+        <p className="code-builder-hint">{mode === 'create' ? 'O novo projeto substitui o atual somente depois da sua revisão.' : 'O agente mantém o projeto atual e altera o que você pedir.'}</p>
+        <div className="code-builder-submit"><div><label htmlFor="code-model">Modelo</label><select id="code-model" value={modelId} onChange={event => setModelId(event.target.value)}>{availableModels.map(name => <option key={name} value={name}>{name}</option>)}</select></div><button type="button" onClick={requestProposal} disabled={agentBusy || agentPrompt.trim().length < 10 || !providerId || !modelId} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{agentBusy ? 'Criando...' : <><ArrowUp className="h-4 w-4" /> Gerar {projectType === 'app' ? 'app' : 'site'}</>}</button></div>
         {agentError && <p role="alert" className="mt-2 text-xs text-red-700">{agentError}</p>}
         {proposal && <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
           <p className="text-sm font-semibold text-slate-900">{proposal.summary}</p>
