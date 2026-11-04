@@ -3470,9 +3470,12 @@ Ambiente: HTML, CSS e JavaScript puros em um iframe isolado. O HTML é inserido 
 Qualidade obrigatória: interprete o objetivo e crie uma composição com identidade própria, hierarquia tipográfica clara, espaçamento consistente, boa leitura, contraste, estados de foco e hover, layout responsivo a 375px e 1200px e conteúdo relevante ao pedido. Para um site novo, projete uma página de largura total com cabeçalho, hero marcante, conteúdo organizado em seções e fechamento; use composição assimétrica, ritmo, escala e detalhes CSS específicos ao tema. A largura do conteúdo pode ser limitada, mas a página não deve parecer um cartão centralizado flutuando sobre outro fundo. Não use um wrapper branco arredondado com sombra para toda a página. Não use o mesmo modelo de cartões repetidos como estrutura principal. Se o pedido disser para alterar, preserve o que não foi pedido. Não invente preços, depoimentos, endereços ou promessas comerciais; quando faltarem dados, use conteúdo neutro ou identificável como exemplo. Controles interativos devem funcionar de verdade em JS e nunca prometer ações inexistentes (pedido, pagamento, envio, contato). Verifique mentalmente seletores HTML/JS, responsividade e se a página se sustenta sem imagens. Inclua no CSS regras de @media para telas pequenas.
 Antes de responder, revise se cada requisito do usuário está implementado, se a navegação e a interação fazem sentido e se os três arquivos funcionam juntos. Não inclua markdown, comentários explicativos fora do JSON ou arquivos adicionais.`;
       const creating = body.mode === 'create';
-      const conversationContext = Array.isArray(body.history) ? body.history.slice(-8).filter(item =>
-        item && ['user', 'agent'].includes(item.role) && typeof item.text === 'string'
-      ).map(item => `${item.role === 'user' ? 'Usuário' : 'Agente'}: ${item.text.slice(0, 1000)}`).join('\n') : '';
+      // A new project must not inherit failed attempts or the prior project's direction.
+      const recentHistory = !creating && Array.isArray(body.history) ? body.history.slice(-8) : [];
+      const conversationContext = recentHistory.filter(item =>
+        item && ['user', 'agent'].includes(item.role) && typeof item.text === 'string' &&
+        !/seu projeto foi preservado|a proposta foi recusada|não consegui gerar agora/i.test(item.text)
+      ).slice(-4).map(item => `${item.role === 'user' ? 'Usuário' : 'Agente'}: ${item.text.slice(0, 500)}`).join('\n');
       const landingPage = creating && /landing|site|website|p[aá]gina|cafeteria|portf[oó]lio/i.test(prompt);
       let designBrief = landingPage ? '\nDireção para esta landing page: evite simetria e texto centralizado em todas as seções. Faça um cabeçalho discreto, hero em duas colunas no desktop com título grande de 3 a 6 palavras e um elemento visual original feito em CSS na outra coluna, depois uma seção editorial de conteúdo e fechamento. Use largura total na composição, sem cartão branco em volta da página. No celular, empilhe as colunas. Não invente preços, ano de copyright ou história da empresa.' : '';
       if (creating) {
