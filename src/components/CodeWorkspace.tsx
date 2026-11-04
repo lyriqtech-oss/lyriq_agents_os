@@ -85,6 +85,7 @@ export default function CodeWorkspace() {
   const [modelId, setModelId] = useState('');
   const previewRef = useRef<HTMLIFrameElement>(null);
   const expandedPreviewRef = useRef<HTMLIFrameElement>(null);
+  const chatFeedRef = useRef<HTMLDivElement>(null);
   const dirty = useMemo(() => JSON.stringify(files) !== JSON.stringify(previewFiles), [files, previewFiles]);
 
   useEffect(() => {
@@ -92,6 +93,10 @@ export default function CodeWorkspace() {
   }, [files]);
   useEffect(() => { localStorage.setItem(PROJECT_TYPE_KEY, projectType); }, [projectType]);
   useEffect(() => { localStorage.setItem(CONVERSATION_KEY, JSON.stringify(conversation)); }, [conversation]);
+  useEffect(() => {
+    const feed = chatFeedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, [conversation.length, agentBusy]);
   useEffect(() => {
     if (projectType !== 'app' || !files['app.json']) return;
     const timer = window.setTimeout(async () => {
@@ -307,13 +312,13 @@ export default function CodeWorkspace() {
           </div>
           <span className="code-builder-model-badge">{selectedProvider ? `${selectedProvider.provider} · ${modelId}` : 'Conecte um modelo'}</span>
         </div>
-        <div className="code-chat-feed" aria-label="Conversa do projeto">{conversation.length ? conversation.map((message, index) => <div key={index} className={`code-chat-message ${message.role}`}><strong>{message.role === 'user' ? 'Você' : 'Agent Center'}</strong><p>{message.text}</p></div>) : <div className="code-chat-empty"><Sparkles className="h-5 w-5" /><strong>O que vamos criar?</strong><p>Conte sua ideia em linguagem natural. Se precisar guardar dados, o agente prepara isso no projeto.</p></div>}{agentBusy && <div className="code-chat-message agent code-chat-thinking" role="status"><strong>Agent Center</strong><p>Definindo direção visual e construindo a prévia<span aria-hidden="true">…</span></p></div>}</div>
+        <div ref={chatFeedRef} className="code-chat-feed" aria-label="Conversa do projeto">{conversation.length ? conversation.map((message, index) => <div key={index} className={`code-chat-message ${message.role}`}><strong>{message.role === 'user' ? 'Você' : 'Agent Center'}</strong><p>{message.text}</p></div>) : <div className="code-chat-empty"><Sparkles className="h-5 w-5" /><strong>O que vamos criar?</strong><p>Conte sua ideia em linguagem natural. Se precisar guardar dados, o agente prepara isso no projeto.</p><div className="code-chat-suggestions"><button type="button" onClick={() => setAgentPrompt('Crie um site editorial para um estúdio criativo, com identidade visual própria, seções bem compostas e layout responsivo.')}>Site editorial</button><button type="button" onClick={() => setAgentPrompt('Crie um aplicativo de tarefas com dados persistentes, estados vazios, filtros e uma interface clara e responsiva.')}>App com dados</button></div></div>}{agentBusy && <div className="code-chat-message agent code-chat-thinking" role="status"><strong>Agent Center</strong><p>Definindo direção visual e construindo a prévia<span aria-hidden="true">…</span></p></div>}</div>
         {projectType === 'app' && backendStatus && <p className="text-xs text-slate-500">{backendStatus}</p>}
         <textarea aria-label="Mensagem para o agente de código" value={agentPrompt} onChange={event => setAgentPrompt(event.target.value)} rows={2} placeholder="Descreva o que quer criar ou peça uma mudança..." className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" />
         <div className="code-builder-submit"><div><label htmlFor="code-model">Modelo</label><select id="code-model" value={modelId} onChange={event => { setModelId(event.target.value); localStorage.setItem(MODEL_KEY, event.target.value); }}>{availableModels.map(name => <option key={name} value={name}>{name}</option>)}</select></div><button type="button" onClick={requestProposal} disabled={agentBusy || agentPrompt.trim().length < 10 || !providerId || !modelId} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{agentBusy ? 'Criando...' : <><ArrowUp className="h-4 w-4" /> Enviar</>}</button></div>
         {modelId === 'gemini-2.5-pro' && <p className="code-builder-hint">Modelo escolhido para melhor qualidade visual; usa mais cota da sua API.</p>}
         {agentError && <p role="alert" className="mt-2 text-xs text-red-700">{agentError}</p>}
-        {proposal && <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+        {proposal && <div className="code-proposal mt-3 space-y-3 border-t border-slate-200 pt-3">
           <p className="text-sm font-semibold text-slate-900">{proposal.summary}</p>
           <p className="text-xs text-slate-600">Proposta de {proposal.provider} / {proposal.model}. A prévia ao lado mostra o resultado antes de aplicar.</p>
           {proposal.changes.map(change => <details key={change.name} className="rounded-lg border border-slate-200 p-3 text-xs">

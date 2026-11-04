@@ -41,3 +41,39 @@
 @media(max-width:1180px){.code-builder{grid-template-columns:1fr;grid-template-rows:auto auto minmax(600px,1fr)}.code-builder>div:first-child{grid-column:1}.code-builder-prompt{width:100%}}
 @media(max-width:850px){.code-builder-workspace.show-code{grid-template-columns:150px minmax(0,1fr)}.code-builder-workspace.show-code>section[aria-label="Prévia do projeto"]{grid-column:1/-1;min-height:500px}.code-builder-workspace.show-code>section[aria-label="Prévia do projeto"] iframe{min-height:500px}}
 @media(max-width:600px){.code-builder{gap:12px}.code-builder-workspace.show-code{display:block}.code-builder-workspace.show-code aside{display:block}.code-builder-tabs{height:47px}.code-builder-submit{flex-wrap:wrap}.code-builder-submit button{flex:1;justify-content:center}.code-builder-workspace>section[aria-label="Prévia do projeto"] iframe{min-height:500px}}
+
+/* Workspace conversation */
+.code-builder-prompt{background:#0b1730!important;border-color:#223453;box-shadow:0 20px 50px #08152d20}
+.code-builder-prompt h2{color:#f3f8ff!important;font-size:18px}
+.code-builder-prompt>div:first-child p{color:#a9bfd2!important}
+.code-builder-model-badge{background:#123a64;color:#80e9ff;font-weight:750;border:1px solid #245477}
+.code-chat-feed{min-height:290px;max-height:460px;padding:18px 8px;border-color:#263b58;scroll-behavior:smooth;scrollbar-color:#56708d transparent}
+.code-chat-message{background:#172b48;color:#e9f5ff;border:1px solid #294465;font-size:12px;line-height:1.55}
+.code-chat-message.user{background:#164a78;border-color:#26689c;color:white}
+.code-chat-message strong{color:#88dcf7;opacity:1}
+.code-chat-message.user strong{color:#c0f3ff}
+.code-chat-thinking{background:#183653;border-color:#2d779e;animation:code-thinking-dark 1.7s ease-in-out infinite}
+@keyframes code-thinking-dark{50%{background:#205278;border-color:#44b7de}}
+.code-chat-empty{background:#132744;border:1px solid #2a4767;color:#e9f5ff;padding:22px}
+.code-chat-empty svg{color:#48cbf5}
+.code-chat-empty p{color:#aac2d8}
+.code-chat-suggestions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.code-chat-suggestions button{padding:8px 10px;border:1px solid #38688c;border-radius:8px;background:#173a60;color:#d4f6ff;font-size:11px;font-weight:700;cursor:pointer}
+.code-chat-suggestions button:hover,.code-chat-suggestions button:focus-visible{background:#225684;border-color:#54c8ee}
+.code-builder-prompt textarea{background:#f8fbff;border-color:#90a9bd;color:#14283d}
+.code-builder-prompt .code-builder-submit label{color:#b9cede}
+.code-builder-prompt .code-builder-submit select{border-color:#7a99b4;background:#f8fbff;color:#14283d}
+.code-builder-prompt .code-builder-submit button{background:#18b9e5!important;color:#061a32!important}
+.code-builder-prompt .code-builder-submit button:hover:not(:disabled){background:#62d8f6!important}
+.code-builder-prompt .code-builder-hint{color:#b9cede}
+.code-builder-tabs button.active{border-color:#128ee8;color:#0d3b70}
+.code-proposal{border-color:#36516f!important;background:#132743!important}
+.code-proposal>p:first-child{color:#f4faff!important}
+.code-proposal>p:nth-child(2){color:#bdd4e6!important}
+.code-proposal details{border-color:#36516f!important;background:#172d4b!important}
+.code-proposal details summary{color:#eaf7ff!important}
+.code-proposal details p{color:#bdd4e6!important}
+.code-proposal pre{background:#0b1b32!important;color:#dbeeff!important}
+.code-proposal button.border{border-color:#7193b1!important;color:#eaf7ff!important}
+.code-builder-prompt [role=alert]{color:#ffb0a9!important}
+@media(prefers-reduced-motion:reduce){.code-chat-feed{scroll-behavior:auto}.code-chat-thinking{animation:none}}
