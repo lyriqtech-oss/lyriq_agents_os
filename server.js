@@ -281,7 +281,8 @@ const callRealLlmProvider = async (provider, model, key, messages, systemPrompt,
         contents: normalizedMessages.length > 0 ? normalizedMessages : [{ role: 'user', parts: [{ text: 'Olá' }] }],
         ...(options.jsonMode || options.maxOutputTokens ? { generationConfig: {
           ...(options.jsonMode ? { responseMimeType: 'application/json' } : {}),
-          ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {})
+          ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
+          ...(Number.isInteger(options.thinkingBudget) && /^gemini-2\.5-flash(?:-|$)/.test(targetModel) ? { thinkingConfig: { thinkingBudget: options.thinkingBudget } } : {})
         } } : {})
       };
 
@@ -3490,7 +3491,7 @@ Antes de responder, revise se cada requisito do usuário está implementado, se 
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
             const guidance = designAttempt ? `\n\nA primeira proposta foi rejeitada: ${qualityIssues.join('; ')}. Corrija a resposta e devolva JSON válido com os arquivos necessários.` : '';
-            raw = await callRealLlmProvider(providerConn.provider, activeModel, key, [{ role: 'user', content: input + guidance }], systemPrompt, { maxOutputTokens: appProject ? 16384 : 8192, jsonMode: true, throwOnFailure: true });
+            raw = await callRealLlmProvider(providerConn.provider, activeModel, key, [{ role: 'user', content: input + guidance }], systemPrompt, { maxOutputTokens: appProject ? 24576 : 16384, thinkingBudget: 512, jsonMode: true, throwOnFailure: true });
             break;
           } catch (providerError) {
             if (fallbackModel && activeModel !== fallbackModel && attempt === 0) {
