@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, Code2, FilePlus2, Maximize2, Monitor, Play, RotateCcw, Save, Smartphone, Sparkles, Trash2, X } from 'lucide-react';
+import { Archive, ArrowUp, Code2, Copy, Download, FilePlus2, Maximize2, Monitor, Play, Plus, RotateCcw, Save, Smartphone, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import './CodeWorkspace.css';
 
 type ProjectFiles = Record<string, string>;
@@ -12,7 +12,11 @@ const PROJECT_ID_KEY = 'agent-center-code-project-id-v1';
 const PROJECT_TYPE_KEY = 'agent-center-code-project-type-v1';
 const CONVERSATION_KEY = 'agent-center-code-conversation-v1';
 const MODEL_KEY = 'agent-center-code-model-v1';
+const PROJECTS_KEY = 'agent-center-code-projects-v1';
+const ACTIVE_PROJECT_KEY = 'agent-center-code-active-project-v1';
 type ConversationMessage = { role: 'user' | 'agent'; text: string };
+type StoredProject = { id: string; name: string; type: 'site' | 'app'; mode: 'create' | 'edit'; archived?: boolean; files: ProjectFiles; history: ProjectFiles[]; conversation: ConversationMessage[]; updatedAt: number };
+type ProjectStore = { activeId: string; projects: StoredProject[] };
 function loadConversation(): ConversationMessage[] {
   try { const saved = JSON.parse(localStorage.getItem(CONVERSATION_KEY) || '[]'); return Array.isArray(saved) ? saved.filter(item => (item?.role === 'user' || item?.role === 'agent') && typeof item.text === 'string').slice(-20) : []; }
   catch { return []; }
@@ -47,6 +51,25 @@ function loadHistory(): ProjectFiles[] {
   } catch { return []; }
 }
 
+function loadProjectStore(): ProjectStore {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PROJECTS_KEY) || 'null');
+    if (Array.isArray(saved)) {
+      const projects = saved.filter((item): item is StoredProject => item && typeof item.id === 'string' && typeof item.name === 'string' &&
+        (item.type === 'site' || item.type === 'app') && item.files && typeof item.files['index.html'] === 'string' &&
+        typeof item.files['styles.css'] === 'string' && typeof item.files['script.js'] === 'string' && Array.isArray(item.history) && Array.isArray(item.conversation));
+      if (projects.some(item => !item.archived)) {
+        const selected = localStorage.getItem(ACTIVE_PROJECT_KEY);
+        return { activeId: projects.some(item => item.id === selected && !item.archived) ? selected! : projects.find(item => !item.archived)!.id, projects };
+      }
+    }
+  } catch { /* Recover the current legacy project below. */ }
+  const id = localStorage.getItem(PROJECT_ID_KEY) || `project_${crypto.randomUUID()}`;
+  const legacy: StoredProject = { id, name: 'Meu primeiro projeto', type: localStorage.getItem(PROJECT_TYPE_KEY) === 'app' ? 'app' : 'site', mode: 'edit',
+    files: loadFiles(), history: loadHistory(), conversation: loadConversation(), updatedAt: Date.now() };
+  return { activeId: id, projects: [legacy] };
+}
+
 function buildPreview(files: ProjectFiles, page = 'index.html'): string {
   const sourceHtml = files[page] || '';
   const html = sourceHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] || sourceHtml.replace(/<!doctype[^>]*>/gi, '').replace(/<\/?(?:html|head|body)[^>]*>/gi, '').replace(/<title>[\s\S]*?<\/title>/gi, '');
@@ -59,10 +82,12 @@ function buildPreview(files: ProjectFiles, page = 'index.html'): string {
 }
 
 export default function CodeWorkspace() {
-  const [files, setFiles] = useState<ProjectFiles>(loadFiles);
-  const [history, setHistory] = useState<ProjectFiles[]>(loadHistory);
+  const [projectStore, setProjectStore] = useState<ProjectStore>(loadProjectStore);
+  const initialProject = projectStore.projects.find(item => item.id === projectStore.activeId)!;
+  const [files, setFiles] = useState<ProjectFiles>(() => initialProject.files);
+  const [history, setHistory] = useState<ProjectFiles[]>(() => initialProject.history);
   const [activeFile, setActiveFile] = useState('index.html');
-  const [previewFiles, setPreviewFiles] = useState<ProjectFiles>(() => loadFiles());
+  const [previewFiles, setPreviewFiles] = useState<ProjectFiles>(() => initialProject.files);
   const [status, setStatus] = useState('Projeto pronto');
   const [agentPrompt, setAgentPrompt] = useState('');
   const [proposal, setProposal] = useState<CodeProposal | null>(null);
@@ -75,10 +100,10 @@ export default function CodeWorkspace() {
   const [previewPage, setPreviewPage] = useState('index.html');
   const [expandedPreview, setExpandedPreview] = useState(false);
   const [view, setView] = useState<'preview' | 'code'>('preview');
-  const [mode, setMode] = useState<'create' | 'edit'>(() => localStorage.getItem(STORAGE_KEY) ? 'edit' : 'create');
-  const [projectType, setProjectType] = useState<'site' | 'app'>(() => localStorage.getItem(PROJECT_TYPE_KEY) === 'app' ? 'app' : 'site');
-  const [projectId, setProjectId] = useState(() => { const id = localStorage.getItem(PROJECT_ID_KEY) || `project_${crypto.randomUUID()}`; localStorage.setItem(PROJECT_ID_KEY, id); return id; });
-  const [conversation, setConversation] = useState<ConversationMessage[]>(loadConversation);
+  const [mode, setMode] = useState<'create' | 'edit'>(() => initialProject.mode || 'edit');
+  const [projectType, setProjectType] = useState<'site' | 'app'>(() => initialProject.type);
+  const [projectId, setProjectId] = useState(() => initialProject.id);
+  const [conversation, setConversation] = useState<ConversationMessage[]>(() => initialProject.conversation);
   const [proposalMode, setProposalMode] = useState<'create' | 'edit'>('edit');
   const [proposalType, setProposalType] = useState<'site' | 'app'>('site');
   const [backendStatus, setBackendStatus] = useState('');
@@ -88,13 +113,22 @@ export default function CodeWorkspace() {
   const previewRef = useRef<HTMLIFrameElement>(null);
   const expandedPreviewRef = useRef<HTMLIFrameElement>(null);
   const chatFeedRef = useRef<HTMLDivElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
   const dirty = useMemo(() => JSON.stringify(files) !== JSON.stringify(previewFiles), [files, previewFiles]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(files));
-  }, [files]);
-  useEffect(() => { localStorage.setItem(PROJECT_TYPE_KEY, projectType); }, [projectType]);
-  useEffect(() => { localStorage.setItem(CONVERSATION_KEY, JSON.stringify(conversation)); }, [conversation]);
+    setProjectStore(previous => ({ activeId: projectId, projects: previous.projects.map(item => item.id === projectId ?
+      { ...item, files, history, conversation, type: projectType, mode, updatedAt: Date.now() } : item) }));
+  }, [projectId, files, history, conversation, projectType, mode]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(PROJECTS_KEY, JSON.stringify(projectStore.projects));
+      localStorage.setItem(ACTIVE_PROJECT_KEY, projectStore.activeId);
+      localStorage.setItem(PROJECT_ID_KEY, projectStore.activeId);
+    } catch {
+      setStatus('O armazenamento local está cheio. Exporte ou remova projetos antes de continuar.');
+    }
+  }, [projectStore]);
   useEffect(() => {
     const feed = chatFeedRef.current;
     if (feed) feed.scrollTop = feed.scrollHeight;
@@ -127,6 +161,85 @@ export default function CodeWorkspace() {
   const selectedProvider = providers.find(item => item.id === providerId);
   const availableModels = (selectedProvider?.available_models || []).map(item => typeof item === 'string' ? item : item.id).filter(name => /^(gemini-(2\.5-(flash|pro)|3(\.1)?-(flash|pro)|flash-latest|pro-latest)|gpt-|claude-|llama-|meta\/)/i.test(name) && !/tts|image|embedding|transcribe|robotics|computer-use/i.test(name));
   const shownFiles = proposal ? { ...previewFiles, ...Object.fromEntries(proposal.changes.map(change => [change.name, change.after])) } : previewFiles;
+  const snapshotCurrent = (item: StoredProject): StoredProject => ({ ...item, files, history, conversation, type: projectType, mode, updatedAt: Date.now() });
+  const openProject = (next: StoredProject) => {
+    if (next.id === projectId) return;
+    setProjectStore(previous => ({ activeId: next.id, projects: previous.projects.map(item => item.id === projectId ? snapshotCurrent(item) : item) }));
+    setProjectId(next.id);
+    setFiles({ ...next.files }); setPreviewFiles({ ...next.files }); setHistory([...next.history]);
+    setConversation([...next.conversation]); setProjectType(next.type); setMode(next.mode || 'edit');
+    setActiveFile('index.html'); setPreviewPage('index.html'); setView('preview');
+    setProposal(null); setAgentPrompt(''); setAgentError(''); setPreviewError(''); setPreviewIssues([]);
+    setStatus(`Projeto ${next.name} aberto.`);
+  };
+  const createProject = (duplicate = false) => {
+    if (projectStore.projects.length >= 20) { setStatus('Limite local de 20 projetos atingido. Exporte um projeto antes de criar outro.'); return; }
+    const id = `project_${crypto.randomUUID()}`;
+    const source = projectStore.projects.find(item => item.id === projectId);
+    const next: StoredProject = { id, name: duplicate ? `${source?.name || 'Projeto'} — cópia` : 'Novo projeto', type: duplicate ? projectType : 'site', mode: duplicate ? 'edit' : 'create',
+      files: duplicate ? { ...files } : { ...STARTER_FILES }, history: [], conversation: [], updatedAt: Date.now() };
+    setProjectStore(previous => ({ activeId: id, projects: [...previous.projects.map(item => item.id === projectId ? snapshotCurrent(item) : item), next] }));
+    setProjectId(id); setFiles(next.files); setPreviewFiles(next.files); setHistory([]); setConversation([]);
+    setProjectType(next.type); setMode(duplicate ? 'edit' : 'create'); setActiveFile('index.html'); setPreviewPage('index.html'); setView('preview');
+    setProposal(null); setAgentPrompt(''); setAgentError(''); setPreviewError(''); setPreviewIssues([]);
+    setStatus(duplicate ? 'Cópia criada. O projeto original foi preservado.' : 'Projeto novo pronto para criar.');
+  };
+  const renameProject = () => {
+    const current = projectStore.projects.find(item => item.id === projectId);
+    const name = window.prompt('Nome do projeto:', current?.name || 'Novo projeto')?.trim();
+    if (!name) return;
+    setProjectStore(previous => ({ ...previous, projects: previous.projects.map(item => item.id === projectId ? { ...item, name: name.slice(0, 80) } : item) }));
+  };
+  const archiveProject = () => {
+    const active = projectStore.projects.filter(item => !item.archived);
+    if (active.length < 2) { setStatus('Mantenha pelo menos um projeto ativo.'); return; }
+    const next = active.find(item => item.id !== projectId)!;
+    openProject(next);
+    setProjectStore(previous => ({ ...previous, projects: previous.projects.map(item => item.id === projectId ? { ...item, archived: true } : item) }));
+    setStatus('Projeto arquivado. Você pode restaurá-lo abaixo.');
+  };
+  const restoreProject = (id: string) => {
+    setProjectStore(previous => ({ ...previous, projects: previous.projects.map(item => item.id === id ? { ...item, archived: false } : item) }));
+    setStatus('Projeto restaurado. Selecione-o na lista para abrir.');
+  };
+  const deleteArchivedProject = (id: string) => {
+    const item = projectStore.projects.find(project => project.id === id && project.archived);
+    if (!item || !window.confirm(`Excluir definitivamente "${item.name}"? Esta ação não pode ser desfeita.`)) return;
+    setProjectStore(previous => ({ ...previous, projects: previous.projects.filter(project => project.id !== id) }));
+    setStatus('Projeto arquivado excluído definitivamente.');
+  };
+  const exportProject = () => {
+    const current = projectStore.projects.find(item => item.id === projectId);
+    if (!current) return;
+    const payload = { version: 1, project: { name: current.name, type: projectType, files } };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${current.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9-]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'agent-center-project'}.json`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus('Projeto exportado em JSON. Guarde o arquivo para importar depois.');
+  };
+  const importProject = async (file?: File) => {
+    if (!file) return;
+    if (projectStore.projects.length >= 20 || file.size > 2_000_000) { setStatus('Não foi possível importar: limite de 20 projetos ou arquivo acima de 2 MB.'); return; }
+    try {
+      const payload = JSON.parse(await file.text());
+      const item = payload?.project;
+      const importedFiles = item?.files;
+      if (payload.version !== 1 || !item || !['site', 'app'].includes(item.type) || !importedFiles ||
+        (item.type === 'app' && typeof importedFiles['app.json'] !== 'string') ||
+        ['index.html', 'styles.css', 'script.js'].some(name => typeof importedFiles[name] !== 'string') ||
+        Object.entries(importedFiles).some(([name, content]) => !/^[\w.-]+\.(html|css|js|json)$/.test(name) || typeof content !== 'string' || content.length > 100_000)) throw new Error('invalid');
+      const id = `project_${crypto.randomUUID()}`;
+      const next: StoredProject = { id, name: `${String(item.name || 'Projeto').slice(0, 68)} — importado`, type: item.type, mode: 'edit',
+        files: importedFiles, history: [], conversation: [], updatedAt: Date.now() };
+      setProjectStore(previous => ({ activeId: id, projects: [...previous.projects.map(project => project.id === projectId ? snapshotCurrent(project) : project), next] }));
+      setProjectId(id); setFiles(next.files); setPreviewFiles(next.files); setHistory([]); setConversation([]); setProjectType(next.type); setMode('edit');
+      setActiveFile('index.html'); setPreviewPage('index.html'); setView('preview'); setProposal(null); setAgentPrompt(''); setAgentError(''); setPreviewError(''); setPreviewIssues([]);
+      setStatus('Projeto importado. Confira a prévia e os arquivos.');
+    } catch { setStatus('Arquivo inválido. Importe um JSON exportado pelo Agent Center Code.'); }
+  };
   useEffect(() => {
     if (!dirty) return;
     const timeout = window.setTimeout(() => { setPreviewFiles({ ...files }); setPreviewError(''); setStatus('Prévia atualizada automaticamente.'); }, 650);
@@ -266,11 +379,23 @@ export default function CodeWorkspace() {
     }
     const nextFiles = { ...files, ...Object.fromEntries(proposal.changes.map(change => [change.name, change.after])) };
     if (proposalMode === 'create' && proposalType === 'site') delete nextFiles['app.json'];
-    if (proposalMode === 'create') { const nextId = `project_${crypto.randomUUID()}`; localStorage.setItem(PROJECT_ID_KEY, nextId); setProjectId(nextId); }
+    if (proposalMode === 'create' && mode !== 'create') {
+      const nextId = `project_${crypto.randomUUID()}`;
+      const nextProject: StoredProject = { id: nextId, name: agentPrompt.trim().replace(/^(crie|quero|preciso|desenvolva|monte|construa)\s+(um|uma|novo|nova|projeto|site|app|aplicativo|sistema)*\s*/i, '').slice(0, 52) || 'Projeto criado com IA',
+        type: proposalType, mode: 'edit', files: nextFiles, history: [], conversation, updatedAt: Date.now() };
+      setProjectStore(previous => ({ activeId: nextId, projects: [...previous.projects.map(item => item.id === projectId ? snapshotCurrent(item) : item), nextProject] }));
+      setProjectId(nextId);
+      setHistory([]);
+    }
+    if (proposalMode === 'create' && mode === 'create') {
+      const name = agentPrompt.trim().replace(/^(crie|quero|preciso|desenvolva|monte|construa)\s+(um|uma|novo|nova|projeto|site|app|aplicativo|sistema)*\s*/i, '').slice(0, 52) || 'Projeto criado com IA';
+      setProjectStore(previous => ({ ...previous, projects: previous.projects.map(item => item.id === projectId ? { ...item, name } : item) }));
+    }
     setProjectType(proposalType);
-    const nextHistory = [...history, { ...files }].slice(-10);
-    setHistory(nextHistory);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(nextHistory));
+    if (proposalMode !== 'create') {
+      const nextHistory = [...history, { ...files }].slice(-10);
+      setHistory(nextHistory);
+    }
     setFiles(nextFiles);
     setPreviewFiles(nextFiles);
     setPreviewError('');
@@ -287,7 +412,6 @@ export default function CodeWorkspace() {
     const previous = history[history.length - 1];
     const remaining = history.slice(0, -1);
     setHistory(remaining);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(remaining));
     setFiles(previous);
     setPreviewFiles(previous);
     setProposal(null);
@@ -305,6 +429,21 @@ export default function CodeWorkspace() {
           <button type="button" onClick={undo} disabled={!history.length} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">Desfazer versão</button>
           <button type="button" onClick={() => { setFiles({ ...STARTER_FILES }); setActiveFile('index.html'); setStatus('Projeto inicial restaurado. A prévia será atualizada.'); }} className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><RotateCcw className="h-3.5 w-3.5" /> Restaurar exemplo</button>
           <button type="button" onClick={run} className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-400"><Play className="h-3.5 w-3.5" /> Executar</button>
+        </div>
+        <div className="code-project-picker" aria-label="Projetos do Code">
+          <label htmlFor="code-project-select">Projeto</label>
+          <select id="code-project-select" value={projectId} onChange={event => { const next = projectStore.projects.find(item => item.id === event.target.value); if (next) openProject(next); }}>
+            {projectStore.projects.filter(item => !item.archived).map(item => <option key={item.id} value={item.id}>{item.name} · {item.type === 'app' ? 'App' : 'Site'}</option>)}
+          </select>
+          <button type="button" onClick={renameProject}>Renomear</button>
+          <button type="button" onClick={() => createProject(true)}><Copy className="h-3.5 w-3.5" /> Duplicar</button>
+          <button type="button" onClick={exportProject}><Download className="h-3.5 w-3.5" /> Exportar</button>
+          <button type="button" onClick={() => importRef.current?.click()}><Upload className="h-3.5 w-3.5" /> Importar</button>
+          <button type="button" onClick={archiveProject}><Archive className="h-3.5 w-3.5" /> Arquivar</button>
+          <input ref={importRef} type="file" accept="application/json,.json" hidden onChange={event => { void importProject(event.target.files?.[0]); event.target.value = ''; }} />
+          <button type="button" onClick={() => createProject()} className="primary"><Plus className="h-3.5 w-3.5" /> Novo projeto</button>
+          <span className="code-project-status" role="status">{status}</span>
+          {projectStore.projects.some(item => item.archived) && <details className="code-project-archive"><summary>Arquivados ({projectStore.projects.filter(item => item.archived).length})</summary><div>{projectStore.projects.filter(item => item.archived).map(item => <span key={item.id}>{item.name}<button type="button" onClick={() => restoreProject(item.id)}>Restaurar</button><button type="button" onClick={() => deleteArchivedProject(item.id)}>Excluir</button></span>)}</div></details>}
         </div>
       </div>
       <section className="code-builder-prompt rounded-xl bg-white p-4 shadow-sm" aria-label="Agente de programação">
