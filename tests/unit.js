@@ -30,6 +30,10 @@ assert.ok(weakDesign.some(issue => issue.includes('emojis')));
 assert.ok(weakDesign.some(issue => issue.includes('coluna estreita')));
 assert.ok(weakDesign.some(issue => issue.includes('formulário')));
 assert.deepStrictEqual(reviewGeneratedDesign({ creating: false, appProject: true, html: '', css: '', script: '' }), []);
+const fakeSiteActions = reviewGeneratedDesign({ creating: true, html: '<a href="#">Ver detalhes</a><p>(XX) XXXX-XXXX</p>', css: '', script: '' });
+assert.ok(fakeSiteActions.some(issue => issue.includes('link de ação')));
+assert.ok(fakeSiteActions.some(issue => issue.includes('contato fictícios')));
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, html: '<a href="#">CASA AURA</a><a href="#projetos">Ver projetos</a><section id="projetos"></section>', css: '', script: '' }), []);
 console.log('✅ Code design quality gate rejects generic app layouts and fake forms.');
 
 assert.strictEqual(PLAN_CATALOG.personal.pro.priceCents, 4990);

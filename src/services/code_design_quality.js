@@ -2,6 +2,12 @@ export function reviewGeneratedDesign({ html = '', css = '', script = '', creati
   const issues = [];
   if (!creating) return issues;
   if (/body\s*\{[^}]*place-items\s*:\s*center/is.test(css)) issues.push('a página inteira está centralizada como um cartão');
+  if (!appProject) {
+    if (/<a\b[^>]*href\s*=\s*["']#["'][^>]*>\s*(?:<[^>]+>\s*)*(?:ver|saiba|conheça|explore|contato|abrir|acessar)\b/i.test(html)) {
+      issues.push('há um link de ação que aponta apenas para #; conecte-o a uma seção real ou remova a ação');
+    }
+    if (/\(XX\)|\(00\)\s*0000|contato@example\.com/i.test(html)) issues.push('há dados de contato fictícios apresentados como reais');
+  }
   if (appProject) {
     if (!/<(?:header|nav|aside)\b/i.test(html) || !/<main\b/i.test(html)) issues.push('o app precisa de navegação e área principal claras');
     if (/\p{Extended_Pictographic}/u.test(html)) issues.push('não use emojis como ícones; crie controles tipográficos ou ícones SVG simples');
