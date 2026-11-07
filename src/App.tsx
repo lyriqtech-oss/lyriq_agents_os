@@ -1,9 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './lib/supabase';
-import CodeWorkspace from './components/CodeWorkspace';
-import AgentWorkspace from './components/AgentWorkspace';
-import SettingsWorkspace from './components/SettingsWorkspace';
-import AutomationWorkspace from './components/AutomationWorkspace';
 import { persistentStorage, setPersistentUser } from './lib/persistentStorage';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
 import {
@@ -52,6 +48,11 @@ import {
   Layout,
   Code2,
 } from 'lucide-react';
+
+const CodeWorkspace = React.lazy(() => import('./components/CodeWorkspace'));
+const AgentWorkspace = React.lazy(() => import('./components/AgentWorkspace'));
+const SettingsWorkspace = React.lazy(() => import('./components/SettingsWorkspace'));
+const AutomationWorkspace = React.lazy(() => import('./components/AutomationWorkspace'));
 
 // --- DATABASE TYPES ---
 interface Agent {
@@ -8352,7 +8353,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                     <p className="mt-2 text-sm text-slate-600">No Business, o Code está disponível a partir do plano Max.</p>
                     <button onClick={() => setCurrentTab('pricing')} className="mt-5 rounded-lg bg-slate-950 px-5 py-2.5 text-xs font-bold text-white">Ver planos com Code</button>
                   </div>
-                ) : <CodeWorkspace />
+                ) : <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Carregando Code…</div>}><CodeWorkspace /></React.Suspense>
               )}
 
               {currentTab === 'dashboard' && isDashboardUnlocked && (
@@ -9927,7 +9928,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
-              {currentTab === 'agents' && companyProfile.setupComplete && <AgentWorkspace onOpenProviders={() => setCurrentTab('providers')} />}
+              {currentTab === 'agents' && companyProfile.setupComplete && <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Carregando agentes…</div>}><AgentWorkspace onOpenProviders={() => setCurrentTab('providers')} /></React.Suspense>}
               {currentTab === 'memory' && companyProfile.setupComplete && (
                 <div className="space-y-6 max-w-6xl">
                   <div>
@@ -10406,7 +10407,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
-              {currentTab === 'automation_builder' && companyProfile.setupComplete && <AutomationWorkspace />}
+              {currentTab === 'automation_builder' && companyProfile.setupComplete && <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Carregando automações…</div>}><AutomationWorkspace /></React.Suspense>}
               {/* 6. APP: WORKFLOWS */}
               {currentTab === 'workflows' && companyProfile.setupComplete && (
                 <div className="space-y-6 max-w-6xl">
@@ -16349,7 +16350,7 @@ Regras duras:
               )}
 
               {/* 9. APP: CONFIGURAÇÕES */}
-              {currentTab === 'settings' && companyProfile.setupComplete && <SettingsWorkspace companyName={companyProfile.name} onOpenProviders={() => setCurrentTab('providers')} onOpenAgents={() => setCurrentTab('agents')} />}
+              {currentTab === 'settings' && companyProfile.setupComplete && <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Carregando configurações…</div>}><SettingsWorkspace companyName={companyProfile.name} onOpenProviders={() => setCurrentTab('providers')} onOpenAgents={() => setCurrentTab('agents')} /></React.Suspense>}
 
               {/* 10. APP: ONBOARDING WIZARD */}
               {currentTab === 'onboarding' && !isDashboardUnlocked && (
