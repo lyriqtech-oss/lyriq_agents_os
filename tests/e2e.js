@@ -1,17 +1,20 @@
 import { spawn } from 'child_process';
 import assert from 'assert';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 console.log('=== RUNNING E2E TESTS ===');
 
-// Reset database
-if (fs.existsSync('./database.json')) {
-  fs.unlinkSync('./database.json');
-}
+// Keep the E2E database and vault separate from the user's local workspace.
+const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-center-e2e-'));
+process.on('exit', () => {
+  try { fs.rmSync(testDir, { recursive: true, force: true }); } catch { /* server may still be exiting */ }
+});
 
 // Start backend
 const serverProcess = spawn('node', ['server.js'], {
-  env: { ...process.env, PORT: '5002' }
+  env: { ...process.env, PORT: '5002', AGENT_CENTER_DB_FILE: path.join(testDir, 'database.json') }
 });
 
 setTimeout(async () => {

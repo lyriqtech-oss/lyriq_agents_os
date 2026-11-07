@@ -276,8 +276,14 @@ setTimeout(async () => {
     assert.strictEqual(flowRun.input, 'Teste manual com uma pergunta nova.');
     assert.strictEqual(flowRun.creditsUsed, null);
     assert.ok(flowRun.error.includes('modelo real'));
+    assert.strictEqual(flowRun.steps[0].stepId, 'research-step');
+    assert.strictEqual(flowRun.steps[0].agentName, 'Analista de pesquisa');
+    assert.strictEqual(flowRun.steps[0].error, true);
     const flowHistory = await fetch(`${baseUrl}/automations/${flow.id}/runs`).then(response => response.json());
     assert.ok(flowHistory.data.some(run => run.id === flowRun.id));
+    const secretRunResponse = await fetch(`${baseUrl}/automations/${flow.id}/trigger`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: 'Minha chave sk-123456789abcdef precisa ser escondida.' }) });
+    const secretRun = (await secretRunResponse.json()).data.run;
+    assert.ok(!secretRun.input.includes('123456789abcdef'));
     const oversizedInput = await fetch(`${baseUrl}/automations/${flow.id}/trigger`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: 'a'.repeat(8001) }) });
     assert.strictEqual(oversizedInput.status, 400);
     console.log('✅ Agent automation saves runs and reports a missing real model instead of a fake success.');
