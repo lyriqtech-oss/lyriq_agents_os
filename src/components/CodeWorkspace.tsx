@@ -96,6 +96,7 @@ export default function CodeWorkspace() {
   const [agentError, setAgentError] = useState('');
   const [previewError, setPreviewError] = useState('');
   const [previewIssues, setPreviewIssues] = useState<string[]>([]);
+  const [previewCheckIssues, setPreviewCheckIssues] = useState<string[]>([]);
   const [previewCheckResult, setPreviewCheckResult] = useState('');
   const [previewWidth, setPreviewWidth] = useState(0);
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
@@ -163,7 +164,7 @@ export default function CodeWorkspace() {
   const selectedProvider = providers.find(item => item.id === providerId);
   const availableModels = (selectedProvider?.available_models || []).map(item => typeof item === 'string' ? item : item.id).filter(name => /^(gemini-(2\.5-(flash|pro)|3(\.1)?-(flash|pro)|flash-latest|pro-latest)|gpt-|claude-|llama-|meta\/)/i.test(name) && !/tts|image|embedding|transcribe|robotics|computer-use/i.test(name));
   const shownFiles = proposal ? { ...previewFiles, ...Object.fromEntries(proposal.changes.map(change => [change.name, change.after])) } : previewFiles;
-  useEffect(() => { setPreviewCheckResult(''); }, [previewFiles, proposal, previewPage, device]);
+  useEffect(() => { setPreviewCheckResult(''); setPreviewCheckIssues([]); }, [previewFiles, proposal, previewPage, device]);
   const snapshotCurrent = (item: StoredProject): StoredProject => ({ ...item, files, history, conversation, type: projectType, mode, updatedAt: Date.now() });
   const openProject = (next: StoredProject) => {
     if (next.id === projectId) return;
@@ -255,7 +256,7 @@ export default function CodeWorkspace() {
       if (event.data?.source === 'agent-center-preview' && event.data.type === 'audit' && Array.isArray(event.data.issues)) setPreviewIssues(event.data.issues.map((issue: unknown) => String(issue).slice(0, 200)).slice(0, 3));
       if (event.data?.source === 'agent-center-preview' && event.data.type === 'checks' && Array.isArray(event.data.issues)) {
         const issues = event.data.issues.map((issue: unknown) => String(issue).slice(0, 200)).slice(0, 8);
-        setPreviewIssues(issues);
+        setPreviewCheckIssues(issues);
         setPreviewCheckResult(issues.length ? `${issues.length} ponto${issues.length === 1 ? '' : 's'} para corrigir na janela de ${event.data.width} px.` : `Prévia verificada em ${event.data.width} px: nenhuma falha detectada.`);
       }
       if (event.data?.source === 'agent-center-preview' && event.data.type === 'viewport' && Number.isFinite(event.data.width)) setPreviewWidth(event.data.width);
@@ -519,7 +520,7 @@ export default function CodeWorkspace() {
           <div className="flex h-11 items-center justify-between gap-2 border-b border-slate-200 px-4 text-xs font-semibold text-slate-700"><span>Prévia {proposal && <span className="text-cyan-700">· proposta para revisão</span>}{dirty && !proposal && <span className="text-amber-700">· atualizando</span>}</span><div className="flex items-center gap-2"><select aria-label="Página da prévia" value={previewPage} onChange={event => setPreviewPage(event.target.value)} className="max-w-32 rounded border border-slate-200 bg-white px-1 py-1 text-[11px]">{Object.keys(shownFiles).filter(name => name.endsWith('.html')).map(name => <option key={name} value={name}>{name}</option>)}</select><button type="button" onClick={() => setDevice('desktop')} aria-label="Prévia desktop" title="Desktop" className={`rounded p-1 ${device === 'desktop' ? 'bg-slate-200 text-slate-900' : 'text-slate-400'}`}><Monitor className="h-4 w-4" /></button><button type="button" onClick={() => setDevice('mobile')} aria-label="Prévia celular" title="Celular" className={`rounded p-1 ${device === 'mobile' ? 'bg-slate-200 text-slate-900' : 'text-slate-400'}`}><Smartphone className="h-4 w-4" /></button><button type="button" onClick={() => setExpandedPreview(true)} aria-label="Ampliar prévia" title="Ampliar prévia" className="rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-950"><Maximize2 className="h-4 w-4" /></button></div></div>
           <div className="flex min-h-[300px] flex-1 justify-center overflow-auto bg-slate-100 p-2"><iframe ref={previewRef} key={buildPreview(shownFiles, previewPage)} title="Prévia isolada do projeto" sandbox="allow-scripts" srcDoc={buildPreview(shownFiles, previewPage)} className={`min-h-[300px] flex-1 border-0 bg-white ${device === 'mobile' ? 'max-w-[375px]' : 'w-full'}`} /></div>
           {previewError && <p role="alert" className="border-t border-red-200 bg-red-50 px-3 py-2 font-mono text-[11px] text-red-800">Erro na prévia: {previewError}</p>}
-          {previewCheckResult && <p role="status" className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">{previewCheckResult}{previewIssues.length > 0 && <span className="mt-1 block text-red-700">{previewIssues.join(' · ')}</span>}</p>}
+          {previewCheckResult && <p role="status" className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">{previewCheckResult}{previewCheckIssues.length > 0 && <span className="mt-1 block text-red-700">{previewCheckIssues.join(' · ')}</span>}</p>}
         </section>
       </div>
       {expandedPreview && <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950" role="dialog" aria-modal="true" aria-label="Prévia ampliada do projeto">
