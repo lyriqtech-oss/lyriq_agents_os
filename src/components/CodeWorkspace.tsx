@@ -25,6 +25,12 @@ function inferProjectType(prompt: string, currentType: 'site' | 'app', creating:
   if (!creating) return currentType;
   return /\b(app|aplicativo|sistema|dashboard|painel|cadastro|tarefas?|clientes?|agendamentos?|login|backend|banco de dados|persistente|gerenciador)\b/i.test(prompt) ? 'app' : 'site';
 }
+function projectNameFromPrompt(prompt: string): string {
+  const named = prompt.match(/\b(?:chamad[oa]|nomead[oa]|intitulad[oa])\s+[“"']?([^.!?\n,“"']{2,52})/i)?.[1]?.trim();
+  if (named) return named;
+  const description = prompt.trim().replace(/^(crie|quero|preciso|desenvolva|monte|construa)\s+(um|uma|novo|nova|projeto|site|app|aplicativo|sistema)*\s*/i, '').split(/[.!?\n]/)[0].trim();
+  return description.slice(0, 52).trim() || 'Projeto criado com IA';
+}
 const STARTER_FILES: ProjectFiles = {
   'index.html': '<main class="card">\n  <span class="eyebrow">Agent Center</span>\n  <h1>Seu projeto começa aqui.</h1>\n  <p>Edite os arquivos ao lado. A prévia aparece automaticamente.</p>\n  <button id="hello">Testar interação</button>\n</main>',
   'styles.css': 'body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0b1220; color: #f8fafc; font-family: ui-sans-serif, system-ui, sans-serif; }\n.card { max-width: 520px; padding: 48px; }\n.eyebrow { color: #22d3ee; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }\nh1 { font-size: clamp(32px, 5vw, 56px); line-height: 1.05; letter-spacing: -.04em; }\np { color: #cbd5e1; line-height: 1.6; }\nbutton { margin-top: 16px; padding: 12px 18px; border: 0; border-radius: 10px; background: #22d3ee; color: #082f49; font-weight: 700; cursor: pointer; }',
@@ -90,6 +96,7 @@ export default function CodeWorkspace() {
   const [activeFile, setActiveFile] = useState('index.html');
   const [previewFiles, setPreviewFiles] = useState<ProjectFiles>(() => initialProject.files);
   const [status, setStatus] = useState('Projeto pronto');
+  const [renameDraft, setRenameDraft] = useState<string | null>(null);
   const [agentPrompt, setAgentPrompt] = useState('');
   const [proposal, setProposal] = useState<CodeProposal | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
@@ -168,6 +175,7 @@ export default function CodeWorkspace() {
   const snapshotCurrent = (item: StoredProject): StoredProject => ({ ...item, files, history, conversation, type: projectType, mode, updatedAt: Date.now() });
   const openProject = (next: StoredProject) => {
     if (next.id === projectId) return;
+    setRenameDraft(null);
     setProjectStore(previous => ({ activeId: next.id, projects: previous.projects.map(item => item.id === projectId ? snapshotCurrent(item) : item) }));
     setProjectId(next.id);
     setFiles({ ...next.files }); setPreviewFiles({ ...next.files }); setHistory([...next.history]);
@@ -178,6 +186,7 @@ export default function CodeWorkspace() {
   };
   const createProject = (duplicate = false) => {
     if (projectStore.projects.length >= 20) { setStatus('Limite local de 20 projetos atingido. Exporte um projeto antes de criar outro.'); return; }
+    setRenameDraft(null);
     const id = `project_${crypto.randomUUID()}`;
     const source = projectStore.projects.find(item => item.id === projectId);
     const next: StoredProject = { id, name: duplicate ? `${source?.name || 'Projeto'} — cópia` : 'Novo projeto', type: duplicate ? projectType : 'site', mode: duplicate ? 'edit' : 'create',
@@ -189,10 +198,11 @@ export default function CodeWorkspace() {
     setStatus(duplicate ? 'Cópia criada. O projeto original foi preservado.' : 'Projeto novo pronto para criar.');
   };
   const renameProject = () => {
-    const current = projectStore.projects.find(item => item.id === projectId);
-    const name = window.prompt('Nome do projeto:', current?.name || 'Novo projeto')?.trim();
+    const name = renameDraft?.trim();
     if (!name) return;
     setProjectStore(previous => ({ ...previous, projects: previous.projects.map(item => item.id === projectId ? { ...item, name: name.slice(0, 80) } : item) }));
+    setRenameDraft(null);
+    setStatus('Projeto renomeado.');
   };
   const archiveProject = () => {
     const active = projectStore.projects.filter(item => !item.archived);
@@ -394,14 +404,14 @@ export default function CodeWorkspace() {
     if (proposalMode === 'create' && proposalType === 'site') delete nextFiles['app.json'];
     if (proposalMode === 'create' && mode !== 'create') {
       const nextId = `project_${crypto.randomUUID()}`;
-      const nextProject: StoredProject = { id: nextId, name: agentPrompt.trim().replace(/^(crie|quero|preciso|desenvolva|monte|construa)\s+(um|uma|novo|nova|projeto|site|app|aplicativo|sistema)*\s*/i, '').slice(0, 52) || 'Projeto criado com IA',
+      const nextProject: StoredProject = { id: nextId, name: projectNameFromPrompt(agentPrompt),
         type: proposalType, mode: 'edit', files: nextFiles, history: [], conversation, updatedAt: Date.now() };
       setProjectStore(previous => ({ activeId: nextId, projects: [...previous.projects.map(item => item.id === projectId ? snapshotCurrent(item) : item), nextProject] }));
       setProjectId(nextId);
       setHistory([]);
     }
     if (proposalMode === 'create' && mode === 'create') {
-      const name = agentPrompt.trim().replace(/^(crie|quero|preciso|desenvolva|monte|construa)\s+(um|uma|novo|nova|projeto|site|app|aplicativo|sistema)*\s*/i, '').slice(0, 52) || 'Projeto criado com IA';
+      const name = projectNameFromPrompt(agentPrompt);
       setProjectStore(previous => ({ ...previous, projects: previous.projects.map(item => item.id === projectId ? { ...item, name } : item) }));
     }
     setProjectType(proposalType);
@@ -449,7 +459,12 @@ export default function CodeWorkspace() {
           <select id="code-project-select" value={projectId} onChange={event => { const next = projectStore.projects.find(item => item.id === event.target.value); if (next) openProject(next); }}>
             {projectStore.projects.filter(item => !item.archived).map(item => <option key={item.id} value={item.id}>{item.name} · {item.type === 'app' ? 'App' : 'Site'}</option>)}
           </select>
-          <button type="button" onClick={renameProject}>Renomear</button>
+          {renameDraft === null ? <button type="button" onClick={() => setRenameDraft(projectStore.projects.find(item => item.id === projectId)?.name || '')}>Renomear</button> :
+            <form className="code-project-rename" onSubmit={event => { event.preventDefault(); renameProject(); }}>
+              <input aria-label="Novo nome do projeto" autoFocus maxLength={80} value={renameDraft} onChange={event => setRenameDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setRenameDraft(null); }} />
+              <button type="submit" disabled={!renameDraft.trim()}>Salvar nome</button>
+              <button type="button" onClick={() => setRenameDraft(null)}>Cancelar</button>
+            </form>}
           <button type="button" onClick={() => createProject(true)}><Copy className="h-3.5 w-3.5" /> Duplicar</button>
           <button type="button" onClick={exportProject}><Download className="h-3.5 w-3.5" /> Exportar</button>
           <button type="button" onClick={() => importRef.current?.click()}><Upload className="h-3.5 w-3.5" /> Importar</button>
