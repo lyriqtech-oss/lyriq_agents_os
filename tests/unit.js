@@ -34,6 +34,13 @@ const fakeSiteActions = reviewGeneratedDesign({ creating: true, html: '<a href="
 assert.ok(fakeSiteActions.some(issue => issue.includes('link de ação')));
 assert.ok(fakeSiteActions.some(issue => issue.includes('contato fictícios')));
 assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, html: '<a href="#">CASA AURA</a><a href="#projetos">Ver projetos</a><section id="projetos"></section>', css: '', script: '' }), []);
+const selfLinkIssues = reviewGeneratedDesign({ creating: true, html: '<section id="projetos"><a href="#projetos">Detalhes</a></section><section id="contato"><a href="#contato">Iniciar um diálogo</a></section>', css: '', script: '' });
+assert.strictEqual(selfLinkIssues.filter(issue => issue.includes('volta para a mesma seção')).length, 2);
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, prompt: 'Use contato@formaviva.com', html: '<nav><a href="#projetos">Projetos</a></nav><section id="projetos"><a href="#contato">Iniciar um diálogo</a></section><section id="contato"><a href="mailto:contato@formaviva.com">E-mail</a></section>', css: '', script: '' }), []);
+assert.ok(reviewGeneratedDesign({ creating: true, prompt: 'Site para Forma Viva', html: '<a href="mailto:contato@formaviva.com">Contato</a>' }).some(issue => issue.includes('e-mail')));
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, prompt: 'Use contato@formaviva.com', html: '<a href="mailto:contato@formaviva.com">Contato</a>' }), []);
+assert.ok(reviewGeneratedDesign({ creating: true, html: '<footer id="contato"><h2>Contato</h2><p>Entre em contato conosco.</p></footer>' }).some(issue => issue.includes('canal funcional')));
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, prompt: 'Use contato@formaviva.com', html: '<footer id="contato"><a href="mailto:contato@formaviva.com">Contato</a></footer>' }), []);
 console.log('✅ Code design quality gate rejects generic app layouts and fake forms.');
 
 assert.strictEqual(PLAN_CATALOG.personal.pro.priceCents, 4990);

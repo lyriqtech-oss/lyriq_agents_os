@@ -1,4 +1,4 @@
-export function reviewGeneratedDesign({ html = '', css = '', script = '', creating = false, appProject = false }) {
+export function reviewGeneratedDesign({ html = '', css = '', script = '', prompt = '', creating = false, appProject = false }) {
   const issues = [];
   if (!creating) return issues;
   if (/body\s*\{[^}]*place-items\s*:\s*center/is.test(css)) issues.push('a página inteira está centralizada como um cartão');
@@ -7,6 +7,21 @@ export function reviewGeneratedDesign({ html = '', css = '', script = '', creati
       issues.push('há um link de ação que aponta apenas para #; conecte-o a uma seção real ou remova a ação');
     }
     if (/\(XX\)|\(00\)\s*0000|contato@example\.com/i.test(html)) issues.push('há dados de contato fictícios apresentados como reais');
+    const inventedEmail = [...html.matchAll(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi)].map(match => match[0]).find(email => !prompt.toLocaleLowerCase().includes(email.toLocaleLowerCase()));
+    if (inventedEmail) issues.push('há um e-mail de contato que o usuário não forneceu; não invente dados de contato');
+    const contactSection = html.match(/<(?:section|footer)\b[^>]*\bid=["']contato["'][^>]*>([\s\S]*?)<\/(?:section|footer)>/i)?.[1];
+    if (contactSection && !/\b(?:mailto:|tel:|<form\b|https?:\/\/)/i.test(contactSection)) {
+      issues.push('a seção de contato não oferece um canal funcional; remova a chamada para contato se o usuário não forneceu um canal');
+    }
+    for (const section of html.matchAll(/<section\b[^>]*\bid=["']([^"']+)["'][^>]*>([\s\S]*?)<\/section>/gi)) {
+      const [, sectionId, sectionHtml] = section;
+      for (const anchor of sectionHtml.matchAll(/<a\b[^>]*\bhref=["']#([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+        const label = anchor[2].replace(/<[^>]+>/g, '').trim();
+        if (anchor[1] === sectionId && /\b(detalhes?|iniciar|conversar|di[aá]logo|fale|solicitar|enviar|contato)\b/i.test(label)) {
+          issues.push(`a ação "${label.slice(0, 40)}" volta para a mesma seção; conecte-a a um destino útil ou remova-a`);
+        }
+      }
+    }
   }
   if (appProject) {
     if (!/<(?:header|nav|aside)\b/i.test(html) || !/<main\b/i.test(html)) issues.push('o app precisa de navegação e área principal claras');
