@@ -119,6 +119,7 @@ export default function CodeWorkspace() {
   const [proposalType, setProposalType] = useState<'site' | 'app'>('site');
   const [backendStatus, setBackendStatus] = useState('');
   const [providers, setProviders] = useState<ProviderConnection[]>([]);
+  const [syncingModels, setSyncingModels] = useState(false);
   const [providerId, setProviderId] = useState('');
   const [modelId, setModelId] = useState('');
   const previewRef = useRef<HTMLIFrameElement>(null);
@@ -164,13 +165,31 @@ export default function CodeWorkspace() {
         setProviderId(preferred.id);
         const available = (preferred.available_models || []).map((item: string | { id: string }) => typeof item === 'string' ? item : item.id);
         const savedModel = localStorage.getItem(MODEL_KEY);
-        const qualityModel = preferred.provider === 'gemini' && available.includes('gemini-2.5-pro') ? 'gemini-2.5-pro' : preferred.selected_chat_model || '';
-        setModelId(savedModel && available.includes(savedModel) ? savedModel : qualityModel);
+        setModelId(savedModel && available.includes(savedModel) ? savedModel : preferred.selected_chat_model || available[0] || '');
       }
     }).catch(() => setAgentError('Não foi possível carregar os modelos. Verifique a API local.'));
   }, []);
   const selectedProvider = providers.find(item => item.id === providerId);
-  const availableModels = (selectedProvider?.available_models || []).map(item => typeof item === 'string' ? item : item.id).filter(name => /^(gemini-(2\.5-(flash|pro)|3(\.1)?-(flash|pro)|flash-latest|pro-latest)|gpt-|claude-|llama-|meta\/)/i.test(name) && !/tts|image|embedding|transcribe|robotics|computer-use/i.test(name));
+  const availableModels = (selectedProvider?.available_models || []).map(item => typeof item === 'string' ? item : item.id).filter(name => /^(gemini-(?:(?:\d+(?:\.\d+)?)-(?:flash|pro)|(?:flash|pro)-latest)|gpt-|claude-|llama-|meta\/)/i.test(name) && !/tts|image|embedding|transcribe|robotics|computer-use/i.test(name));
+  const refreshModels = async () => {
+    if (!selectedProvider) return;
+    setSyncingModels(true);
+    setAgentError('');
+    try {
+      const response = await fetch(`/api/providers/${selectedProvider.provider}/sync-models`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId: 'workspace_123', providerConnectionId: selectedProvider.id }) });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error?.message || 'Não foi possível atualizar os modelos.');
+      const models = result.data.models as string[];
+      setProviders(previous => previous.map(item => item.id === selectedProvider.id ? { ...item, available_models: models, selected_chat_model: result.data.selected_chat_model } : item));
+      if (!models.includes(modelId)) {
+        setModelId(result.data.selected_chat_model);
+        localStorage.setItem(MODEL_KEY, result.data.selected_chat_model);
+      }
+      setStatus(`${models.length} modelos atualizados nesta conexão.`);
+    } catch (error) { setAgentError(error instanceof Error ? error.message : 'Falha ao atualizar modelos.'); }
+    finally { setSyncingModels(false); }
+  };
   const shownFiles = proposal ? { ...previewFiles, ...Object.fromEntries(proposal.changes.map(change => [change.name, change.after])) } : previewFiles;
   useEffect(() => { setPreviewCheckResult(''); setPreviewCheckIssues([]); }, [previewFiles, proposal, previewPage, device]);
   const snapshotCurrent = (item: StoredProject): StoredProject => ({ ...item, files, history, conversation, type: projectType, mode, updatedAt: Date.now() });
@@ -490,7 +509,7 @@ export default function CodeWorkspace() {
         <div ref={chatFeedRef} className="code-chat-feed" aria-label="Conversa do projeto">{conversation.length ? conversation.map((message, index) => <div key={index} className={`code-chat-message ${message.role}`}><strong>{message.role === 'user' ? 'Você' : 'Agent Center'}</strong><p>{message.text}</p></div>) : <div className="code-chat-empty"><Sparkles className="h-5 w-5" /><strong>O que vamos criar?</strong><p>Conte sua ideia em linguagem natural. Se precisar guardar dados, o agente prepara isso no projeto.</p><div className="code-chat-suggestions"><button type="button" onClick={() => setAgentPrompt('Crie um site editorial para um estúdio criativo, com identidade visual própria, seções bem compostas e layout responsivo.')}>Site editorial</button><button type="button" onClick={() => setAgentPrompt('Crie um aplicativo de tarefas com dados persistentes, estados vazios, filtros e uma interface clara e responsiva.')}>App com dados</button></div></div>}{agentBusy && <div className="code-chat-message agent code-chat-thinking" role="status"><strong>Agent Center</strong><p>Definindo direção visual e construindo a prévia<span aria-hidden="true">…</span></p></div>}</div>
         {projectType === 'app' && backendStatus && <p className="text-xs text-slate-500">{backendStatus}</p>}
         <textarea aria-label="Mensagem para o agente de código" value={agentPrompt} onChange={event => setAgentPrompt(event.target.value)} rows={2} placeholder="Descreva o que quer criar ou peça uma mudança..." className="mt-3 w-full rounded-lg border border-slate-300 p-3 text-sm text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500" />
-        <div className="code-builder-submit"><div><label htmlFor="code-model">Modelo</label><select id="code-model" value={modelId} onChange={event => { setModelId(event.target.value); setFallbackNotice(''); localStorage.setItem(MODEL_KEY, event.target.value); }}>{availableModels.map(name => <option key={name} value={name}>{name}</option>)}</select></div><button type="button" onClick={requestProposal} disabled={agentBusy || agentPrompt.trim().length < 10 || !providerId || !modelId} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{agentBusy ? 'Criando...' : <><ArrowUp className="h-4 w-4" /> Enviar</>}</button></div>
+        <div className="code-builder-submit"><div><label htmlFor="code-model">Modelo</label><select id="code-model" value={modelId} onChange={event => { setModelId(event.target.value); setFallbackNotice(''); localStorage.setItem(MODEL_KEY, event.target.value); }}>{availableModels.map(name => <option key={name} value={name}>{name}</option>)}</select></div><button type="button" onClick={refreshModels} disabled={syncingModels || agentBusy || !selectedProvider} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50"><RotateCcw className="h-3.5 w-3.5" /> {syncingModels ? 'Atualizando…' : 'Atualizar modelos'}</button><button type="button" onClick={requestProposal} disabled={agentBusy || agentPrompt.trim().length < 10 || !providerId || !modelId} className="rounded-lg bg-slate-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{agentBusy ? 'Criando...' : <><ArrowUp className="h-4 w-4" /> Enviar</>}</button></div>
         {fallbackNotice && <p role="status" className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{fallbackNotice}</p>}
         {modelId === 'gemini-2.5-pro' && <p className="code-builder-hint">Modelo escolhido para melhor qualidade visual; usa mais cota da sua API.</p>}
         {agentError && <p role="alert" className="mt-2 text-xs text-red-700">{agentError}</p>}

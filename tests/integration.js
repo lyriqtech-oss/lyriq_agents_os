@@ -174,6 +174,17 @@ setTimeout(async () => {
     assert.strictEqual(bodyValKeyOk.data.connection.encrypted_api_key, undefined);
     console.log('✅ POST /api/providers/:provider/validate-key (Mock Valid Key) passed.');
 
+    const syncResponse = await fetch(`${baseUrl}/providers/gemini/sync-models`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', providerConnectionId: bodyValKeyOk.data.connection.id })
+    });
+    const syncResult = await syncResponse.json();
+    assert.strictEqual(syncResponse.status, 200);
+    assert.ok(syncResult.data.models.includes('gemini-2.5-flash'));
+    assert.strictEqual(syncResult.data.selected_chat_model, 'gemini-2.5-flash');
+    assert.strictEqual(syncResult.data.encrypted_api_key, undefined);
+    console.log('✅ Provider model sync uses the saved connection and returns safe model IDs.');
+
     // 4. Test POST /api/agents/main (Invalid - Empty instructions)
     const resAgentEmpty = await fetch(`${baseUrl}/agents/main`, {
       method: 'POST',

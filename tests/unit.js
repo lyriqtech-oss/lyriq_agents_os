@@ -78,17 +78,22 @@ const createJsonResponse = (status, body) => ({
   }
 });
 
+let geminiRequest;
 const geminiModels = await getModelsForProvider('gemini', 'real-looking-key', {
   allowFallback: false,
-  fetchImpl: async () => createJsonResponse(200, {
+  fetchImpl: async (url, options) => { geminiRequest = { url, headers: options.headers }; return createJsonResponse(200, {
     models: [
       { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
       { name: 'models/embedding-001', supportedGenerationMethods: ['embedContent'] }
     ]
-  })
+  }); }
 });
 assert.ok(geminiModels.some(m => m.id === 'gemini-2.5-flash' && m.source === 'provider_api'));
+assert.ok(geminiModels.some(m => m.id === 'gemini-3.8-flash' && m.source === 'provider_api'));
 assert.ok(!geminiModels.some(m => m.id === 'embedding-001'));
+assert.strictEqual(geminiRequest.headers['x-goog-api-key'], 'real-looking-key');
+assert.ok(!geminiRequest.url.includes('real-looking-key'));
 
 const openAiModels = await getModelsForProvider('openai', 'sk-real-looking-key', {
   allowFallback: false,

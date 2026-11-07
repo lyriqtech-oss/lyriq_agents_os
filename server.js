@@ -2069,9 +2069,25 @@ const server = http.createServer(async (req, res) => {
     // POST /api/providers/:provider/sync-models
     const provSyncModelsRouteMatch = pathName.match(/^\/api\/providers\/([a-zA-Z0-9_\-]+)\/sync-models$/);
     if (provSyncModelsRouteMatch && method === 'POST') {
-      const providerId = provSyncModelsRouteMatch[1];
-      const modelsList = await getModelsForProvider(providerId);
-      return sendSuccess(res, { ok: true, provider: providerId, syncedCount: modelsList.length, models: modelsList }, reqId);
+      const provider = provSyncModelsRouteMatch[1];
+      const body = await parseBody(req);
+      const db = readDb();
+      const connection = (db.providers || []).find(item => item.provider === provider && item.status === 'valid' &&
+        (!body.providerConnectionId || item.id === body.providerConnectionId) && item.workspace_id === (body.workspaceId || 'workspace_123'));
+      if (!connection) return sendError(res, 404, 'PROVIDER_NOT_CONFIGURED', 'Conexão não encontrada.', 'Valide uma conexão antes de atualizar os modelos.', 'blocking', null, reqId);
+      const key = decodeStoredKey(connection.encrypted_api_key);
+      let models;
+      try {
+        models = key.startsWith('mock-') ? buildMockProviderModels(provider, key) :
+          (await getModelsForProvider(provider, key, { allowFallback: false })).filter(item => item.isAvailable !== false).map(item => item.id);
+      } catch { return sendError(res, 503, 'PROVIDER_MODEL_SYNC_FAILED', 'Não foi possível consultar os modelos agora.', 'Tente novamente em instantes.', 'blocking', null, reqId); }
+      if (!models.length) return sendError(res, 502, 'PROVIDER_NO_MODELS', 'A conexão não retornou modelos utilizáveis.', 'Verifique a chave e a conta no provedor.', 'blocking', null, reqId);
+      connection.available_models = models;
+      if (!models.includes(connection.selected_chat_model)) {
+        connection.selected_chat_model = models.find(id => !/embedding|image|tts|transcrib|audio|robotics/i.test(id)) || models[0];
+      }
+      writeDb(db);
+      return sendSuccess(res, { provider, models, selected_chat_model: connection.selected_chat_model, syncedCount: models.length }, reqId);
     }
 
     // ----------------------------------------------------
