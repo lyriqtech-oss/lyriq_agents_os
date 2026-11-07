@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ArrowUp, Code2, Copy, Download, FilePlus2, Maximize2, Monitor, Play, Plus, RotateCcw, Save, Smartphone, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Archive, ArrowUp, Code2, Copy, Download, FilePlus2, Maximize2, Monitor, Play, Plus, RotateCcw, Save, ShieldCheck, Smartphone, Sparkles, Trash2, Upload, X } from 'lucide-react';
 import './CodeWorkspace.css';
 
 type ProjectFiles = Record<string, string>;
@@ -78,7 +78,8 @@ function buildPreview(files: ProjectFiles, page = 'index.html'): string {
   const bridge = `var originalAddEventListener=document.addEventListener.bind(document);document.addEventListener=function(type,listener,options){if(type==='DOMContentLoaded'&&document.readyState!=='loading'){queueMicrotask(function(){listener(new Event(type))});return}originalAddEventListener(type,listener,options)};function sendForm(form){if(form.checkValidity())form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));else form.reportValidity()}document.addEventListener('click',function(event){var button=event.target.closest?.('button[type="submit"]');if(button&&button.form){event.preventDefault();sendForm(button.form)}},true);document.addEventListener('keydown',function(event){if(event.key==='Enter'&&event.target.matches?.('form input:not([type="textarea"])')){event.preventDefault();sendForm(event.target.form)}},true);window.AgentCenter={data:{}};['list','create','update','remove'].forEach(function(action){window.AgentCenter.data[action]=function(collection,a,b){return new Promise(function(resolve,reject){var requestId=Math.random().toString(36).slice(2)+Date.now();var timer=setTimeout(function(){window.removeEventListener('message',onReply);reject(new Error('O backend demorou para responder.'))},10000);function onReply(event){if(event.source!==window.parent||event.data?.source!=='agent-center-data-result'||event.data.requestId!==requestId)return;clearTimeout(timer);window.removeEventListener('message',onReply);event.data.ok?resolve(event.data.data):reject(new Error(event.data.error||'Falha nos dados'))}window.addEventListener('message',onReply);window.parent.postMessage({source:'agent-center-data',requestId:requestId,action:action,collection:collection,id:action==='update'||action==='remove'?a:undefined,record:action==='create'?a:action==='update'?b:undefined},'*')})}});`;
   const audit = `window.addEventListener('load',function(){var h=document.querySelector('h1');if(!h)return;function rgb(v){var m=v.match(/[\\d.]+/g);return m&&m.length>=3?m.slice(0,3).map(Number):null}function luminance(c){var n=c.map(v=>{v=v/255;return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*n[0]+.7152*n[1]+.0722*n[2]}var color=rgb(getComputedStyle(h).color),node=h,bg=null;while(node){var s=getComputedStyle(node);if(s.backgroundImage!=='none')break;if(s.backgroundColor&&!/rgba?\\([^)]*,\\s*0\\s*\\)$/.test(s.backgroundColor)){bg=rgb(s.backgroundColor);if(bg)break}node=node.parentElement}if(color&&bg){var a=luminance(color),b=luminance(bg),ratio=(Math.max(a,b)+.05)/(Math.min(a,b)+.05);if(ratio<3)window.parent.postMessage({source:'agent-center-preview',type:'audit',issues:['O título principal tem pouco contraste com o fundo.']},'*')}});`;
   const viewportReport = `function reportViewport(){window.parent.postMessage({source:'agent-center-preview',type:'viewport',width:innerWidth},'*')}window.addEventListener('load',reportViewport);window.addEventListener('resize',reportViewport);`;
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>${css.replace(/<\/style/gi, '<\\/style')}</style><script>${bridge}window.addEventListener('error',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:event.message},'*')});window.addEventListener('unhandledrejection',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:String(event.reason)},'*')});${audit}${viewportReport}<\/script></head><body>${html}<script>${js.replace(/<\/script/gi, '<\\/script')}<\/script></body></html>`;
+  const checks = `function checkPreview(){var issues=[];if(document.querySelectorAll('h1').length!==1)issues.push('Use um único título principal (h1).');if(document.documentElement.scrollWidth>innerWidth+8)issues.push('O conteúdo ultrapassa a largura da tela.');document.querySelectorAll('a[href^="#"]').forEach(function(link){var target=link.getAttribute('href').slice(1);if(target&&!document.getElementById(target))issues.push('Link interno sem destino: #'+target)});document.querySelectorAll('img:not([alt])').forEach(function(){issues.push('Imagem sem texto alternativo.')});if(innerWidth>=850){var logo=document.querySelector('.site-header .logo'),nav=document.querySelector('.site-header nav a:not(.logo)');if(logo&&nav){var a=logo.getBoundingClientRect(),b=nav.getBoundingClientRect();if(Math.abs((a.top+a.bottom)/2-(b.top+b.bottom)/2)>14)issues.push('Marca e navegação não estão alinhadas no desktop.')}}window.parent.postMessage({source:'agent-center-preview',type:'checks',issues:issues.slice(0,8),width:innerWidth},'*')}window.addEventListener('message',function(event){if(event.source===window.parent&&event.data?.source==='agent-center-run-checks')checkPreview()});`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'"><style>${css.replace(/<\/style/gi, '<\\/style')}</style><script>${bridge}window.addEventListener('error',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:event.message},'*')});window.addEventListener('unhandledrejection',function(event){window.parent.postMessage({source:'agent-center-preview',type:'error',message:String(event.reason)},'*')});${audit}${viewportReport}${checks}<\/script></head><body>${html}<script>${js.replace(/<\/script/gi, '<\\/script')}<\/script></body></html>`;
 }
 
 export default function CodeWorkspace() {
@@ -95,6 +96,7 @@ export default function CodeWorkspace() {
   const [agentError, setAgentError] = useState('');
   const [previewError, setPreviewError] = useState('');
   const [previewIssues, setPreviewIssues] = useState<string[]>([]);
+  const [previewCheckResult, setPreviewCheckResult] = useState('');
   const [previewWidth, setPreviewWidth] = useState(0);
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
   const [previewPage, setPreviewPage] = useState('index.html');
@@ -161,6 +163,7 @@ export default function CodeWorkspace() {
   const selectedProvider = providers.find(item => item.id === providerId);
   const availableModels = (selectedProvider?.available_models || []).map(item => typeof item === 'string' ? item : item.id).filter(name => /^(gemini-(2\.5-(flash|pro)|3(\.1)?-(flash|pro)|flash-latest|pro-latest)|gpt-|claude-|llama-|meta\/)/i.test(name) && !/tts|image|embedding|transcribe|robotics|computer-use/i.test(name));
   const shownFiles = proposal ? { ...previewFiles, ...Object.fromEntries(proposal.changes.map(change => [change.name, change.after])) } : previewFiles;
+  useEffect(() => { setPreviewCheckResult(''); }, [previewFiles, proposal, previewPage, device]);
   const snapshotCurrent = (item: StoredProject): StoredProject => ({ ...item, files, history, conversation, type: projectType, mode, updatedAt: Date.now() });
   const openProject = (next: StoredProject) => {
     if (next.id === projectId) return;
@@ -250,6 +253,11 @@ export default function CodeWorkspace() {
       if (event.source !== previewRef.current?.contentWindow && event.source !== expandedPreviewRef.current?.contentWindow) return;
       if (event.data?.source === 'agent-center-preview' && event.data.type === 'error') setPreviewError(String(event.data.message).slice(0, 500));
       if (event.data?.source === 'agent-center-preview' && event.data.type === 'audit' && Array.isArray(event.data.issues)) setPreviewIssues(event.data.issues.map((issue: unknown) => String(issue).slice(0, 200)).slice(0, 3));
+      if (event.data?.source === 'agent-center-preview' && event.data.type === 'checks' && Array.isArray(event.data.issues)) {
+        const issues = event.data.issues.map((issue: unknown) => String(issue).slice(0, 200)).slice(0, 8);
+        setPreviewIssues(issues);
+        setPreviewCheckResult(issues.length ? `${issues.length} ponto${issues.length === 1 ? '' : 's'} para corrigir na janela de ${event.data.width} px.` : `Prévia verificada em ${event.data.width} px: nenhuma falha detectada.`);
+      }
       if (event.data?.source === 'agent-center-preview' && event.data.type === 'viewport' && Number.isFinite(event.data.width)) setPreviewWidth(event.data.width);
       if (event.data?.source !== 'agent-center-data') return;
       const { requestId, action, collection, id, record } = event.data;
@@ -312,6 +320,10 @@ export default function CodeWorkspace() {
     setPreviewFiles({ ...files });
     setPreviewError('');
     setStatus('Prévia atualizada. HTML, CSS e JavaScript executados no navegador.');
+  };
+  const checkCurrentPreview = () => {
+    setPreviewCheckResult('Verificando a prévia…');
+    previewRef.current?.contentWindow?.postMessage({ source: 'agent-center-run-checks' }, '*');
   };
 
   const requestProposal = async () => {
@@ -429,6 +441,7 @@ export default function CodeWorkspace() {
           <button type="button" onClick={undo} disabled={!history.length} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">Desfazer versão</button>
           <button type="button" onClick={() => { setFiles({ ...STARTER_FILES }); setActiveFile('index.html'); setStatus('Projeto inicial restaurado. A prévia será atualizada.'); }} className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><RotateCcw className="h-3.5 w-3.5" /> Restaurar exemplo</button>
           <button type="button" onClick={run} className="flex items-center gap-1.5 rounded-lg bg-cyan-500 px-4 py-2 text-xs font-bold text-slate-950 hover:bg-cyan-400"><Play className="h-3.5 w-3.5" /> Executar</button>
+          <button type="button" onClick={checkCurrentPreview} className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><ShieldCheck className="h-3.5 w-3.5" /> Verificar prévia</button>
         </div>
         <div className="code-project-picker" aria-label="Projetos do Code">
           <label htmlFor="code-project-select">Projeto</label>
@@ -506,6 +519,7 @@ export default function CodeWorkspace() {
           <div className="flex h-11 items-center justify-between gap-2 border-b border-slate-200 px-4 text-xs font-semibold text-slate-700"><span>Prévia {proposal && <span className="text-cyan-700">· proposta para revisão</span>}{dirty && !proposal && <span className="text-amber-700">· atualizando</span>}</span><div className="flex items-center gap-2"><select aria-label="Página da prévia" value={previewPage} onChange={event => setPreviewPage(event.target.value)} className="max-w-32 rounded border border-slate-200 bg-white px-1 py-1 text-[11px]">{Object.keys(shownFiles).filter(name => name.endsWith('.html')).map(name => <option key={name} value={name}>{name}</option>)}</select><button type="button" onClick={() => setDevice('desktop')} aria-label="Prévia desktop" title="Desktop" className={`rounded p-1 ${device === 'desktop' ? 'bg-slate-200 text-slate-900' : 'text-slate-400'}`}><Monitor className="h-4 w-4" /></button><button type="button" onClick={() => setDevice('mobile')} aria-label="Prévia celular" title="Celular" className={`rounded p-1 ${device === 'mobile' ? 'bg-slate-200 text-slate-900' : 'text-slate-400'}`}><Smartphone className="h-4 w-4" /></button><button type="button" onClick={() => setExpandedPreview(true)} aria-label="Ampliar prévia" title="Ampliar prévia" className="rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-950"><Maximize2 className="h-4 w-4" /></button></div></div>
           <div className="flex min-h-[300px] flex-1 justify-center overflow-auto bg-slate-100 p-2"><iframe ref={previewRef} key={buildPreview(shownFiles, previewPage)} title="Prévia isolada do projeto" sandbox="allow-scripts" srcDoc={buildPreview(shownFiles, previewPage)} className={`min-h-[300px] flex-1 border-0 bg-white ${device === 'mobile' ? 'max-w-[375px]' : 'w-full'}`} /></div>
           {previewError && <p role="alert" className="border-t border-red-200 bg-red-50 px-3 py-2 font-mono text-[11px] text-red-800">Erro na prévia: {previewError}</p>}
+          {previewCheckResult && <p role="status" className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">{previewCheckResult}{previewIssues.length > 0 && <span className="mt-1 block text-red-700">{previewIssues.join(' · ')}</span>}</p>}
         </section>
       </div>
       {expandedPreview && <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950" role="dialog" aria-modal="true" aria-label="Prévia ampliada do projeto">
