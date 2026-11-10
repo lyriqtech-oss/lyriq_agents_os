@@ -25,7 +25,8 @@ import { MANDATORY_TEST_CASES, QAReportService } from './src/services/qa_report_
 import { FALLBACK_CATALOG, canUseModel, getModelsForProvider } from './providersCatalog.js';
 import { PLAN_CATALOG, hasCodeAccess } from './plansCatalog.js';
 import { validateCodeFiles, parseAppManifest, validateRecordInput } from './src/services/code_project_service.js';
-import { reviewGeneratedDesign } from './src/services/code_design_quality.js';
+import { reviewGeneratedDesign, stabilizeGeneratedSiteScript } from './src/services/code_design_quality.js';
+import { buildCodeSkillPrompt, getCodeSkills } from './src/services/code_skills.js';
 import { BUILTIN_AGENT_SKILLS, buildAgentSystemPrompt, isKnownAgentSkill } from './src/services/agent_skills.js';
 import { normalizeAgentIdentity, isValidAgentIdentity, evaluateAgentReadiness } from './src/services/agent_identity.js';
 
@@ -3465,6 +3466,9 @@ const server = http.createServer(async (req, res) => {
       return sendError(res, 405, 'METHOD_NOT_ALLOWED', 'Método não permitido.', '', 'blocking', null, reqId);
     }
 
+    if (pathName === '/api/code/skills' && method === 'GET') {
+      return sendSuccess(res, getCodeSkills().map(({ id, name, stage }) => ({ id, name, stage })), reqId);
+    }
     if (pathName === '/api/code/assist' && method === 'POST') {
       const body = await parseBody(req);
       const prompt = String(body.prompt || '').trim();
@@ -3493,9 +3497,12 @@ const server = http.createServer(async (req, res) => {
       let activeModel = model;
       const systemPrompt = appProject ? `Você é um engenheiro de produto e designer sênior criando um app memorável no Agent Center Code. Responda APENAS JSON válido com summary e files: index.html, styles.css, script.js e app.json, cada um com name e content completos. Ao editar, retorne apenas arquivos alterados. app.json deve conter {"name":"Nome do app","collections":[{"name":"tasks","fields":[{"name":"title","type":"text","required":true}]}]}. Use 1 a 5 coleções; cada campo tem name em snake_case, type text|number|boolean|date e required boolean. O backend persistente está disponível no navegador por AgentCenter.data.list(collection), .create(collection, record), .update(collection, id, record) e .remove(collection, id), todos retornando Promise. Os IDs são strings UUID; nunca converta com parseInt ou Number. Implemente os formulários, carregamento, edição, exclusão, erros e estados vazios com dados reais usando essas funções. index.html deve conter somente o conteúdo interno do body, sem doctype/html/head/body. CSS e JS separados. Sem bibliotecas, rede externa ou backend arbitrário. Visual: use a direção específica do pedido, crie uma composição de aplicativo com navegação ou cabeçalho, uma área principal com hierarquia forte, uma segunda região funcional quando fizer sentido, boa densidade e espaços de respiro. Não entregue um cartão único centralizado, um formulário solto ou grade de cartões iguais. Dê caráter ao produto com tipografia, escala, cor e detalhes específicos ao assunto; evite o painel SaaS azul/roxo genérico. Use tokens CSS, foco visível, hover, estados de loading/erro/vazio, responsividade real a 375px e 1200px com @media. Não invente métricas ou dados comerciais. Não afirme que uma ação funcionou sem aguardar a Promise. Revise a relação entre app.json, seletores DOM e chamadas de dados antes de responder. Não inclua markdown.` : `Você é um engenheiro frontend e diretor de design construindo um site real dentro do Agent Center Code. Entregue código completo, funcional e visualmente cuidado. Responda SOMENTE JSON válido: {"summary":"o que foi criado","files":[{"name":"index.html","content":"arquivo completo"},{"name":"styles.css","content":"arquivo completo"},{"name":"script.js","content":"arquivo completo"}]}.
 Ambiente: HTML, CSS e JavaScript puros em um iframe isolado. O HTML é inserido no body; não escreva html/head/body. CSS e JS são injetados automaticamente. Não há build, bibliotecas externas, fontes remotas, imagens externas, links externos ou backend disponível na prévia. Use apenas os três arquivos permitidos. Nunca coloque código CSS/JS dentro do HTML.
-Qualidade obrigatória: interprete o objetivo e crie uma composição com identidade própria, hierarquia tipográfica clara, espaçamento consistente, boa leitura, contraste, estados de foco e hover, layout responsivo a 375px e 1200px e conteúdo relevante ao pedido. Para um site novo, projete uma página de largura total com cabeçalho, hero marcante, conteúdo organizado em seções e fechamento; use composição assimétrica, ritmo, escala e detalhes CSS específicos ao tema. A largura do conteúdo pode ser limitada, mas a página não deve parecer um cartão centralizado flutuando sobre outro fundo. Não use um wrapper branco arredondado com sombra para toda a página. Não use o mesmo modelo de cartões repetidos como estrutura principal. Se o pedido disser para alterar, preserve o que não foi pedido. Não invente preços, depoimentos, endereços, telefones ou promessas comerciais; quando faltarem dados, use conteúdo neutro ou identificável como exemplo. Links de ação não podem apontar para # nem para a própria seção onde já estão; detalhes de projeto precisam revelar detalhes reais ou não devem ser links. Um convite para contato exige um canal funcional fornecido pelo usuário; sem ele, escreva texto informativo sem botão. Controles interativos devem funcionar de verdade em JS e nunca prometer ações inexistentes (pedido, pagamento, envio, contato). Verifique mentalmente seletores HTML/JS, responsividade e se a página se sustenta sem imagens. Inclua no CSS regras de @media para telas pequenas.
+Qualidade obrigatória: interprete o objetivo e crie uma composição com identidade própria, hierarquia tipográfica clara, espaçamento consistente, boa leitura, contraste, estados de foco e hover, layout responsivo a 375px e 1200px e conteúdo relevante ao pedido. Para um site novo, projete uma página de largura total com cabeçalho, hero marcante, conteúdo organizado em seções e fechamento; use composição assimétrica, ritmo, escala e detalhes CSS específicos ao tema. A largura do conteúdo pode ser limitada, mas a página não deve parecer um cartão centralizado flutuando sobre outro fundo. Não use um wrapper branco arredondado com sombra para toda a página. Não use o mesmo modelo de cartões repetidos como estrutura principal. Se o pedido disser para alterar, preserve o que não foi pedido. Não invente preços, depoimentos, endereços, telefones ou promessas comerciais; quando faltarem dados, use conteúdo neutro ou identificável como exemplo. Links de ação não podem apontar para # nem para a própria seção onde já estão; detalhes de projeto precisam revelar detalhes reais ou não devem ser links. Um convite para contato exige um canal funcional fornecido pelo usuário; sem ele, escreva texto informativo sem botão. O hero precisa aparecer completo no primeiro quadro, sem texto espremido, sobreposição com o menu ou ilustração invisível. Se usar SVG, todas as linhas principais devem estar visíveis mesmo sem rolagem e sem JavaScript; animação é apenas aprimoramento. Não oculte seções com opacity:0 até um evento de scroll. Controles interativos devem funcionar de verdade em JS e nunca prometer ações inexistentes (pedido, pagamento, envio, contato). Verifique mentalmente seletores HTML/JS, responsividade e se a página se sustenta sem imagens. Inclua no CSS regras de @media para telas pequenas.
 Antes de responder, revise se cada requisito do usuário está implementado, se a navegação e a interação fazem sentido e se os três arquivos funcionam juntos. Não inclua markdown, comentários explicativos fora do JSON ou arquivos adicionais.`;
       const creating = body.mode === 'create';
+      const codeSkills = appProject ? '' : buildCodeSkillPrompt('build');
+      const siteReviewSkill = appProject ? '' : buildCodeSkillPrompt('review');
+      const generationPrompt = [systemPrompt, codeSkills, siteReviewSkill].filter(Boolean).join('\n\n');
       // A new project must not inherit failed attempts or the prior project's direction.
       const recentHistory = !creating && Array.isArray(body.history) ? body.history.slice(-8) : [];
       const conversationContext = recentHistory.filter(item =>
@@ -3506,10 +3513,11 @@ Antes de responder, revise se cada requisito do usuário está implementado, se 
       let designBrief = landingPage ? '\nDireção para esta landing page: evite simetria e texto centralizado em todas as seções. Faça um cabeçalho discreto, hero em duas colunas no desktop com título grande de 3 a 6 palavras e uma composição visual específica do tema na outra coluna, usando CSS ou SVG inline autoral; evite retângulos girados e círculos decorativos genéricos, depois uma seção editorial de conteúdo e fechamento. Use largura total na composição, sem cartão branco em volta da página. No celular, empilhe as colunas. Não invente preços, ano de copyright ou história da empresa.' : '';
       if (creating) {
         try {
-          const artDirection = await callRealLlmProvider(providerConn.provider, activeModel, key, [{ role: 'user', content: `Pedido: ${prompt.slice(0, 1800)}\nTipo: ${appProject ? 'aplicativo funcional' : 'site'}. Defina uma direção visual singular e adequada ao assunto. Não use o padrão de cartão centralizado, painel genérico azul/roxo, três cartões iguais ou gradiente decorativo. Responda APENAS JSON com cinco strings curtas: concept, layout, typography, palette, signature. Descreva conteúdo real e interações, sem inventar números, marcas ou depoimentos.` }], 'Você é diretor de design de produto. Crie uma direção concreta, original e viável em HTML/CSS/JS puros. Cada campo deve ser específico ao pedido, não um adjetivo genérico.', { maxOutputTokens: 1200, jsonMode: true, throwOnFailure: true });
+          const artDirection = await callRealLlmProvider(providerConn.provider, activeModel, key, [{ role: 'user', content: `Pedido: ${prompt.slice(0, 1800)}\nTipo: ${appProject ? 'aplicativo funcional' : 'site'}. Defina uma direção visual singular e adequada ao assunto. Não use o padrão de cartão centralizado, painel genérico azul/roxo, três cartões iguais ou gradiente decorativo. Responda APENAS JSON com cinco strings curtas: concept, layout, typography, palette, signature. Descreva conteúdo real e interações, sem inventar números, marcas ou depoimentos.` }], ['Você é diretor de design de produto. Crie uma direção concreta, original e viável em HTML/CSS/JS puros. Cada campo deve ser específico ao pedido, não um adjetivo genérico.', !appProject && buildCodeSkillPrompt('plan')].filter(Boolean).join('\n\n'), { maxOutputTokens: 1200, jsonMode: true, throwOnFailure: true });
           const plan = JSON.parse(String(artDirection).replace(/^```(?:json)?\s*|\s*```$/g, '').trim());
-          const parts = ['concept', 'layout', 'typography', 'palette', 'signature'].map(name => `${name}: ${String(plan[name] || '').slice(0, 220)}`);
-          if (parts.every(part => part.length > 16)) designBrief += `\nDireção visual específica para este projeto (execute no código, não apenas descreva):\n${parts.join('\n')}`;
+          const fields = ['concept', 'layout', 'typography', 'palette', 'signature'];
+          const parts = fields.map(name => `${name}: ${String(plan[name] || '').slice(0, 220)}`);
+          if (fields.every(name => String(plan[name] || '').trim().length >= 12)) designBrief += `\nDireção visual específica para este projeto (execute no código, não apenas descreva):\n${parts.join('\n')}`;
         } catch { /* Continue with the requested model; the main generation has its own fallback. */ }
       }
       const contactConstraint = creating && !/[\w.+-]+@[\w.-]+\.[a-z]{2,}|\+?\d[\d\s().-]{8,}|https?:\/\//i.test(prompt) ?
@@ -3522,7 +3530,7 @@ Antes de responder, revise se cada requisito do usuário está implementado, se 
         for (let attempt = 0; attempt < 2; attempt++) {
           try {
             const guidance = designAttempt ? `\n\nA primeira proposta foi rejeitada: ${qualityIssues.join('; ')}. Corrija a resposta e devolva JSON válido com os arquivos necessários.` : '';
-            raw = await callRealLlmProvider(providerConn.provider, activeModel, key, [{ role: 'user', content: input + guidance }], systemPrompt, { maxOutputTokens: appProject ? 24576 : 16384, thinkingBudget: 512, jsonMode: true, throwOnFailure: true });
+            raw = await callRealLlmProvider(providerConn.provider, activeModel, key, [{ role: 'user', content: input + guidance }], generationPrompt, { maxOutputTokens: appProject ? 24576 : 16384, thinkingBudget: 512, jsonMode: true, throwOnFailure: true });
             break;
           } catch (providerError) {
             if (fallbackModel && activeModel !== fallbackModel && attempt === 0) {
@@ -3547,6 +3555,10 @@ Antes de responder, revise se cada requisito do usuário está implementado, se 
         }
         qualityIssues = [];
         if (Array.isArray(parsed.files)) {
+          if (creating && !appProject) {
+            const scriptFile = parsed.files.find(item => item.name === 'script.js' && typeof item.content === 'string');
+            if (scriptFile) scriptFile.content = stabilizeGeneratedSiteScript(scriptFile.content);
+          }
           const html = String(parsed.files.find(item => item.name === 'index.html')?.content || '');
           const css = String(parsed.files.find(item => item.name === 'styles.css')?.content || '');
           const script = String(parsed.files.find(item => item.name === 'script.js')?.content || files['script.js'] || '');

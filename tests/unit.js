@@ -2,11 +2,16 @@ import assert from 'assert';
 import { selectOrchestrationAgents, orchestrateMultiAgentTask } from '../src/services/main_chat_service.js';
 import { getModelsForProvider } from '../providersCatalog.js';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
-import { reviewGeneratedDesign } from '../src/services/code_design_quality.js';
+import { reviewGeneratedDesign, stabilizeGeneratedSiteScript } from '../src/services/code_design_quality.js';
+import { getCodeSkills, buildCodeSkillPrompt } from '../src/services/code_skills.js';
 import { buildAgentSystemPrompt, resolveAgentSkills } from '../src/services/agent_skills.js';
 import { normalizeAgentIdentity, isValidAgentIdentity, evaluateAgentReadiness } from '../src/services/agent_identity.js';
 
 console.log('=== RUNNING UNIT TESTS ===');
+assert.deepStrictEqual(getCodeSkills().map(skill => skill.id), ['site-direction', 'site-build', 'site-review']);
+assert.ok(buildCodeSkillPrompt('build').includes('375px'));
+assert.ok(!buildCodeSkillPrompt('plan').includes('Construção de site'));
+console.log('✅ Code site skills are loaded by stage.');
 
 const trainedPrompt = buildAgentSystemPrompt({ instructions: 'Ajude a equipe.', boundaries: 'Não envie mensagens sem aprovação.', installedSkills: ['skill-code', 'skill-telegram', 'unknown'] });
 assert.ok(trainedPrompt.includes('Programação') && trainedPrompt.includes('Telegram'));
@@ -41,6 +46,12 @@ assert.ok(reviewGeneratedDesign({ creating: true, prompt: 'Site para Forma Viva'
 assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, prompt: 'Use contato@formaviva.com', html: '<a href="mailto:contato@formaviva.com">Contato</a>' }), []);
 assert.ok(reviewGeneratedDesign({ creating: true, html: '<footer id="contato"><h2>Contato</h2><p>Entre em contato conosco.</p></footer>' }).some(issue => issue.includes('canal funcional')));
 assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, prompt: 'Use contato@formaviva.com', html: '<footer id="contato"><a href="mailto:contato@formaviva.com">Contato</a></footer>' }), []);
+assert.ok(reviewGeneratedDesign({ creating: true, script: 'path.style.strokeDashoffset = length;' }).some(issue => issue.includes('SVG começa invisível')));
+assert.ok(reviewGeneratedDesign({ creating: true, script: "el.style.opacity = '0'; new IntersectionObserver(() => {});" }).some(issue => issue.includes('conteúdo importante começa invisível')));
+const repairedVisibility = stabilizeGeneratedSiteScript("path.style.strokeDashoffset = length; path.style.strokeDashoffset = Math.max(0, draw); el.style.opacity = '0';");
+assert.ok(!reviewGeneratedDesign({ creating: true, script: repairedVisibility }).some(issue => issue.includes('invisível')));
+assert.ok(repairedVisibility.includes('path.style.strokeDashoffset = 0;'));
+assert.ok(repairedVisibility.includes('el.style.opacity = "1"'));
 console.log('✅ Code design quality gate rejects generic app layouts and fake forms.');
 
 assert.strictEqual(PLAN_CATALOG.personal.pro.priceCents, 4990);

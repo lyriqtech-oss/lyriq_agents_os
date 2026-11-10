@@ -1,8 +1,20 @@
+export function stabilizeGeneratedSiteScript(script = '') {
+  return script
+    .replace(/([A-Za-z_$][\w$]*)\.style\.strokeDashoffset\s*=\s*[^;]+;/g, '$1.style.strokeDashoffset = 0;')
+    .replace(/(\.style\.opacity\s*=\s*)['"]0['"]/g, '$1"1"');
+}
+
 export function reviewGeneratedDesign({ html = '', css = '', script = '', prompt = '', creating = false, appProject = false }) {
   const issues = [];
   if (!creating) return issues;
   if (/body\s*\{[^}]*place-items\s*:\s*center/is.test(css)) issues.push('a página inteira está centralizada como um cartão');
   if (!appProject) {
+    if (/strokeDashoffset\s*=\s*(?:length|[^;]*getTotalLength\s*\()/i.test(script)) {
+      issues.push('o desenho SVG começa invisível; mantenha a ilustração visível sem rolagem ou JavaScript');
+    }
+    if (/\.style\.opacity\s*=\s*['"]0['"]/i.test(script) && /IntersectionObserver|scroll/i.test(script)) {
+      issues.push('conteúdo importante começa invisível até rolar; mantenha as seções legíveis antes da animação');
+    }
     if (/<a\b[^>]*href\s*=\s*["']#["'][^>]*>\s*(?:<[^>]+>\s*)*(?:ver|saiba|conheça|explore|contato|abrir|acessar)\b/i.test(html)) {
       issues.push('há um link de ação que aponta apenas para #; conecte-o a uma seção real ou remova a ação');
     }
