@@ -490,6 +490,8 @@ export default function CodeWorkspace() {
           <select id="code-project-select" value={projectId} onChange={event => { const next = projectStore.projects.find(item => item.id === event.target.value); if (next) openProject(next); }}>
             {projectStore.projects.filter(item => !item.archived).map(item => <option key={item.id} value={item.id}>{item.name} · {item.type === 'app' ? 'App' : 'Site'}</option>)}
           </select>
+          <button type="button" onClick={() => createProject()} className="primary"><Plus className="h-3.5 w-3.5" /> Novo projeto</button>
+          <details className="code-project-more"><summary>Mais opções</summary><div>
           {renameDraft === null ? <button type="button" onClick={() => setRenameDraft(projectStore.projects.find(item => item.id === projectId)?.name || '')}>Renomear</button> :
             <form className="code-project-rename" onSubmit={event => { event.preventDefault(); renameProject(); }}>
               <input aria-label="Novo nome do projeto" autoFocus maxLength={80} value={renameDraft} onChange={event => setRenameDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') setRenameDraft(null); }} />
@@ -501,9 +503,9 @@ export default function CodeWorkspace() {
           <button type="button" onClick={() => importRef.current?.click()}><Upload className="h-3.5 w-3.5" /> Importar</button>
           <button type="button" onClick={archiveProject}><Archive className="h-3.5 w-3.5" /> Arquivar</button>
           <input ref={importRef} type="file" accept="application/json,.json" hidden onChange={event => { void importProject(event.target.files?.[0]); event.target.value = ''; }} />
-          <button type="button" onClick={() => createProject()} className="primary"><Plus className="h-3.5 w-3.5" /> Novo projeto</button>
-          <span className="code-project-status" role="status">{status}</span>
           {projectStore.projects.some(item => item.archived) && <details className="code-project-archive"><summary>Arquivados ({projectStore.projects.filter(item => item.archived).length})</summary><div>{projectStore.projects.filter(item => item.archived).map(item => <span key={item.id}>{item.name}<button type="button" onClick={() => restoreProject(item.id)}>Restaurar</button><button type="button" onClick={() => deleteArchivedProject(item.id)}>Excluir</button></span>)}</div></details>}
+          </div></details>
+          <span className="code-project-status" role="status">{status}</span>
         </div>
       </div>
       <section className="code-builder-prompt rounded-xl bg-white p-4 shadow-sm" aria-label="Agente de programação">

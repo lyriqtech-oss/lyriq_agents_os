@@ -135,19 +135,19 @@ export default function AutomationWorkspace() {
   const step = draft?.steps[selectedStep];
   const triggerLabel = draft?.trigger.type === 'interval' ? `A cada ${draft.trigger.minutes || 30} min` : draft?.trigger.type === 'webhook' ? 'Webhook' : 'Manual';
   return <div className="automation-workspace">
-    <header className="auto-header"><div><h1>Automações</h1><p>Monte um fluxo, atribua agentes e acompanhe cada execução.</p></div><button onClick={start} className="auto-primary"><Plus size={16}/> Novo fluxo</button></header>
+    <header className="auto-header"><div><h1><GitBranch size={31}/> Automações</h1><p>Crie fluxos, conecte seus agentes e acompanhe cada execução.</p></div><button onClick={start} className="auto-primary"><Plus size={16}/> Nova automação</button></header>
     <div className="auto-shell"><aside className="auto-sidebar"><div className="auto-sidebar-title"><strong>Fluxos</strong><span>{flows.length}</span></div>
       {flows.map(flow => <button className={`auto-flow-link ${selectedId === flow.id ? 'selected' : ''}`} key={flow.id} onClick={() => { setSelectedId(flow.id); setError(''); setNotice(''); }}><GitBranch size={17}/><span><strong>{flow.name}</strong><small>{flow.steps.length} {flow.steps.length === 1 ? 'etapa' : 'etapas'} · {flow.trigger.type === 'interval' ? 'Agendado' : flow.trigger.type === 'webhook' ? 'Webhook' : 'Manual'} · {flow.trigger.type === 'manual' ? 'Pronto' : flow.status === 'active' ? 'Ativo' : 'Pausado'}</small></span><ChevronRight size={14}/></button>)}
       {flows.length === 0 && <p className="auto-sidebar-empty">Nenhum fluxo salvo ainda.</p>}
       <p className="auto-sidebar-note">Agendamentos e webhooks só rodam depois que você ativa o fluxo. Cada etapa usa o modelo do agente selecionado.</p>
     </aside><main className="auto-main">{draft ? <>
-      <div className="auto-toolbar"><div><h2>{draft.name || 'Novo fluxo'}</h2><p>{triggerLabel} → agentes e condições → resultado</p></div><div className="auto-toolbar-actions">
+      <div className="auto-toolbar"><div><h2>{draft.name || 'Novo fluxo'} <span className={`auto-toolbar-state ${draft.status === 'active' ? 'active' : ''}`}>{draft.trigger.type === 'manual' ? 'Manual' : draft.status === 'active' ? 'Ativo' : 'Pausado'}</span></h2><p>{triggerLabel} → agentes e condições → resultado</p></div><div className="auto-toolbar-actions">
         {draft.id && <button className="auto-delete" title="Excluir fluxo" aria-label="Excluir fluxo" onClick={remove}><Trash2 size={17}/></button>}
         <button className="auto-secondary" disabled={busy} onClick={save}><Save size={15}/> Salvar</button>
         {draft.id && draft.trigger.type !== 'manual' && <button className="auto-secondary" disabled={busy || changed} onClick={setActive}>{draft.status === 'active' ? 'Pausar gatilho' : 'Ativar gatilho'}</button>}
         <button className="auto-primary" disabled={busy || !draft.id || changed} onClick={run}><CirclePlay size={16}/>{busy ? 'Aguarde...' : 'Executar agora'}</button>
       </div></div><div className="auto-body">
-        {error && <p className="auto-error" role="alert">{error}</p>}{notice && <p className="auto-notice" role="status">{notice}</p>}
+        <div className="auto-messages">{error && <p className="auto-error" role="alert">{error}</p>}{notice && <p className="auto-notice" role="status">{notice}</p>}</div>
         <div className="auto-flow-canvas" aria-label="Fluxo da automação"><div className="auto-node trigger"><span><Zap size={19}/></span><div><strong>{triggerLabel}</strong><small>Gatilho do fluxo</small></div></div>
           {draft.steps.map((item, index) => <div className="auto-node-wrap" key={item.id}><div className="auto-connector"/><button className={`auto-node agent ${selectedStep === index ? 'selected' : ''}`} onClick={() => setSelectedStep(index)}><span>{item.type === 'condition' ? <GitBranch size={20}/> : <Bot size={20}/>}</span><div><strong>{item.type === 'condition' ? 'Condição' : agents.find(agent => agent.id === item.agentId)?.name || 'Escolha um agente'}</strong><small>Etapa {index + 1} · {item.type === 'condition' ? 'Decisão' : 'Agente'}</small></div></button></div>)}
           <div className="auto-node-wrap"><div className="auto-connector"/><div className="auto-node output"><span><GitBranch size={19}/></span><div><strong>Resultado</strong><small>Saída registrada no histórico</small></div></div></div>
