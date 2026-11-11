@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './AgentCenterTheme.css';
 import { supabase } from './lib/supabase';
 import { persistentStorage, setPersistentUser } from './lib/persistentStorage';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
@@ -53,6 +54,7 @@ const CodeWorkspace = React.lazy(() => import('./components/CodeWorkspace'));
 const AgentWorkspace = React.lazy(() => import('./components/AgentWorkspace'));
 const SettingsWorkspace = React.lazy(() => import('./components/SettingsWorkspace'));
 const AutomationWorkspace = React.lazy(() => import('./components/AutomationWorkspace'));
+const HomeWorkspace = React.lazy(() => import('./components/HomeWorkspace'));
 
 // --- DATABASE TYPES ---
 interface Agent {
@@ -4352,25 +4354,6 @@ export default function App() {
     handleLogAuditEvent('Lyriq Smart Scheduler', `Agendamento de reunião: "${title}" com ${customer} para o agente ${agent}`, 'low');
   };
 
-  // SUPPORT ACTIONS
-  const handleResolveTicket = (id: string) => {
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, status: 'resolved' } : t));
-    addToast(`Ticket #${id} resolvido.`, 'success');
-  };
-
-  const handleEscalateTicket = (id: string) => {
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, priority: 'high' } : t));
-    addToast(`Ticket #${id} escalado para humano.`, 'info');
-  };
-
-  const handleResolveApproval = (id: string, status: 'approved' | 'denied') => {
-    const target = approvals.find(a => a.id === id);
-    if (!target) return;
-    addToast(`Ação "${target.actionType}" foi ${status === 'approved' ? 'aprovada' : 'rejeitada'}.`, status === 'approved' ? 'success' : 'info');
-    handleLogAuditEvent(target.agentName, `Decisão de aprovação humana: "${target.actionType}" -> ${status.toUpperCase()}`, status === 'approved' ? 'low' : 'medium');
-    setApprovals(prev => prev.map(app => app.id === id ? { ...app, status } : app));
-  };
-
   const handleTriggerSentimentEscalation = (ticketId: string, text: string) => {
     const txtLower = text.toLowerCase();
     let sentiment: 'happy' | 'neutral' | 'angry' = 'neutral';
@@ -5970,7 +5953,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
   const revenueSum = leads.reduce((sum, lead) => sum + (lead.stage !== 'closed' ? lead.value : 0), 0);
 
   return (
-    <div className={`min-h-screen flex flex-col bg-slate-50/50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 theme-${activeTheme}`}>
+    <div className={`min-h-screen flex flex-col bg-slate-50/50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 theme-${activeTheme} ${currentRoute === 'app' ? 'ac-app' : ''}`}>
       
       {/* TOAST SYSTEM (With Slide-up Animation) */}
       <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-md">
@@ -7583,11 +7566,11 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
           
           {/* SIDEBAR */}
           {mobileNavOpen && <button type="button" aria-label="Fechar navegação" onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-40 bg-slate-950/45 md:hidden" />}
-          <aside className={`${mobileNavOpen ? 'fixed inset-y-0 left-0 z-50 flex shadow-2xl' : 'hidden md:flex'} w-64 border-r border-slate-200/60 bg-white flex-col shrink-0`}>
+          <aside className={`${mobileNavOpen ? 'fixed inset-y-0 left-0 z-50 flex shadow-2xl' : 'hidden md:flex'} ac-main-sidebar w-64 border-r border-slate-200/60 bg-white flex-col shrink-0`}>
             {/* Header info */}
             <div className="h-16 px-6 border-b border-slate-200/60 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <AgentCenterWordmark className="h-9 w-auto max-w-[170px] object-contain" />
+                <AgentCenterWordmark light className="h-9 w-auto max-w-[190px] object-contain" />
               </div>
             </div>
 
@@ -7605,7 +7588,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               >
                 <div className="flex items-center gap-2.5">
                   <LayoutDashboard className="w-4 h-4 shrink-0" />
-                  <span>Home</span>
+                  <span>Início</span>
                 </div>
               </button>
 
@@ -7619,7 +7602,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               >
                 <div className="flex items-center gap-2.5">
                   <MessageSquare className="w-4 h-4 shrink-0 text-indigo-600" />
-                  <span>Chat</span>
+                  <span>Chats</span>
                 </div>
                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">IA</span>
               </button>
@@ -7647,7 +7630,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               >
                 <div className="flex items-center gap-2.5">
                   <User className="w-4 h-4 shrink-0" />
-                  <span>Agentes</span>
+                  <span>Meus Agentes</span>
                 </div>
                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">{agents.length}</span>
               </button>
@@ -7807,7 +7790,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             
             {/* Topbar navigation metrics */}
-            <header className="h-16 px-4 md:px-8 border-b border-slate-200/60 bg-white flex items-center justify-between shrink-0 z-10">
+            <header className="ac-main-topbar h-16 px-4 md:px-8 border-b border-slate-200/60 bg-white flex items-center justify-between shrink-0 z-10">
               <button type="button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir navegação" className="rounded-lg p-2 text-slate-800 hover:bg-slate-100 md:hidden"><Menu className="h-5 w-5" /></button>
               <span className="text-sm font-bold text-slate-950 md:hidden">Agent Center</span>
               <div className="relative hidden w-96 md:block">
@@ -7855,7 +7838,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
             </header>
 
             {/* Active view component render */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-8">
+            <div className="ac-main-content flex-1 overflow-y-auto p-4 md:p-8">
 
               {/* 0. SETUP CONSOLE (WIZARD FOR NON-UNLOCKED WORKSPACES) */}
               {currentTab === 'setup_console' && !isDashboardUnlocked && (
@@ -8357,388 +8340,17 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               )}
 
               {currentTab === 'dashboard' && isDashboardUnlocked && (
-                <div className="space-y-6 max-w-6xl">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Dashboard de Operações</h1>
-                      <p className="text-xs text-slate-400 mt-0.5">Visão unificada das operações de inteligência, CRM e suporte da empresa.</p>
-                    </div>
-                  </div>
-
-                  {/* Metrics grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Oportunidades no CRM</span>
-                      <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(revenueSum)}
-                      </p>
-                      <span className="text-[10px] text-slate-400 mt-2 block font-mono">{leads.length} leads qualificados</span>
-                    </div>
-
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Fila de Suporte</span>
-                      <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">{tickets.filter(t => t.status !== 'resolved').length}</p>
-                      <span className="text-[10px] text-slate-400 mt-2 block font-mono">{urgentTicketsCount} tickets urgentes</span>
-                    </div>
-
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Arquivos na Memória</span>
-                      <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">{memoryDocs.length}</p>
-                      <span className="text-[10px] text-slate-400 mt-2 block font-mono">Base de RAG ativa</span>
-                    </div>
-
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Canais Integrados</span>
-                      <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">{channels.filter(c => c.connected).length} / {channels.length}</p>
-                      <span className="text-[10px] text-slate-400 mt-2 block">webhooks conectados</span>
-                    </div>
-                  </div>
-
-                  {/* Dashboard body grids */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    {/* Left Column: Leads Funnel and Tickets Queue */}
-                    <div className="lg:col-span-2 space-y-6">
-                      
-                      {/* Leads CRM Table Card */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                          <div>
-                            <span className="text-xs font-bold text-slate-900">CRM Sync — Funil Comercial</span>
-                            <span className="block text-[9px] text-slate-400 mt-0.5">Mapeamento de pipelines e lead scoring automatizados</span>
-                          </div>
-                          <button
-                            onClick={handleSimulateLead}
-                            className="px-2.5 py-1 bg-slate-950 text-white rounded text-[10px] font-semibold hover:bg-slate-800 transition"
-                          >
-                            + Simular Lead
-                          </button>
-                        </div>
-                        
-                        {leads.length === 0 ? (
-                          <div className="p-8 text-center text-xs text-slate-400 italic">
-                            Nenhum lead cadastrado. Clique em "+ Simular Lead" para testar o funil de CRM.
-                          </div>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                              <thead>
-                                <tr className="bg-slate-50/50 text-[9px] font-bold text-slate-400 uppercase border-b border-slate-100">
-                                  <th className="px-5 py-2.5">Nome / Empresa</th>
-                                  <th className="px-5 py-2.5">E-mail</th>
-                                  <th className="px-5 py-2.5">Valor</th>
-                                  <th className="px-5 py-2.5">IA Score</th>
-                                  <th className="px-5 py-2.5 text-right">Etapa</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100 text-xs">
-                                {leads.map((lead) => (
-                                  <tr key={lead.id} className="hover:bg-slate-50/30 transition">
-                                    <td className="px-5 py-3">
-                                      <span className="font-semibold text-slate-900 block">{lead.name}</span>
-                                      <span className="text-[9px] text-slate-400">{lead.company}</span>
-                                    </td>
-                                    <td className="px-5 py-3 text-slate-500 font-mono text-[10px]">{lead.email}</td>
-                                    <td className="px-5 py-3 font-bold text-slate-800 font-mono">
-                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(lead.value)}
-                                    </td>
-                                    <td className="px-5 py-3">
-                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 font-mono">
-                                        {lead.score}/100
-                                      </span>
-                                    </td>
-                                    <td className="px-5 py-3 text-right">
-                                      <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-50 text-emerald-700">
-                                        {lead.stage === 'new' ? 'Novo' : 'Qualificado'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Caixa de Aprovações Humanas */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                          <div>
-                            <span className="text-xs font-bold text-slate-900">Caixa de Aprovação Humana ⚖️</span>
-                            <span className="block text-[9px] text-slate-400 mt-0.5">Validação de ações críticas executadas pelos agentes de IA</span>
-                          </div>
-                          <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded font-mono">
-                            {approvals.filter(a => a.status === 'pending').length} Pendentes
-                          </span>
-                        </div>
-
-                        {approvals.filter(a => a.status === 'pending').length === 0 ? (
-                          <div className="p-8 text-center text-xs text-slate-400 italic">
-                            Nenhuma ação pendente de aprovação humana. Tudo seguro!
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-slate-100">
-                            {approvals.filter(a => a.status === 'pending').map((app) => (
-                              <div key={app.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/30 transition text-xs">
-                                <div className="space-y-1 text-left">
-                                  <div className="flex items-center gap-2">
-                                    <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-50 text-indigo-700 uppercase font-mono">
-                                      {app.agentName}
-                                    </span>
-                                    <span className="text-[9px] text-slate-400 font-mono">{app.createdAt}</span>
-                                  </div>
-                                  <h4 className="font-semibold text-slate-900">{app.actionType}</h4>
-                                  <p className="text-[10px] text-slate-500 font-sans">{app.actionPayload}</p>
-                                </div>
-
-                                <div className="flex gap-2 shrink-0">
-                                  <button
-                                    onClick={() => handleResolveApproval(app.id, 'approved')}
-                                    className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-[10px] font-semibold text-emerald-700 rounded transition"
-                                  >
-                                    Aprovar
-                                  </button>
-                                  <button
-                                    onClick={() => handleResolveApproval(app.id, 'denied')}
-                                    className="px-3 py-1 bg-red-50 hover:bg-red-100 text-[10px] font-semibold text-red-700 rounded transition"
-                                  >
-                                    Rejeitar
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Tickets Support Queue Card */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                          <div>
-                            <span className="text-xs font-bold text-slate-900">Atendimento — Fila de Suporte</span>
-                            <span className="block text-[9px] text-slate-400 mt-0.5">Triagem de suporte inteligente de clientes</span>
-                          </div>
-                          <button
-                            onClick={handleSimulateTicket}
-                            className="px-2.5 py-1 bg-slate-950 text-white rounded text-[10px] font-semibold hover:bg-slate-800 transition"
-                          >
-                            + Simular Ticket
-                          </button>
-                        </div>
-
-                        {tickets.length === 0 ? (
-                          <div className="p-8 text-center text-xs text-slate-400 italic">
-                            Nenhum chamado aberto na fila de suporte.
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-slate-100">
-                            {tickets.map((ticket) => (
-                              <div key={ticket.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/30 transition text-xs">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold text-slate-400 font-mono">#{ticket.id}</span>
-                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                      ticket.status === 'urgent' ? 'bg-red-50 text-red-700 border border-red-100' :
-                                      ticket.status === 'resolved' ? 'bg-slate-100 text-slate-500' : 'bg-indigo-50 text-indigo-700'
-                                    }`}>
-                                      {ticket.status === 'urgent' ? 'Urgente' : ticket.status === 'resolved' ? 'Resolvido' : 'Aberto'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <h4 className="font-semibold text-slate-900">{ticket.subject}</h4>
-                                    {ticket.sentiment && (
-                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold shrink-0 ${
-                                        ticket.sentiment === 'happy' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                                        ticket.sentiment === 'angry' ? 'bg-red-50 text-red-700 border border-red-100 animate-pulse' :
-                                        'bg-slate-50 text-slate-500 border border-slate-100'
-                                      }`}>
-                                        {ticket.sentiment === 'happy' ? '😊 Satisfeito' :
-                                         ticket.sentiment === 'angry' ? '😡 Insatisfeito' : '😐 Neutro'}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[9px] text-slate-400">Cliente: {ticket.customer} ({ticket.company}) | Categoria: {ticket.category}</p>
-                                </div>
-
-                                <div className="flex gap-2">
-                                  {ticket.status !== 'resolved' && (
-                                    <button
-                                      onClick={() => handleResolveTicket(ticket.id)}
-                                      className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-[10px] font-semibold text-emerald-700 rounded transition"
-                                    >
-                                      Resolver
-                                    </button>
-                                  )}
-                                  {ticket.status === 'open' && (
-                                    <button
-                                      onClick={() => handleEscalateTicket(ticket.id)}
-                                      className="px-2 py-1 border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-slate-700 rounded transition"
-                                    >
-                                      Escalar
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                    </div>
-
-                    {/* Right Column: Main Agent, Coordinated Specialists & Connected Channels */}
-                    <div className="space-y-6">
-                      
-                      {/* Executive summary card */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5 relative overflow-hidden text-left">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Sparkles className="w-4 h-4 text-indigo-600 font-sans" />
-                          <span className="text-xs font-bold text-slate-905 text-slate-950 font-sans">Relatório Operacional ({agents.find(a => a.id === 'main')?.name || 'Coordenador Principal'})</span>
-                        </div>
-                        {leads.length === 0 && tickets.length === 0 ? (
-                          <p className="text-[10px] text-slate-400 italic font-sans">
-                            Aguardando interações dos agentes de IA no CRM e chamados para processar.
-                          </p>
-                        ) : (
-                          <div className="space-y-2 text-[10px] leading-relaxed text-slate-600 font-sans">
-                            <p>
-                              O sistema operacional está consolidando operações de inteligência da <strong className="text-slate-800">{companyProfile.name}</strong>.
-                              {leads.length > 0 && ` Detectamos ${leads.length} oportunidades qualificadas no pipeline comercial.`}
-                              {tickets.length > 0 && ` A central de suporte triou ${tickets.length} chamados, mantendo SLAs dentro das métricas.`}
-                            </p>
-                            {operationalDiagnosis && (
-                              <p className="border-t border-slate-100 pt-2 text-[9.5px] italic text-slate-500">
-                                💡 <strong>Aviso do Coordenador:</strong> {operationalDiagnosis.bottlenecks[0]}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Subordinate Specialists hierarchy list */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5 space-y-3 text-left">
-                        <span className="text-xs font-bold text-slate-950 block border-b border-slate-100 pb-2 font-sans">
-                          👥 Equipe Especialista Subordinada
-                        </span>
-                        <div className="space-y-2">
-                          {agents.filter(a => a.id !== 'main').map((sp) => (
-                            <div key={sp.id} className="flex justify-between items-center text-[10.5px]">
-                              <div>
-                                <span className="font-bold text-slate-800 block font-sans">👤 {sp.name}</span>
-                                <span className="text-[8.5px] text-slate-400 font-sans block">{sp.role}</span>
-                              </div>
-                              <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold ${
-                                sp.status ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                              }`}>
-                                {sp.status ? 'Ativo' : 'Pausado'}
-                              </span>
-                            </div>
-                          ))}
-                          {agents.filter(a => a.id !== 'main').length === 0 && (
-                            <div className="text-[10px] text-slate-400 italic text-center py-2 font-sans">
-                              Nenhum especialista subordinado ativo. Habilite na Central de Onboarding.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Webhook Connected Channels */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5">
-                        <span className="text-xs font-bold text-slate-900 block mb-3.5">Canais de Integração</span>
-                        <div className="space-y-3">
-                          {channels.map((chan) => (
-                            <div key={chan.id} className="flex justify-between items-center text-xs">
-                              <div>
-                                <span className="font-semibold text-slate-900 block">{chan.name}</span>
-                                <span className="text-[9px] text-slate-400 capitalize">
-                                  {chan.id === 'telegram' && chan.connected && chan.telegramBotUsername
-                                    ? `Ativo: ${chan.telegramBotUsername}`
-                                    : `${chan.type} Gateway`}
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => handleToggleChannel(chan.id)}
-                                className={`px-2 py-0.5 rounded text-[9px] font-bold transition ${
-                                  chan.connected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                }`}
-                              >
-                                {chan.connected ? 'Conectado' : 'Conectar'}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Smart Calendar Scheduler */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5">
-                        <div className="flex justify-between items-center mb-3">
-                          <span className="text-xs font-bold text-slate-900">Agenda de Reuniões de IA</span>
-                          <span className="text-[9px] font-semibold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono">
-                            {appointments.length} Ativas
-                          </span>
-                        </div>
-                        <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-                          {appointments.length === 0 ? (
-                            <div className="text-center py-4 text-[10px] text-slate-400 italic">
-                              Nenhum compromisso agendado.
-                            </div>
-                          ) : (
-                            appointments.map((meet) => (
-                              <div key={meet.id} className="p-2.5 bg-slate-50/50 border border-slate-100 rounded-lg space-y-1.5 hover:bg-slate-50 transition">
-                                <div className="flex justify-between items-center text-[10px]">
-                                  <span className="font-bold text-slate-900 truncate max-w-[150px]">{meet.title}</span>
-                                  <span className="font-mono text-slate-400 text-[9px]">{meet.time}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[9px] text-slate-500">
-                                  <span>Cliente: {meet.customer}</span>
-                                  <span className="bg-slate-200/60 text-slate-700 px-1 py-0.2 rounded font-semibold text-[8px] font-sans">
-                                    {meet.agent.split(' ')[0]}
-                                  </span>
-                                </div>
-                                <div className="text-[8px] text-slate-400 font-mono">
-                                  Data: {meet.date}
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Log history timeline */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5 flex flex-col h-[280px]">
-                        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2 shrink-0">
-                          <span className="text-xs font-semibold text-slate-900">Histórico de Atividade</span>
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        </div>
-                        <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-[10px] min-h-0">
-                          {timelineLogs.length === 0 ? (
-                            <div className="text-center py-10 text-slate-450 italic">
-                              Nenhum log operacional registrado.
-                            </div>
-                          ) : (
-                            timelineLogs.map((log) => (
-                              <div key={log.id} className="relative border-l border-slate-100 pl-4 pb-2">
-                                <div className="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full bg-indigo-50 border-2 border-white"></div>
-                                <span className="font-semibold text-slate-800 block leading-tight">{log.agent}</span>
-                                <span className="text-slate-500 mt-0.5 block leading-tight">{log.action}</span>
-                                <span className="text-[8px] font-mono text-slate-400 block mt-0.5">{log.time} • {log.source}</span>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-400">Carregando início…</div>}>
+                  <HomeWorkspace name={currentUser?.name || 'você'} activity={timelineLogs} onNavigate={setCurrentTab} />
+                </React.Suspense>
               )}
-
               {/* CHAT WORKSPACE TAB */}
               {currentTab === 'chat' && companyProfile.setupComplete && (
-                <div className="space-y-6 max-w-6xl h-[calc(100vh-12rem)] flex flex-col">
+                <div className="ac-chat space-y-6 max-w-6xl h-[calc(100vh-12rem)] flex flex-col">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Chat de Agentes</h1>
-                      <p className="text-xs text-slate-400 mt-0.5">Comunique-se diretamente com qualquer agente e execute comandos no banco de dados.</p>
+                      <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Chats</h1>
+                      <p className="text-xs text-slate-400 mt-0.5">Converse com seus agentes e retome o histórico de cada um.</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex bg-slate-100 p-0.5 rounded-lg text-xs font-semibold select-none border border-slate-200/50">

@@ -537,7 +537,7 @@ export default function CodeWorkspace() {
       </section>
       <div className={`code-builder-workspace ${view === 'code' ? 'show-code' : ''}`}>
         <div className="code-builder-tabs"><div role="tablist" aria-label="Visualização do projeto"><button role="tab" aria-selected={view === 'preview'} className={view === 'preview' ? 'active' : ''} onClick={() => setView('preview')}>Prévia</button><button role="tab" aria-selected={view === 'code'} className={view === 'code' ? 'active' : ''} onClick={() => setView('code')}>Código</button></div><span>{previewError || previewIssues.length || previewCheckIssues.length ? 'Prévia precisa de ajuste' : `Janela ${previewWidth || '…'} px · salva automaticamente`}</span></div>
-        {view === 'code' && <>
+        <>
         <aside className="border-b border-slate-800 p-4 text-slate-200 lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Arquivos</span>
@@ -559,10 +559,11 @@ export default function CodeWorkspace() {
               <button type="button" onClick={removeFile} title="Remover arquivo" aria-label="Remover arquivo" className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-red-300"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           </div>
+          <div className="code-editor-file-tabs" aria-label="Arquivos do projeto">{Object.keys(files).map(name => <button type="button" key={name} onClick={() => setActiveFile(name)} className={activeFile === name ? 'active' : ''}>{name}</button>)}</div>
           <textarea aria-label={`Conteúdo de ${activeFile}`} spellCheck={false} value={files[activeFile] || ''} onChange={event => setFiles(previous => ({ ...previous, [activeFile]: event.target.value }))} className="min-h-[300px] flex-1 resize-none bg-transparent p-4 font-mono text-xs leading-6 text-slate-100 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-400" />
           <div role="status" className="border-t border-slate-800 px-4 py-2 text-[11px] text-slate-300">{status}</div>
         </section>
-        </>}
+        </>
         <section className="flex min-h-[350px] flex-col bg-white" aria-label="Prévia do projeto">
           <div className="flex h-11 items-center justify-between gap-2 border-b border-slate-200 px-4 text-xs font-semibold text-slate-700"><span>Prévia {proposal && <span className="text-cyan-700">· proposta para revisão</span>}{dirty && !proposal && <span className="text-amber-700">· atualizando</span>}</span><div className="flex items-center gap-2"><select aria-label="Página da prévia" value={previewPage} onChange={event => setPreviewPage(event.target.value)} className="max-w-32 rounded border border-slate-200 bg-white px-1 py-1 text-[11px]">{Object.keys(shownFiles).filter(name => name.endsWith('.html')).map(name => <option key={name} value={name}>{name}</option>)}</select><button type="button" onClick={() => setDevice('desktop')} aria-label="Prévia desktop" title="Desktop" className={`rounded p-1 ${device === 'desktop' ? 'bg-slate-200 text-slate-900' : 'text-slate-400'}`}><Monitor className="h-4 w-4" /></button><button type="button" onClick={() => setDevice('mobile')} aria-label="Prévia celular" title="Celular" className={`rounded p-1 ${device === 'mobile' ? 'bg-slate-200 text-slate-900' : 'text-slate-400'}`}><Smartphone className="h-4 w-4" /></button><button type="button" onClick={() => setExpandedPreview(true)} aria-label="Ampliar prévia" title="Ampliar prévia" className="rounded p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-950"><Maximize2 className="h-4 w-4" /></button></div></div>
           <div className="flex min-h-[300px] flex-1 justify-center overflow-auto bg-slate-100 p-2"><iframe ref={previewRef} onLoad={() => { if (proposal) previewRef.current?.contentWindow?.postMessage({ source: 'agent-center-run-checks' }, '*'); }} key={buildPreview(shownFiles, previewPage)} title="Prévia isolada do projeto" sandbox="allow-scripts" srcDoc={buildPreview(shownFiles, previewPage)} className={`min-h-[300px] flex-1 border-0 bg-white ${device === 'mobile' ? 'max-w-[375px]' : 'w-full'}`} /></div>

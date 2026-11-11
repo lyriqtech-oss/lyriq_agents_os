@@ -1,0 +1,121 @@
+.ac-app{--ac-bg:#080f1d;--ac-panel:#101a2a;--ac-panel-raised:#152236;--ac-line:#28384c;--ac-text:#eff7ff;--ac-muted:#9aadc1;--ac-cyan:#19cbe9;background:var(--ac-bg);color:var(--ac-text);color-scheme:dark}
+.ac-app .ac-main-sidebar{width:260px;background:linear-gradient(175deg,#0c1525,#09111f 75%);border-right:1px solid #223349;color:var(--ac-text)}
+.ac-app .ac-main-sidebar>div:first-child{height:82px;border-color:#223349;padding-left:20px}
+.ac-app .ac-main-sidebar>div:first-child img{max-width:202px;height:42px}
+.ac-app .ac-main-sidebar nav{padding:18px 13px}
+.ac-app .ac-main-sidebar nav>div:first-child{display:none}
+.ac-app .ac-main-sidebar nav button{min-height:45px;border:1px solid transparent;border-radius:10px;padding:0 14px;font-size:13px;color:#b9c8d9;background:transparent;box-shadow:none}
+.ac-app .ac-main-sidebar nav button:hover{background:#132238;color:#f6fbff}
+.ac-app .ac-main-sidebar nav button.bg-slate-950{border-color:#1686ae;background:linear-gradient(100deg,#152d48,#111c2e);color:#fff;box-shadow:inset 0 0 0 1px #0b54744d}
+.ac-app .ac-main-sidebar nav button.bg-slate-950 svg{color:#39d9f1}
+.ac-app .ac-main-sidebar nav button svg{width:19px;height:19px}
+.ac-app .ac-main-sidebar nav button span[class*="rounded-full"]{background:#1c2c42;color:#a8dfee;border:0}
+.ac-app .ac-main-sidebar>div:last-child{border-color:#24344a;background:#0b1728}
+.ac-app .ac-main-sidebar>div:last-child p:first-child{color:#f2f7ff}.ac-app .ac-main-sidebar>div:last-child p:last-child{color:#9fb2c8}
+.ac-app .ac-main-sidebar>div:last-child button{border-color:#304157;color:#bdcde0;background:#111f31}
+.ac-app .ac-main-sidebar>div:last-child button:hover{background:#172a43;color:#fff}
+.ac-app .ac-main-topbar{height:72px;background:#0a1322;border-color:#223349}
+.ac-app .ac-main-topbar input{height:40px;background:#111b2b;border-color:#334359;color:#eaf5ff;font-size:12px}
+.ac-app .ac-main-topbar input::placeholder{color:#8fa4bd}
+.ac-app .ac-main-topbar input:focus{background:#16263c;border-color:#24cbe9;box-shadow:0 0 0 3px #0ebee525}
+.ac-app .ac-main-topbar button{color:#afc2d8}.ac-app .ac-main-topbar button:hover{background:#1b2b40;color:#fff}
+.ac-app .ac-main-topbar .bg-slate-100\/70{background:#15263a;color:#bceaf1}.ac-app .ac-main-topbar .bg-slate-100\/70 span:last-child{color:#d8eafa}
+.ac-app .ac-main-content{background:radial-gradient(ellipse 700px 240px at 90% -10%,#10365575,transparent 70%),var(--ac-bg);scrollbar-color:#32475f transparent}
+.ac-app .ac-main-content :is(h1,h2,h3){color:#f2f7ff}
+.ac-app .ac-main-content :is(.text-slate-950,.text-slate-900,.text-slate-800,.text-slate-700){color:#eaf3fb}
+.ac-app .ac-main-content :is(.text-slate-600,.text-slate-500,.text-slate-400){color:#9eafc3}
+.ac-app .ac-main-content :is(.bg-white,.bg-slate-50,.bg-slate-50\/50){background-color:#111c2c}
+.ac-app .ac-main-content :is(.border-slate-100,.border-slate-200,.border-slate-200\/60,.border-slate-300){border-color:#2b3b50}
+.ac-app .ac-main-content input:not([type=checkbox]),.ac-app .ac-main-content textarea,.ac-app .ac-main-content select{background:#111f33;color:#edf7ff;border-color:#344a61}
+.ac-app .ac-main-content input::placeholder,.ac-app .ac-main-content textarea::placeholder{color:#8ca2bb}
+.ac-app .ac-main-content :is(button,input,select,textarea):focus-visible{outline:2px solid #29cfe9;outline-offset:2px}
+.ac-app .ac-main-content button.bg-cyan-500,.ac-app .ac-main-content button.bg-cyan-400{background:#18cbe8;color:#062235}
+.ac-app .ac-main-content button.bg-slate-950{background:#1bbfdf;color:#082335}
+.ac-app .ac-main-content button.bg-slate-950:hover{background:#70e6fa}
+.ac-app .agent-workspace{--aw-ink:#eef6ff;--aw-muted:#a0b3c8;--aw-line:#293b52;--aw-accent:#1ecbe8;color:#eaf3ff}
+.ac-app .aw-header h1,.ac-app .auto-header h1,.ac-app .sw-heading h1{color:#f2f8ff;font-size:clamp(30px,3vw,40px)}
+.ac-app .aw-header p,.ac-app .auto-header p,.ac-app .sw-heading p{color:#9fb1c7}
+.ac-app .aw-shell,.ac-app .auto-shell{background:#111b2b;border:1px solid #2b3b50;box-shadow:0 18px 45px #02071255}
+.ac-app .aw-list,.ac-app .auto-sidebar{background:#0e1929;border-color:#293a4f}
+.ac-app .aw-main,.ac-app .aw-agent-header,.ac-app .auto-main,.ac-app .auto-body,.ac-app .auto-toolbar{background:#111b2b;border-color:#293a4f;color:#eaf3ff}
+.ac-app .aw-agent,.ac-app .auto-flow-link{color:#aebfd2}.ac-app .aw-agent:hover,.ac-app .auto-flow-link:hover{background:#172b42}
+.ac-app .aw-agent.selected,.ac-app .auto-flow-link.selected{background:#142b43;border-color:#21b9d8;color:#f0faff;box-shadow:inset 0 0 0 1px #1b99bd35}
+.ac-app .aw-agent strong,.ac-app .auto-flow-link strong,.ac-app .aw-title-row h2,.ac-app .auto-toolbar h2{color:#f3f8ff}
+.ac-app .aw-tabs,.ac-app .code-builder-tabs{background:#111e30;border-color:#293b52}
+.ac-app .aw-tabs button,.ac-app .code-builder-tabs button{color:#a2b6ca}.ac-app .aw-tabs button.active,.ac-app .code-builder-tabs button.active{color:#47d7ee;border-color:#2acbe6}
+.ac-app .aw-content,.ac-app .sw-page,.ac-app .automation-workspace{color:#eaf3ff}
+.ac-app .aw-content :is(p,small),.ac-app .auto-body :is(p,small),.ac-app .sw-page :is(p,small){color:#9fb3c8}
+.ac-app .aw-form input:not([type=checkbox]),.ac-app .aw-form textarea,.ac-app .aw-form select,.ac-app .auto-editor input,.ac-app .auto-editor select,.ac-app .auto-editor textarea,.ac-app .sw-panel input,.ac-app .sw-panel select,.ac-app .sw-panel textarea{background:#0d192b;color:#eaf5ff;border-color:#34485f}
+.ac-app .aw-model,.ac-app .aw-safety,.ac-app .aw-readiness,.ac-app .aw-template-section,.ac-app .aw-channel,.ac-app .sw-panel,.ac-app .sw-side section{background:#111e30;border:1px solid #2b3d52;color:#eaf5ff}
+.ac-app .aw-template,.ac-app .aw-knowledge-list,.ac-app .sw-layout .sw-panel,.ac-app .sw-side section{background:#132136;border-color:#30455b;color:#eef7ff}
+.ac-app .aw-section-head h3,.ac-app .sw-panel h2,.ac-app .sw-side h2{color:#f2f8ff}
+.ac-app .aw-primary,.ac-app .aw-save,.ac-app .auto-primary,.ac-app .sw-save{background:#17c7e5;color:#072237}.ac-app .aw-primary:hover,.ac-app .aw-save:hover,.ac-app .auto-primary:hover,.ac-app .sw-save:hover{background:#68e3f6}
+.ac-app .auto-flow-canvas{background-color:#0c1728;background-image:radial-gradient(#284158 1px,transparent 1px);border-color:#2d4056}
+.ac-app .auto-node{background:#14243a;border-color:#3b5875;color:#ecf5ff;box-shadow:0 8px 24px #02071355}
+.ac-app .auto-node.agent{border-color:#7967bd}.ac-app .auto-node.output{border-color:#168caa}.ac-app .auto-node small{color:#a6b8cc}
+.ac-app .auto-connector{background:#5d819b}.ac-app .auto-connector:after{border-left-color:#5d819b}
+.ac-app .auto-runs,.ac-app .auto-editor section,.ac-app .auto-toolbar{border-color:#2b3d52}
+.ac-app .auto-run,.ac-app .auto-hook,.ac-app .auto-run pre{background:#112034;border-color:#2b4057;color:#dbeafd}
+.ac-app .auto-secondary{background:#1a2b41;color:#d7edfc;border-color:#3d566e}
+.ac-app .sw-layout{gap:18px}.ac-app .sw-panel{min-height:0}.ac-app .sw-panel label{color:#dce9f8}
+.ac-app .code-builder{color:#eaf3ff}.ac-app .code-builder>div:first-child h1{font-size:clamp(28px,2.8vw,40px);color:#f1f8ff}.ac-app .code-builder>div:first-child p{color:#a5b7cb}
+.ac-app .code-project-picker{background:#101b2b;border-color:#2d4159}.ac-app .code-project-picker label,.ac-app .code-project-status{color:#a9bdd0}.ac-app .code-project-picker button,.ac-app .code-project-picker select{background:#182a40;color:#dff3ff;border-color:#38516b}
+.ac-app .code-project-picker button.primary{background:#17c8e6;color:#062335;border-color:#1ed3ed}
+.ac-app .code-builder-workspace{border-color:#2b3c50}.ac-app .code-builder-workspace>section[aria-label="Prévia do projeto"]{background:#0d1929}.ac-app .code-builder-workspace>section[aria-label="Prévia do projeto"]>div:first-child{background:#111e30;color:#dcebf7;border-color:#2a3a4c}
+.ac-app .code-builder-prompt{background:#101d31!important;border-color:#2b415b}
+.ac-app .code-proposal{background:#132844;border-color:#37647c}
+@media(max-width:767px){.ac-app .ac-main-topbar{height:58px}.ac-app .ac-main-sidebar{width:min(88vw,300px)}.ac-app .ac-main-content{padding:18px}.ac-app .ac-main-topbar .relative.hidden{display:none}.ac-app .ac-home{padding-bottom:30px}}
+@media(prefers-reduced-motion:reduce){.ac-app .ac-home-actions button{transition:none}}
+
+/* Refinements after checking the live screens. */
+.ac-app .ac-main-topbar .relative.hidden{margin-left:auto;margin-right:24px}
+.ac-app .ac-main-sidebar nav button:where(:nth-of-type(2),:nth-of-type(6),:nth-of-type(7)) svg{color:#73d7ec}
+.ac-app .aw-list input,.ac-app .aw-list input:not([type=checkbox]){background:#0b192a;color:#f0f7ff;border-color:#3b516a}
+.ac-app .aw-avatar,.ac-app .sw-section-icon,.ac-app .sw-side-icon,.ac-app .auto-node>span{background:#1c354c;color:#74def0}
+.ac-app .aw-purpose{background:#101f32}.ac-app .aw-purpose button{color:#adc3d8}.ac-app .aw-purpose button.active{background:#1d4056;color:#baf3ff}
+.ac-app .aw-status{background:#2a4055;color:#b8dff5}
+.ac-app .aw-readiness li,.ac-app .aw-readiness-head strong{color:#d6e6f5}
+.ac-app .ac-chat{max-width:none;height:calc(100vh - 11rem);min-height:520px}
+.ac-app .ac-chat h1{font-size:clamp(30px,3vw,40px);line-height:1.1;letter-spacing:-.03em}
+.ac-app .ac-chat>div:nth-child(2){border:1px solid #2b3d54;background:#101b2c;border-radius:15px;box-shadow:0 20px 50px #02071355}
+.ac-app .ac-chat :is(.bg-slate-50\/30,.bg-slate-50\/50,.bg-slate-50\/10,.bg-slate-50\/20,.bg-slate-50\/80,.bg-slate-100,.bg-slate-200){background-color:#13243a;color:#e8f4ff}
+.ac-app .ac-chat .divide-slate-100>:not(:last-child),.ac-app .ac-chat .border-slate-100{border-color:#2b3d52}
+.ac-app .ac-chat .border-r,.ac-app .ac-chat .border-b{border-color:#2c3e54}
+.ac-app .ac-chat .bg-white{background:#101b2c}
+.ac-app .ac-chat .cursor-pointer:hover{background:#1b344d}
+.ac-app .ac-chat .cursor-pointer.border-l-2{background:#17344e;border-left-color:#20cbe5}
+.ac-app .ac-chat .cursor-pointer .bg-slate-100{background:#1b4055;color:#83e4f6;border-color:#365a71}
+.ac-app .ac-chat :is(.text-slate-950,.text-slate-900,.text-slate-800){color:#eff7ff}
+.ac-app .ac-chat :is(.text-slate-600,.text-slate-500,.text-slate-400){color:#9fb2c8}
+.ac-app .ac-chat .bg-indigo-50,.ac-app .ac-chat .bg-indigo-50\/40{background:#1a334e;color:#a7eafa}
+.ac-app .ac-chat .bg-emerald-50{background:#10342e;color:#6be3ad}
+.ac-app .ac-chat .bg-amber-50{background:#44351b;color:#ffda92}
+.ac-app .ac-chat button.bg-slate-950,.ac-app .ac-chat .bg-slate-950{background:#153c58;color:#e7faff}
+.ac-app .ac-chat button.border-red-200{background:#281c2d;border-color:#7c4653;color:#ffc4cc}
+.ac-app .ac-chat input,.ac-app .ac-chat textarea{background:#101e32;color:#f1f8ff;border-color:#385168}
+@media(max-width:850px){.ac-app .ac-chat{height:auto;min-height:600px}.ac-app .ac-chat>div:first-child{align-items:flex-start;gap:14px;flex-wrap:wrap}}
+@media(max-width:700px){
+  .ac-app .ac-main-topbar>span{color:#f1f8ff;line-height:1.15;max-width:112px}
+  .ac-app .ac-main-topbar>div:last-child>div:first-child{display:none}
+  .ac-app .ac-chat>div:nth-child(2){flex-direction:column;min-height:600px;overflow:visible}
+  .ac-app .ac-chat>div:nth-child(2)>div:first-child{width:100%;max-height:230px;border-right:0;border-bottom:1px solid #2c3e54}
+  .ac-app .ac-chat>div:nth-child(2)>div:last-child{width:100%;min-height:400px}
+  .ac-app .ac-chat>div:nth-child(2)>div:last-child>div:first-child{padding:14px;gap:10px;flex-wrap:wrap}
+}
+.ac-app .ac-main-sidebar nav button:not(.bg-slate-950) svg{color:#a9bfd3}
+.ac-app .ac-chat .text-red-600{color:#ff9ca7}
+.ac-app .ac-chat .bg-red-50{background:#392633}
+@media(min-width:1500px){
+  .ac-app .code-builder{grid-template-columns:minmax(320px,1fr) minmax(285px,.78fr) minmax(360px,1.1fr);grid-template-rows:auto 42px minmax(690px,1fr);gap:12px}
+  .ac-app .code-builder>div:first-child{grid-column:1/-1;grid-row:1}
+  .ac-app .code-builder-workspace{display:contents}
+  .ac-app .code-builder-tabs{grid-column:1/-1;grid-row:2;border:1px solid #2d4054;border-radius:10px;background:#111e30}
+  .ac-app .code-builder-tabs>div{display:none}
+  .ac-app .code-builder-tabs:before{content:"Editor · Agente · Prévia";font-size:12px;font-weight:700;color:#b5d9e8}
+  .ac-app .code-builder-prompt{grid-column:2;grid-row:3;align-self:stretch;min-height:690px}
+  .ac-app .code-chat-feed{max-height:none;flex:1;min-height:260px}
+  .ac-app .code-builder-workspace>aside{display:none}
+  .ac-app .code-builder-workspace>section[aria-label="Editor de código"],.ac-app .code-builder-workspace:not(.show-code)>section[aria-label="Editor de código"]{display:flex;grid-column:1;grid-row:3;min-width:0;min-height:690px;border:1px solid #2d4054;border-radius:12px;background:#0c1727;overflow:hidden}
+  .ac-app .code-builder-workspace>section[aria-label="Prévia do projeto"]{grid-column:3;grid-row:3;min-width:0;min-height:690px;border:1px solid #2d4054;border-radius:12px;overflow:hidden}
+  .ac-app .code-builder-workspace>section[aria-label="Prévia do projeto"] iframe{min-height:620px}
+}
