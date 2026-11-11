@@ -8377,10 +8377,10 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                           const lastMsgText = messagesList.length > 0 ? messagesList[messagesList.length - 1].text : 'Nenhuma mensagem recente.';
 
                           return (
-                            <div
+                            <button type="button"
                               key={agent.id}
                               onClick={() => setSelectedChatAgentId(agent.id)}
-                              className={`p-4 flex items-start gap-3 cursor-pointer transition ${
+                              className={`ac-chat-agent w-full p-4 flex items-start gap-3 cursor-pointer transition text-left ${
                                 isSelected ? 'bg-white border-l-2 border-slate-950' : 'hover:bg-slate-50/80'
                               }`}
                             >
@@ -8401,7 +8401,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                                 <span className="text-[10px] text-slate-400 block truncate">{agent.role}</span>
                                 <p className="text-[10px] text-slate-500 truncate mt-1 italic">{lastMsgText}</p>
                               </div>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -8431,10 +8431,8 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span className="text-[10px] text-slate-400">{activeChatAgent.role} • Módulo {activeChatAgent.model}</span>
                                   <span className="h-1.5 w-px bg-slate-200"></span>
-                                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${geminiApiKey.trim() ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-650'}`}>
-                                    {isConfiguredAgent ? 'Modelo configurado' : geminiApiKey.trim() || (onboardingSelectedProvider === 'gemini' && onboardingApiKeyValidated)
-                                      ? 'Gemini configurado'
-                                      : 'Modelo não configurado'}
+                                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${isConfiguredAgent || providers.some(provider => provider.status === 'valid') ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-650'}`}>
+                                    {isConfiguredAgent || providers.some(provider => provider.status === 'valid') ? 'Provedor conectado' : 'Modelo não validado'}
                                   </span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -8446,21 +8444,12 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-4 text-[10px] text-slate-500 font-mono">
-                                <div>
-                                  <span className="block text-[8px] font-sans text-slate-400 uppercase">Métrica</span>
-                                  <span className="font-bold text-slate-900">{activeChatAgent.metric}</span>
-                                </div>
-                                <div className="h-6 w-px bg-slate-200"></div>
-                                <div>
-                                  <span className="block text-[8px] font-sans text-slate-400 uppercase">Tarefas</span>
-                                  <span className="font-bold text-slate-900">{activeChatAgent.tasksToday}</span>
-                                </div>
-                              </div>
+                              <button type="button" onClick={() => setCurrentTab('agents')} className="ac-chat-agent-link">Ver agentes <ArrowRight size={14}/></button>
                             </div>
 
                             {/* Chat Pane History */}
                             <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 bg-slate-50/20">
+                              {chatHistory.length === 0 && <div className="ac-chat-empty"><span><MessageSquare size={28}/></span><h4>{activeChatAgent.name}</h4><p>{!isConfiguredAgent && !providers.some(provider => provider.status === 'valid') ? 'Conecte um provedor de IA para começar uma conversa real com este agente.' : !isConfiguredAgent && !workspaceModelPreset ? 'Escolha um modelo de IA para este workspace antes de conversar.' : !activeChatAgent.status ? 'Este agente precisa estar ativo para responder.' : 'A conversa começa com a sua primeira mensagem.'}</p>{!isConfiguredAgent && (!providers.some(provider => provider.status === 'valid') || !workspaceModelPreset) ? <button type="button" onClick={() => setCurrentTab('providers')}>Configurar modelo <ArrowRight size={15}/></button> : !activeChatAgent.status ? <button type="button" onClick={() => setCurrentTab('agents')}>Abrir agentes <ArrowRight size={15}/></button> : null}</div>}
                               {chatHistory.map((msg, index) => {
                                 const isUser = msg.sender === 'user';
                                 const isSystem = msg.sender === 'system';
