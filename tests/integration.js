@@ -1,18 +1,19 @@
 import { spawn } from 'child_process';
 import assert from 'assert';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 console.log('=== RUNNING INTEGRATION TESTS ===');
 
-// Clean database file before running tests
-if (fs.existsSync('./database.json')) {
-  fs.unlinkSync('./database.json');
-}
+// Keep integration data isolated from the user's local application database.
+const testDirectory = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-center-test-'));
+const testDatabaseFile = path.join(testDirectory, 'database.json');
 
 // Start backend server
 const testPort = process.env.TEST_PORT || '5002';
 const serverProcess = spawn('node', ['server.js'], {
-  env: { ...process.env, PORT: testPort }
+  env: { ...process.env, NODE_ENV: 'test', PORT: testPort, AGENT_CENTER_DB_FILE: testDatabaseFile }
 });
 
 serverProcess.stdout.on('data', (data) => {
@@ -28,6 +29,33 @@ setTimeout(async () => {
   try {
     const baseUrl = `http://localhost:${testPort}/api`;
 
+    const projectId = 'project_test_fullstack';
+    const projectUrl = `${baseUrl}/code/projects/${projectId}`;
+    const projectFiles = {
+      'index.html': '<main>Tasks</main>',
+      'styles.css': 'body { color: black; }',
+      'script.js': 'AgentCenter.data.list("tasks")',
+      'app.json': JSON.stringify({ name: 'Tasks', collections: [{ name: 'tasks', fields: [{ name: 'title', type: 'text', required: true }, { name: 'done', type: 'boolean' }] }] })
+    };
+    const saveProject = await fetch(projectUrl, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: projectFiles }) });
+    assert.strictEqual(saveProject.status, 200);
+    const collectionUrl = `${projectUrl}/collections/tasks`;
+    const invalidRecord = await fetch(collectionUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: true }) });
+    assert.strictEqual(invalidRecord.status, 400);
+    const createRecord = await fetch(collectionUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: 'Primeira tarefa', done: false }) });
+    assert.strictEqual(createRecord.status, 200);
+    const created = (await createRecord.json()).data;
+    const listRecords = await fetch(collectionUrl);
+    assert.strictEqual((await listRecords.json()).data[0].title, 'Primeira tarefa');
+    const updateRecord = await fetch(`${collectionUrl}/${created.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: true }) });
+    assert.strictEqual((await updateRecord.json()).data.done, true);
+    const blockedOrigin = await fetch(collectionUrl, { headers: { Origin: 'https://evil.example' } });
+    assert.strictEqual(blockedOrigin.status, 403);
+    const deleteRecord = await fetch(`${collectionUrl}/${created.id}`, { method: 'DELETE' });
+    assert.strictEqual(deleteRecord.status, 200);
+    assert.deepStrictEqual((await (await fetch(collectionUrl)).json()).data, []);
+    console.log('✅ Code app backend CRUD and local origin guard passed.');
+
     const codePersonal = await fetch(`${baseUrl}/code/run`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: 'personal', tier: 'free', surface: 'web', prompt: 'Criar app web' })
@@ -37,13 +65,13 @@ setTimeout(async () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: 'business', tier: 'pro', surface: 'web' })
     });
-    assert.strictEqual(codeBusinessPro.status, 402);
+    assert.strictEqual(codeBusinessPro.status, 200);
     const codeBusinessMax = await fetch(`${baseUrl}/code/run`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode: 'business', tier: 'max', surface: 'apps', platform: 'android' })
     });
     assert.strictEqual(codeBusinessMax.status, 200);
-    console.log('✅ Lyriq Code Personal/Business entitlement endpoints passed.');
+    console.log('✅ Agent Center Code access is open in local development.');
 
     // 1. Test POST /api/providers/validate (Invalid Key format check)
     const resValInvalid = await fetch(`${baseUrl}/providers/validate`, {
@@ -122,6 +150,9 @@ setTimeout(async () => {
     assert.strictEqual(bodyValOk.data.status, 'valid');
     assert.strictEqual(bodyValOk.data.encrypted_api_key, undefined);
     const providerConnectionId = bodyValOk.data.id;
+    const storedProvider = JSON.parse(fs.readFileSync(testDatabaseFile, 'utf8')).providers.find(provider => provider.id === providerConnectionId);
+    assert.ok(storedProvider.encrypted_api_key.startsWith('v2:'));
+    assert.ok(fs.existsSync(path.join(testDirectory, '.agent-center.key')));
     console.log('✅ POST /api/providers/validate (Mock Valid Key) passed.');
 
     // 3.1 Test POST /api/providers/:provider/validate-key (Mock valid, safe response)
@@ -142,6 +173,17 @@ setTimeout(async () => {
     assert.strictEqual(bodyValKeyOk.data.connection.selected_chat_model, 'gemini-2.5-flash');
     assert.strictEqual(bodyValKeyOk.data.connection.encrypted_api_key, undefined);
     console.log('✅ POST /api/providers/:provider/validate-key (Mock Valid Key) passed.');
+
+    const syncResponse = await fetch(`${baseUrl}/providers/gemini/sync-models`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', providerConnectionId: bodyValKeyOk.data.connection.id })
+    });
+    const syncResult = await syncResponse.json();
+    assert.strictEqual(syncResponse.status, 200);
+    assert.ok(syncResult.data.models.includes('gemini-2.5-flash'));
+    assert.strictEqual(syncResult.data.selected_chat_model, 'gemini-2.5-flash');
+    assert.strictEqual(syncResult.data.encrypted_api_key, undefined);
+    console.log('✅ Provider model sync uses the saved connection and returns safe model IDs.');
 
     // 4. Test POST /api/agents/main (Invalid - Empty instructions)
     const resAgentEmpty = await fetch(`${baseUrl}/agents/main`, {
@@ -181,6 +223,95 @@ setTimeout(async () => {
     const agentId = bodyAgentOk.data.id;
     console.log('✅ POST /api/agents/main (Valid Agent Creation) passed.');
 
+    const resSpecialist = await fetch(`${baseUrl}/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', name: 'Analista de pesquisa', role: 'Pesquisador', instructions: 'Pesquisar fontes e resumir evidências.' })
+    });
+    assert.strictEqual(resSpecialist.status, 200);
+    const bodySpecialist = await resSpecialist.json();
+    assert.strictEqual(bodySpecialist.data.type, 'specialist');
+    assert.strictEqual(bodySpecialist.data.status, 'draft');
+    const resAgentsAfterSpecialist = await fetch(`${baseUrl}/agents`);
+    const agentsAfterSpecialist = await resAgentsAfterSpecialist.json();
+    assert.ok(agentsAfterSpecialist.data.some(agent => agent.id === agentId && agent.type === 'main'));
+    assert.ok(agentsAfterSpecialist.data.some(agent => agent.id === bodySpecialist.data.id));
+    console.log('✅ POST /api/agents creates a specialist without replacing the main agent.');
+
+    const specialistConfig = await fetch(`${baseUrl}/agents/${bodySpecialist.data.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Analista de pesquisa', role: 'Pesquisador', instructions: 'Pesquisar fontes e resumir evidências.', capabilities: ['research'], permissions: { read_workspace: true, send_messages: false }, boundaries: 'Pedir aprovação antes de enviar.', installedSkills: ['skill-research'], identity: { purpose: 'professional', audience: 'Equipe de pesquisa', tone: 'Objetivo', outputs: 'Relatórios de pesquisa verificáveis', successCriteria: 'Fontes claras e resultados revisáveis', autonomy: 'suggest' }, status: 'active' })
+    });
+    assert.strictEqual(specialistConfig.status, 200);
+    const savedSpecialist = (await specialistConfig.json()).data;
+    assert.deepStrictEqual(savedSpecialist.capabilities, ['research']);
+    assert.strictEqual(savedSpecialist.permissions.read_workspace, true);
+    assert.strictEqual(savedSpecialist.status, 'draft');
+    assert.strictEqual(savedSpecialist.identity.audience, 'Equipe de pesquisa');
+    assert.deepStrictEqual(savedSpecialist.installedSkills, ['skill-research']);
+    const specialistReadiness = await fetch(`${baseUrl}/agents/${savedSpecialist.id}/readiness`);
+    assert.strictEqual(specialistReadiness.status, 200);
+    const readinessBody = await specialistReadiness.json();
+    assert.strictEqual(readinessBody.data.stage, 'configuring');
+    assert.ok(readinessBody.data.checks.some(check => check.id === 'model' && !check.done));
+    console.log('✅ Agent configuration persists functions and permissions without bypassing activation.');
+    const deniedTool = await fetch(`${baseUrl}/tools/execute`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', agentId: savedSpecialist.id, toolName: 'send_notification', params: { userApproved: true } })
+    });
+    assert.strictEqual(deniedTool.status, 403);
+    assert.strictEqual((await deniedTool.json()).error.code, 'AGENT_PERMISSION_DENIED');
+    console.log('✅ Agent tool execution respects the saved permission policy.');
+
+    const flowResponse = await fetch(`${baseUrl}/automations`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'agent_flow', workspaceId: 'workspace_123', name: 'Pesquisa semanal', trigger: { type: 'manual' }, steps: [{ id: 'research-step', type: 'agent_task', agentId: savedSpecialist.id, instruction: 'Resuma as informações disponíveis.' }] })
+    });
+    assert.strictEqual(flowResponse.status, 200);
+    const flow = (await flowResponse.json()).data;
+    const flowRunResponse = await fetch(`${baseUrl}/automations/${flow.id}/trigger`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: 'Teste manual com uma pergunta nova.' }) });
+    assert.strictEqual(flowRunResponse.status, 200);
+    const flowRun = (await flowRunResponse.json()).data.run;
+    assert.strictEqual(flowRun.status, 'failed');
+    assert.strictEqual(flowRun.input, 'Teste manual com uma pergunta nova.');
+    assert.strictEqual(flowRun.creditsUsed, null);
+    assert.ok(flowRun.error.includes('modelo real'));
+    assert.strictEqual(flowRun.steps[0].stepId, 'research-step');
+    assert.strictEqual(flowRun.steps[0].agentName, 'Analista de pesquisa');
+    assert.strictEqual(flowRun.steps[0].error, true);
+    const flowHistory = await fetch(`${baseUrl}/automations/${flow.id}/runs`).then(response => response.json());
+    assert.ok(flowHistory.data.some(run => run.id === flowRun.id));
+    const secretRunResponse = await fetch(`${baseUrl}/automations/${flow.id}/trigger`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: 'Minha chave sk-123456789abcdef precisa ser escondida.' }) });
+    const secretRun = (await secretRunResponse.json()).data.run;
+    assert.ok(!secretRun.input.includes('123456789abcdef'));
+    const oversizedInput = await fetch(`${baseUrl}/automations/${flow.id}/trigger`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: 'a'.repeat(8001) }) });
+    assert.strictEqual(oversizedInput.status, 400);
+    console.log('✅ Agent automation saves runs and reports a missing real model instead of a fake success.');
+    const scheduledFlow = await fetch(`${baseUrl}/automations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'agent_flow', workspaceId: 'workspace_123', name: 'Fluxo agendado', trigger: { type: 'interval', minutes: 5 }, steps: [{ id: 's1', type: 'agent_task', agentId: savedSpecialist.id, instruction: 'Resuma as informações disponíveis.' }, { id: 'c1', type: 'condition', contains: 'aprovado', onFalse: 'stop' }] }) }).then(response => response.json());
+    assert.strictEqual(scheduledFlow.data.status, 'draft');
+    const activatedFlow = await fetch(`${baseUrl}/automations/${scheduledFlow.data.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' }) }).then(response => response.json());
+    assert.ok(Date.parse(activatedFlow.data.nextRunAt) > Date.now());
+    await fetch(`${baseUrl}/automations/${scheduledFlow.data.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nextRunAt: new Date(Date.now() - 1000).toISOString() }) });
+    await new Promise(resolve => setTimeout(resolve, 750));
+    const scheduledRuns = await fetch(`${baseUrl}/automations/${scheduledFlow.data.id}/runs`).then(response => response.json());
+    assert.ok(scheduledRuns.data.some(run => run.source === 'interval' && run.status === 'failed'));
+    const webhookFlow = await fetch(`${baseUrl}/automations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'agent_flow', workspaceId: 'workspace_123', name: 'Fluxo webhook', trigger: { type: 'webhook' }, steps: [{ id: 's1', type: 'agent_task', agentId: savedSpecialist.id, instruction: 'Resuma as informações disponíveis.' }] }) }).then(response => response.json());
+    assert.ok(webhookFlow.data.webhookToken);
+    const webhookId = webhookFlow.data.id;
+    await fetch(`${baseUrl}/automations/${webhookId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'active' }) });
+    const deniedHook = await fetch(`http://localhost:${testPort}/api/automation-hooks/${webhookId}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-agent-center-hook-token': 'wrong' }, body: '{}' });
+    assert.strictEqual(deniedHook.status, 401);
+    const acceptedHook = await fetch(`http://localhost:${testPort}/api/automation-hooks/${webhookId}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-agent-center-hook-token': webhookFlow.data.webhookToken }, body: JSON.stringify({ lead: 'teste' }) });
+    assert.strictEqual(acceptedHook.status, 200);
+    assert.strictEqual((await acceptedHook.json()).data.run.status, 'failed');
+    const repeatedHook = await fetch(`http://localhost:${testPort}/api/automation-hooks/${webhookId}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-agent-center-hook-token': webhookFlow.data.webhookToken }, body: '{}' });
+    assert.strictEqual(repeatedHook.status, 429);
+    const deleteInUse = await fetch(`${baseUrl}/agents/${savedSpecialist.id}`, { method: 'DELETE' });
+    assert.strictEqual(deleteInUse.status, 409);
+    const deleteMain = await fetch(`${baseUrl}/agents/${agentId}`, { method: 'DELETE' });
+    assert.strictEqual(deleteMain.status, 400);
+    console.log('✅ Interval scheduling, conditions and authenticated webhook triggers are configured safely.');
+
     // 6. Test GET /api/agents
     const resAgentsList = await fetch(`${baseUrl}/agents`);
     assert.strictEqual(resAgentsList.status, 200);
@@ -188,12 +319,32 @@ setTimeout(async () => {
     assert.ok(bodyAgentsList.data.length > 0);
     console.log('✅ GET /api/agents list passed.');
 
+    const codeAssistWithoutRealProvider = await fetch(`${baseUrl}/code/assist`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', prompt: 'Crie uma página de apresentação.', files: { 'index.html': '<h1>Oi</h1>', 'styles.css': '', 'script.js': '' } })
+    });
+    assert.strictEqual(codeAssistWithoutRealProvider.status, 400);
+    const unavailableCodeModel = await fetch(`${baseUrl}/code/assist`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId: 'workspace_123', mode: 'create', modelId: 'model-not-in-connection', prompt: 'Crie uma página de apresentação.', files: { 'index.html': '<h1>Oi</h1>', 'styles.css': '', 'script.js': '' } })
+    });
+    assert.strictEqual(unavailableCodeModel.status, 400);
+    assert.strictEqual((await unavailableCodeModel.json()).error.code, 'CODE_MODEL_INVALID');
+    const codeAssistError = await codeAssistWithoutRealProvider.json();
+    assert.strictEqual(codeAssistError.error.code, 'CODE_PROVIDER_REQUIRED');
+    console.log('✅ Code assistant requires a real provider and does not pretend to edit files.');
+
     // 7. Test GET /api/agents/:agentId/health
     const resHealth = await fetch(`${baseUrl}/agents/${agentId}/health`);
     assert.strictEqual(resHealth.status, 200);
     const bodyHealth = await resHealth.json();
     assert.strictEqual(bodyHealth.data.status, 'ready_to_test');
     console.log('✅ GET /api/agents/:agentId/health passed.');
+
+    const fakeReadinessTest = await fetch(`${baseUrl}/agents/${agentId}/test`, { method: 'POST' });
+    assert.strictEqual(fakeReadinessTest.status, 400);
+    assert.strictEqual((await fakeReadinessTest.json()).error.code, 'AGENT_REAL_MODEL_REQUIRED');
+    console.log('✅ Mock model cannot mark an agent as market-ready.');
 
     // 8. Test POST /api/agents/:agentId/chat
     const resChat = await fetch(`${baseUrl}/agents/${agentId}/chat`, {
@@ -412,6 +563,10 @@ setTimeout(async () => {
     const bodyAgentRun = await resAgentRun.json();
     assert.strictEqual(bodyAgentRun.ok, true);
     assert.ok(bodyAgentRun.data.runId.startsWith('run-'));
+    assert.strictEqual(bodyAgentRun.data.status, 'simulated');
+    assert.strictEqual(bodyAgentRun.data.mode, 'simulation');
+    assert.ok(bodyAgentRun.data.answer.includes('Simulação:'));
+    assert.ok(!bodyAgentRun.data.events.some(event => event.type === 'final'));
     assert.ok(bodyAgentRun.data.events.length > 0);
     const runId = bodyAgentRun.data.runId;
     console.log('✅ POST /api/runtime/agent-run (Operational Transparency Loop) passed.');
@@ -1533,62 +1688,24 @@ setTimeout(async () => {
     assert.strictEqual(resMcpDelete.status, 200);
     console.log('✅ Native Connectors, OAuth & MCP Servers Endpoints passed.');
 
-    // 51. Test Telegram Bot & BotFather Connection V1 Endpoints (PDF V1 Specification)
-    console.log('Testing Telegram Bot & BotFather Connection V1 Endpoints...');
-
-    // POST /api/telegram/connections/validate-token (Validate BotFather token)
+    // An invented BotFather token must never be reported as a connected bot.
+    console.log('Testing Telegram connection validation...');
     const resTgVal = await fetch(`${baseUrl}/telegram/connections/validate-token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: '8655720761:AAExemploDeTokenMuitoSecreto12345' })
+      body: JSON.stringify({ token: 'invalid-token' })
     });
-    assert.strictEqual(resTgVal.status, 200);
-    const bodyTgVal = await resTgVal.json();
-    assert.strictEqual(bodyTgVal.data.bot.id, '8655720761');
-
-    // POST /api/telegram/connections (Register Bot Connection)
+    assert.strictEqual(resTgVal.status, 400);
     const resTgCreate = await fetch(`${baseUrl}/telegram/connections`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        workspaceId: 'workspace_123',
-        token: '8655720761:AAExemploDeTokenMuitoSecreto12345',
-        defaultAgentId: 'agent_main'
-      })
+      body: JSON.stringify({ workspaceId: 'workspace_123', token: 'invalid-token', defaultAgentId: 'agent_main' })
     });
-    assert.strictEqual(resTgCreate.status, 200);
-    const bodyTgCreate = await resTgCreate.json();
-    const createdTgConnId = bodyTgCreate.data.connection.id;
-
-    // POST /api/telegram/connections/:id/set-webhook
-    const resTgWebhook = await fetch(`${baseUrl}/telegram/connections/${createdTgConnId}/set-webhook`, {
-      method: 'POST'
-    });
-    assert.strictEqual(resTgWebhook.status, 200);
-
-    // POST /api/telegram/connections/:id/test
-    const resTgTest = await fetch(`${baseUrl}/telegram/connections/${createdTgConnId}/test`, {
-      method: 'POST'
-    });
-    assert.strictEqual(resTgTest.status, 200);
-
-    // POST /api/telegram/webhook/:connectionId (Incoming Telegram Update Simulation)
-    const resTgWebhookRec = await fetch(`${baseUrl}/telegram/webhook/${createdTgConnId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        update_id: 10001,
-        message: {
-          message_id: 456,
-          from: { id: 8655720761, first_name: 'Augusto', username: 'augustoweymar' },
-          chat: { id: 8655720761, type: 'private' },
-          text: '/start'
-        }
-      })
-    });
-    assert.strictEqual(resTgWebhookRec.status, 200);
-    const bodyTgWebhookRec = await resTgWebhookRec.json();
-    assert.strictEqual(bodyTgWebhookRec.data.replySent, true);
+    assert.strictEqual(resTgCreate.status, 400);
+    const resTgList = await fetch(`${baseUrl}/telegram/connections`);
+    assert.strictEqual(resTgList.status, 200);
+    const bodyTgList = await resTgList.json();
+    assert.ok(bodyTgList.data.every(connection => !('botTokenEncrypted' in connection) && !('webhookSecret' in connection)));
 
     // GET /api/workspaces/workspace_123/telegram/chats
     const resTgChats = await fetch(`${baseUrl}/workspaces/workspace_123/telegram/chats`);
@@ -1598,7 +1715,7 @@ setTimeout(async () => {
     const resTgMsgs = await fetch(`${baseUrl}/workspaces/workspace_123/telegram/messages`);
     assert.strictEqual(resTgMsgs.status, 200);
 
-    console.log('✅ Telegram Bot & BotFather Connection Endpoints passed.');
+    console.log('✅ Telegram rejects fake credentials and hides secrets.');
 
     // ----------------------------------------------------
     // WHATSAPP BUSINESS V1 INTEGRATION TESTS
@@ -2674,10 +2791,12 @@ setTimeout(async () => {
 
     console.log('🎉 ALL INTEGRATION TESTS PASSED SUCCESSFULLY!');
     serverProcess.kill();
+    fs.rmSync(testDirectory, { recursive: true, force: true });
     process.exit(0);
   } catch (err) {
     console.error('❌ INTEGRATION TEST FAILED:', err);
     serverProcess.kill();
+    fs.rmSync(testDirectory, { recursive: true, force: true });
     process.exit(1);
   }
 }, 1500);

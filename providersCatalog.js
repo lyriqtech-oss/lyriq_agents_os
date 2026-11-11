@@ -938,7 +938,8 @@ async function getModelsForProvider(provider, apiKey = '', options = {}) {
       fetchUrl = 'https://api.mistral.ai/v1/models';
       headers['Authorization'] = `Bearer ${apiKey}`;
     } else if (provider === 'gemini' && apiKey) {
-      fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+      fetchUrl = 'https://generativelanguage.googleapis.com/v1beta/models';
+      headers['x-goog-api-key'] = apiKey;
     } else if (provider === 'ollama') {
       fetchUrl = 'http://localhost:11434/api/tags';
     }

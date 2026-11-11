@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import './AgentCenterTheme.css';
 import { supabase } from './lib/supabase';
 import { persistentStorage, setPersistentUser } from './lib/persistentStorage';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
@@ -47,10 +48,13 @@ import {
   Globe2,
   Layout,
   Code2,
-  Smartphone,
-  Gamepad2,
-  MonitorPlay
 } from 'lucide-react';
+
+const CodeWorkspace = React.lazy(() => import('./components/CodeWorkspace'));
+const AgentWorkspace = React.lazy(() => import('./components/AgentWorkspace'));
+const SettingsWorkspace = React.lazy(() => import('./components/SettingsWorkspace'));
+const AutomationWorkspace = React.lazy(() => import('./components/AutomationWorkspace'));
+const HomeWorkspace = React.lazy(() => import('./components/HomeWorkspace'));
 
 // --- DATABASE TYPES ---
 interface Agent {
@@ -841,6 +845,7 @@ export default function App() {
   };
 
   const hasPlanAccess = (userPlan: string = 'free', tabOrFeature: string): boolean => {
+    if (import.meta.env.DEV) return true;
     const reqPlan = FEATURE_PLAN_REQUIREMENTS[tabOrFeature] || 'free';
     const userLevel = PLAN_LEVELS[userPlan.toLowerCase()] || 1;
     const reqLevel = PLAN_LEVELS[reqPlan] || 1;
@@ -890,6 +895,7 @@ export default function App() {
     }
     return defaultAgentsList;
   });
+  const [configuredChatAgents, setConfiguredChatAgents] = useState<Agent[]>([]);
 
   const [leads, setLeads] = useState<Lead[]>(() => {
     const data = persistentStorage.getItem('lyriq_leads');
@@ -1003,34 +1009,28 @@ export default function App() {
       const mainAgentConfigured = agentsData ? JSON.parse(agentsData).some((a: any) => a.id === 'main') : false;
       
       const unlocked = compObj?.setupComplete || (compObj?.name && providerValid && mainAgentConfigured && tested);
-      return unlocked ? 'dashboard' : 'setup_console';
+      return unlocked ? 'agents' : 'setup_console';
     } catch (e) {
       return 'setup_console';
     }
   });
-  const [codeSubTab, setCodeSubTab] = useState<'code' | 'apps' | 'web' | 'games'>('code');
-  const [codePlatform, setCodePlatform] = useState<'android' | 'ios' | 'windows' | 'macos' | 'linux'>('android');
-  const [gameDimension, setGameDimension] = useState<'2d' | '3d'>('2d');
-  const [codePrompt, setCodePrompt] = useState('Crie uma landing page premium para apresentar meu produto.');
-  const [codeRunStatus, setCodeRunStatus] = useState<'idle' | 'building' | 'ready'>('idle');
-  const runLyriqCode = async () => {
-    setCodeRunStatus('building');
-    try {
-      const tier = companyProfile.plan || currentUser?.plan || onboardingPlan || 'free';
-      const response = await fetch('/api/code/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: workspaceMode, tier, surface: codeSubTab, platform: codePlatform, dimension: gameDimension, prompt: codePrompt })
-      });
-      const body = await response.json();
-      if (!response.ok || !body.ok) throw new Error(body.error?.message || 'Falha ao preparar o preview.');
-      setCodeRunStatus('ready');
-      addToast('Preview atualizado pelo agente.', 'success');
-    } catch (error: any) {
-      setCodeRunStatus('idle');
-      addToast(error.message || 'Falha ao executar o Lyriq Code.', 'error');
-    }
-  };
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  useEffect(() => { setMobileNavOpen(false); }, [currentTab]);
+  useEffect(() => {
+    if (currentTab !== 'chat' && currentTab !== 'agents') return;
+    let live = true;
+    fetch('/api/agents').then(response => response.json()).then(result => {
+      if (!live || !Array.isArray(result.data)) return;
+      setConfiguredChatAgents(result.data.filter((item: any) => item.type !== 'main').map((item: any) => ({
+        id: item.id, name: item.name, role: item.role, area: item.role, status: !!item.model_id && !!item.provider_connection_id,
+        metric: item.model_id && item.provider_connection_id ? 'Pronto para conversar' : 'Configuração pendente', metricLabel: 'Estado do agente', tasksToday: 0,
+        description: item.role, details: item.instructions, icon: 'Bot', model: item.model_id || '',
+        temperature: 0.2, lastActive: '—', systemPrompt: item.instructions, installedSkills: item.installedSkills || []
+      })));
+    }).catch(() => {});
+    return () => { live = false; };
+  }, [currentTab]);
+  const displayedChatAgents = [...agents, ...configuredChatAgents.filter(item => !agents.some(existing => existing.id === item.id))];
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [platformAdminSettings, setPlatformAdminSettings] = useState(() => {
@@ -1049,7 +1049,7 @@ export default function App() {
   const [mainAgentSubTab, setMainAgentSubTab] = useState<'overview' | 'chat' | 'agents_md' | 'tools' | 'specialists'>('overview');
   const [marketplaceSubTab, setMarketplaceSubTab] = useState<'agents' | 'playbooks'>('agents');
   const [isLogsDrawerOpen, setIsLogsDrawerOpen] = useState(false);
-  const [selectedAgentForLogs, setSelectedAgentForLogs] = useState<Agent | null>(null);
+  const [selectedAgentForLogs] = useState<Agent | null>(null);
   
   const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
   const [telegramTokenInput, setTelegramTokenInput] = useState('');
@@ -1923,7 +1923,7 @@ export default function App() {
   const [swarmLogs, setSwarmLogs] = useState<Array<{ agent: string; text: string; time: string; type: 'system' | 'message' }>>([
     { agent: 'System', text: 'Enxame de Agentes Autônomos (Swarm Mode) pronto para cooperação multi-agente.', time: 'Agora', type: 'system' }
   ]);
-  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
+  const [geminiApiKey] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_gemini_key') || import.meta.env.VITE_GEMINI_API_KEY || '';
   });
 
@@ -1934,24 +1934,24 @@ export default function App() {
   const [expandedLogIds, setExpandedLogIds] = useState<Record<string, boolean>>({});
 
   // Multi-Provider AI Routing and Execution States
-  const [activeProvider, setActiveProvider] = useState<string>(() => {
+  const [activeProvider] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_active_provider') || 'gemini';
   });
-  const [openaiApiKey, setOpenaiApiKey] = useState<string>(() => {
+  const [openaiApiKey] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_openai_key') || '';
   });
-  const [anthropicApiKey, setAnthropicApiKey] = useState<string>(() => {
+  const [anthropicApiKey] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_anthropic_key') || '';
   });
-  const [ollamaEndpoint, setOllamaEndpoint] = useState<string>(() => {
+  const [ollamaEndpoint] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_ollama_endpoint') || 'http://localhost:11434';
   });
 
   // Budget Guard States
-  const [monthlyBudgetLimit, setMonthlyBudgetLimit] = useState<number>(() => {
+  const [monthlyBudgetLimit] = useState<number>(() => {
     return Number(persistentStorage.getItem('lyriq_budget_limit')) || 100;
   });
-  const [budgetGuardHardLimit, setBudgetGuardHardLimit] = useState<boolean>(() => {
+  const [budgetGuardHardLimit] = useState<boolean>(() => {
     return persistentStorage.getItem('lyriq_budget_hard_limit') !== 'false';
   });
   const [apiExpenditureToday, setApiExpenditureToday] = useState<number>(() => {
@@ -2295,190 +2295,6 @@ export default function App() {
   const [ollamaModel, setOllamaModel] = useState<string>(() => {
     return persistentStorage.getItem('lyriq_ollama_model') || 'llama3';
   });
-
-  const [settingsSubTab, setSettingsSubTab] = useState<'general' | 'diagnostics'>('general');
-  const [isDiagnosing, setIsDiagnosing] = useState(false);
-  const [diagnosticsLogs, setDiagnosticsLogs] = useState<string[]>([]);
-  const [diagnosticsResult, setDiagnosticsResult] = useState<'passed' | 'failed' | 'blocked' | null>(null);
-  const [diagnosticsStatus, setDiagnosticsStatus] = useState({
-    backend: 'Unknown',
-    database: 'Unknown',
-    storage: 'Unknown',
-    vectorDb: 'Unknown',
-    provider: 'Unknown',
-    models: 'Unknown',
-    mainAgent: 'Unknown'
-  });
-
-  const handleRunFullDiagnostics = async () => {
-    setIsDiagnosing(true);
-    setDiagnosticsResult(null);
-    setDiagnosticsLogs([]);
-    
-    const logMsg = (msg: string) => {
-      setDiagnosticsLogs(prev => [...prev, `[${new Date().toLocaleTimeString('pt-BR')}] ${msg}`]);
-    };
-
-    logMsg('Iniciando varredura geral do Agent Center...');
-    
-    let backendOk = false;
-    let databaseOk = false;
-    let storageOk = false;
-    let vectorDbOk = false;
-    let providerOk = false;
-    let modelsOk = false;
-    let mainAgentOk = false;
-
-    // 1. Testa Backend
-    logMsg('Testando conectividade com o backend REST na porta 5000...');
-    try {
-      const res = await fetch('/api/health');
-      if (res.status === 200) {
-        const body = await res.json();
-        if (body.ok) {
-          backendOk = true;
-          logMsg('✅ Backend online e respondendo na porta 5000.');
-          
-          const checks = body.data.checks || {};
-          databaseOk = checks.database === 'healthy';
-          storageOk = checks.storage === 'healthy';
-          vectorDbOk = checks.vectorDb === 'healthy';
-          
-          logMsg(`Banco de dados: ${databaseOk ? '✅ Conectado' : '❌ Falhou'}`);
-          logMsg(`Armazenamento: ${storageOk ? '✅ Ativo' : '❌ Falhou'}`);
-          logMsg(`Vector DB (RAG): ${vectorDbOk ? '✅ Ativo' : '❌ Falhou'}`);
-        } else {
-          logMsg('❌ Backend retornou erro na resposta de saúde.');
-        }
-      } else {
-        logMsg(`❌ Backend retornou HTTP status ${res.status}.`);
-      }
-    } catch (err: any) {
-      logMsg(`❌ Falha de conexão física com o backend: ${err.message}`);
-    }
-
-    // 2. Testa Provider
-    logMsg('Verificando conexões de provedores ativas...');
-    try {
-      const res = await fetch('/api/providers');
-      const body = await res.json();
-      if (body.ok && body.data.length > 0) {
-        providerOk = body.data.some((p: any) => p.status === 'valid');
-        logMsg(`✅ Provedor validado: ${providerOk ? 'Sim' : 'Não configurado'}`);
-      } else {
-        logMsg('❌ Nenhum provedor de IA cadastrado ou validado no banco.');
-      }
-    } catch (err: any) {
-      logMsg(`❌ Erro ao listar provedores: ${err.message}`);
-    }
-
-    // 3. Testa Modelos
-    logMsg('Atualizando catálogo de modelos...');
-    try {
-      const res = await fetch('/api/models');
-      const body = await res.json();
-      if (body.ok && body.data.length > 0) {
-        modelsOk = true;
-        logMsg(`✅ Catálogo de modelos carregado: ${body.data.length} modelos disponíveis.`);
-      } else {
-        logMsg('❌ Nenhum modelo de chat disponível no catálogo.');
-      }
-    } catch (err: any) {
-      logMsg(`❌ Erro ao ler modelos: ${err.message}`);
-    }
-
-    // 4. Testa modelo selecionado
-    const selectedModel = activeProvider === 'gemini' ? geminiModel :
-                          activeProvider === 'openai' ? openaiModel :
-                          activeProvider === 'anthropic' ? anthropicModel : ollamaModel;
-    logMsg(`Testando tempo de resposta do modelo selecionado: ${selectedModel || 'Nenhum'}...`);
-    if (selectedModel) {
-      try {
-        const res = await fetch(`/api/providers/${activeProvider}/test-model`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workspaceId: 'workspace_123',
-            modelId: selectedModel,
-            prompt: 'healthcheck'
-          })
-        });
-        const body = await res.json();
-        if (body.ok) {
-          logMsg(`✅ Modelo disponível no provider. Latência estimada: ${body.data.latencyMs}ms`);
-        } else {
-          logMsg(`❌ Teste de modelo falhou: ${body.error ? body.error.message : 'Sem resposta'}`);
-        }
-      } catch (err: any) {
-        logMsg(`❌ Erro ao testar modelo: ${err.message}`);
-      }
-    } else {
-      logMsg('⚠️ Nenhum modelo selecionado para testar.');
-    }
-
-    // 5. Testa Main Agent
-    logMsg('Verificando agente coordenador principal...');
-    let activeAgentId = '';
-    try {
-      const res = await fetch('/api/agents');
-      const body = await res.json();
-      if (body.ok) {
-        const mainAgent = body.data.find((a: any) => a.type === 'main');
-        if (mainAgent) {
-          activeAgentId = mainAgent.id;
-          mainAgentOk = mainAgent.status === 'ready_to_test' || mainAgent.status === 'active';
-          logMsg(`✅ Agente principal encontrado: "${mainAgent.name}" (${mainAgent.role}). Status: ${mainAgent.status}`);
-        } else {
-          logMsg('❌ Agente coordenador principal não configurado ou criado.');
-        }
-      }
-    } catch (err: any) {
-      logMsg(`❌ Erro ao obter informações dos agentes: ${err.message}`);
-    }
-
-    // 6. Testa chat com prompt curto
-    if (activeAgentId && providerOk) {
-      logMsg('Testando pipeline de chat com prompt de validação rápida...');
-      try {
-        const res = await fetch(`/api/agents/${activeAgentId}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            workspaceId: 'workspace_123',
-            sessionId: 'session_diagnostic_123',
-            message: 'ping'
-          })
-        });
-        const body = await res.json();
-        if (body.ok) {
-          logMsg(`✅ Chat respondendo perfeitamente: "${body.data.content}"`);
-        } else {
-          logMsg(`❌ Pipeline de chat falhou: ${body.error ? body.error.message : 'Sem resposta'}`);
-        }
-      } catch (err: any) {
-        logMsg(`❌ Erro no pipeline de chat: ${err.message}`);
-      }
-    } else {
-      logMsg('⚠️ Teste de chat ignorado: Agente ou provedor ausente.');
-    }
-
-    // Update state statuses
-    setDiagnosticsStatus({
-      backend: backendOk ? 'healthy' : 'offline',
-      database: databaseOk ? 'healthy' : 'failed',
-      storage: storageOk ? 'healthy' : 'failed',
-      vectorDb: vectorDbOk ? 'healthy' : 'failed',
-      provider: providerOk ? 'valid' : 'invalid',
-      models: modelsOk ? 'ready' : 'failed',
-      mainAgent: mainAgentOk ? 'active' : 'draft'
-    });
-
-    const passed = backendOk && databaseOk && providerOk && mainAgentOk;
-    setDiagnosticsResult(passed ? 'passed' : 'failed');
-    setIsDiagnosing(false);
-    
-    logMsg(`Diagnostics concluído. Resultado final: ${passed ? 'CONCLUÍDO COM SUCESSO' : 'ATENÇÃO: FALHAS DETECTADAS'}`);
-  };
 
   useEffect(() => {
     persistentStorage.setItem('lyriq_gemini_model', geminiModel);
@@ -3260,6 +3076,7 @@ export default function App() {
       plan: 'pro'
     };
     persistentStorage.setItem('lyriq_session', JSON.stringify(demoUser));
+    persistentStorage.setItem('lyriq_onboarding_completed', 'true');
     setCurrentUser(demoUser);
     
     setCompanyProfile(demoCompany);
@@ -3283,6 +3100,10 @@ export default function App() {
   const handleAgentToggle = (id: string) => {
     const target = agents.find(a => a.id === id);
     if (!target) return;
+    if (target.agentStatus === 'draft') {
+      addToast('Configure um provedor e teste este agente antes de ativá-lo.', 'info');
+      return;
+    }
     const nextStatus = !target.status;
     addToast(`Agente ${target.name} foi ${nextStatus ? 'ativado' : 'pausado'}.`, nextStatus ? 'success' : 'info');
     setAgents(prev => prev.map(a => a.id === id ? { ...a, status: nextStatus, lastActive: nextStatus ? 'Agora mesmo' : 'Pausado' } : a));
@@ -4531,25 +4352,6 @@ export default function App() {
     setAppointments(prev => [newMeet, ...prev]);
     addToast(`Reunião "${title}" agendada com ${customer} para dia ${date} às ${time}.`, 'success');
     handleLogAuditEvent('Lyriq Smart Scheduler', `Agendamento de reunião: "${title}" com ${customer} para o agente ${agent}`, 'low');
-  };
-
-  // SUPPORT ACTIONS
-  const handleResolveTicket = (id: string) => {
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, status: 'resolved' } : t));
-    addToast(`Ticket #${id} resolvido.`, 'success');
-  };
-
-  const handleEscalateTicket = (id: string) => {
-    setTickets(prev => prev.map(t => t.id === id ? { ...t, priority: 'high' } : t));
-    addToast(`Ticket #${id} escalado para humano.`, 'info');
-  };
-
-  const handleResolveApproval = (id: string, status: 'approved' | 'denied') => {
-    const target = approvals.find(a => a.id === id);
-    if (!target) return;
-    addToast(`Ação "${target.actionType}" foi ${status === 'approved' ? 'aprovada' : 'rejeitada'}.`, status === 'approved' ? 'success' : 'info');
-    handleLogAuditEvent(target.agentName, `Decisão de aprovação humana: "${target.actionType}" -> ${status.toUpperCase()}`, status === 'approved' ? 'low' : 'medium');
-    setApprovals(prev => prev.map(app => app.id === id ? { ...app, status } : app));
   };
 
   const handleTriggerSentimentEscalation = (ticketId: string, text: string) => {
@@ -6151,7 +5953,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
   const revenueSum = leads.reduce((sum, lead) => sum + (lead.stage !== 'closed' ? lead.value : 0), 0);
 
   return (
-    <div className={`min-h-screen flex flex-col bg-slate-50/50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 theme-${activeTheme}`}>
+    <div className={`min-h-screen flex flex-col bg-slate-50/50 text-slate-800 font-sans selection:bg-indigo-100 selection:text-indigo-900 theme-${activeTheme} ${currentRoute === 'app' ? 'ac-app' : ''}`}>
       
       {/* TOAST SYSTEM (With Slide-up Animation) */}
       <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-md">
@@ -7763,11 +7565,12 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
         <div className="flex-1 flex overflow-hidden">
           
           {/* SIDEBAR */}
-          <aside className="w-64 border-r border-slate-200/60 bg-white flex flex-col shrink-0">
+          {mobileNavOpen && <button type="button" aria-label="Fechar navegação" onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-40 bg-slate-950/45 md:hidden" />}
+          <aside className={`${mobileNavOpen ? 'fixed inset-y-0 left-0 z-50 flex shadow-2xl' : 'hidden md:flex'} ac-main-sidebar w-64 border-r border-slate-200/60 bg-white flex-col shrink-0`}>
             {/* Header info */}
             <div className="h-16 px-6 border-b border-slate-200/60 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <AgentCenterWordmark className="h-9 w-auto max-w-[170px] object-contain" />
+                <AgentCenterWordmark light className="h-9 w-auto max-w-[190px] object-contain" />
               </div>
             </div>
 
@@ -7777,7 +7580,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('dashboard')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-home w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'dashboard'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7785,13 +7588,13 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               >
                 <div className="flex items-center gap-2.5">
                   <LayoutDashboard className="w-4 h-4 shrink-0" />
-                  <span>Home</span>
+                  <span>Início</span>
                 </div>
               </button>
 
               <button
                 onClick={() => companyProfile.setupComplete ? setCurrentTab('chat') : addToast('Disponível depois de configurar a empresa e o provedor de IA.', 'info')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-chat w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'chat'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7799,36 +7602,27 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               >
                 <div className="flex items-center gap-2.5">
                   <MessageSquare className="w-4 h-4 shrink-0 text-indigo-600" />
-                  <span>Chat</span>
+                  <span>Chats</span>
                 </div>
                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">IA</span>
               </button>
 
               <button
-                onClick={() => {
-                  const tier = companyProfile.plan || currentUser?.plan || onboardingPlan || 'free';
-                  if (hasCodeAccess(workspaceMode, tier)) setCurrentTab('code');
-                  else {
-                    setLockedFeatureName('Lyriq Code Business Max');
-                    setIsUpgradeModalOpen(true);
-                  }
-                }}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                onClick={() => setCurrentTab('code')}
+                className={`ac-nav-code w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'code' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
                   <Code2 className="w-4 h-4 shrink-0 text-cyan-600" />
-                  <span>Lyriq Code</span>
+                  <span>Agent Center Code</span>
                 </div>
-                <span className={`px-1.5 py-0.5 rounded-full text-[8px] font-bold ${workspaceMode === 'business' ? 'bg-amber-50 text-amber-700' : 'bg-cyan-50 text-cyan-700'}`}>
-                  {workspaceMode === 'business' ? 'MAX+' : 'PERSONAL'}
-                </span>
+                {import.meta.env.DEV && <span className="px-1.5 py-0.5 rounded-full bg-cyan-50 text-[8px] font-bold text-cyan-700">LIVRE</span>}
               </button>
 
               <button
                 onClick={() => setCurrentTab('agents')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-agents w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'agents' || currentTab === 'agent_studio' || currentTab === 'main_agent'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7836,15 +7630,29 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               >
                 <div className="flex items-center gap-2.5">
                   <User className="w-4 h-4 shrink-0" />
-                  <span>Agentes</span>
+                  <span>Meus Agentes</span>
                 </div>
                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">{agents.length}</span>
               </button>
 
+              {workspaceMode === 'personal' && <button
+                onClick={() => setCurrentTab('automation_builder')}
+                className={`ac-nav-automations w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                  currentTab === 'automation_builder'
+                    ? 'bg-slate-950 text-white shadow-sm'
+                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Zap className="w-4 h-4 shrink-0 text-amber-500" />
+                  <span>Automações</span>
+                </div>
+              </button>}
+
               {workspaceMode === 'business' && (<>
               <button
                 onClick={() => setCurrentTab('tasks')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-tasks w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'tasks'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7862,9 +7670,9 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </button>
 
               <button
-                onClick={() => setCurrentTab('workflows')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
-                  currentTab === 'workflows'
+                onClick={() => setCurrentTab('automation_builder')}
+                className={`ac-nav-automations w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                  currentTab === 'automation_builder'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
@@ -7877,7 +7685,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('connections')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-connections w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   ['connections', 'channels', 'channel_telegram', 'channel_whatsapp', 'whatsapp_inbox', 'channel_email', 'email_inbox', 'integrations', 'mcps', 'webhooks_outbound', 'webhooks_inbound'].includes(currentTab)
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7892,7 +7700,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('documents')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-documents w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   ['documents', 'memory', 'knowledge_bases', 'rag_sandbox', 'workspace_memories', 'memory_candidates', 'memory_debug'].includes(currentTab)
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7907,7 +7715,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               {workspaceMode === 'business' && <button
                 onClick={() => setCurrentTab('reports')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-reports w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'reports' || currentTab === 'executive_dashboard'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7921,7 +7729,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('settings')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-settings w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   ['settings', 'providers', 'pricing', 'workspace_settings'].includes(currentTab)
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7982,12 +7790,15 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             
             {/* Topbar navigation metrics */}
-            <header className="h-16 px-8 border-b border-slate-200/60 bg-white flex items-center justify-between shrink-0 z-10">
-              <div className="relative w-96">
+            <header className="ac-main-topbar h-16 px-4 md:px-8 border-b border-slate-200/60 bg-white flex items-center justify-between shrink-0 z-10">
+              <button type="button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir navegação" className="rounded-lg p-2 text-slate-800 hover:bg-slate-100 md:hidden"><Menu className="h-5 w-5" /></button>
+              <span className="text-sm font-bold text-slate-950 md:hidden">Agent Center</span>
+              <div className="ac-topbar-location hidden md:flex"><LayoutDashboard size={16}/><span>{currentTab === 'dashboard' ? 'Início' : currentTab === 'chat' ? 'Chats' : currentTab === 'agents' ? 'Meus Agentes' : currentTab === 'automation_builder' ? 'Automações' : currentTab === 'code' ? 'Agent Center Code' : currentTab === 'settings' ? 'Configurações' : 'Agent Center'}</span></div>
+              <div className="relative hidden w-96 md:block">
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Buscar agentes, tarefas, arquivos ou comandos..."
+                  placeholder="Buscar no Agent Center"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
@@ -7995,28 +7806,6 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </div>
 
               <div className="flex items-center gap-4">
-                {/* Budget status badge */}
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs">
-                  <CreditCard className="w-3.5 h-3.5 text-slate-500" />
-                  <span className="text-slate-600 font-medium text-[11px]">API: <strong className="text-slate-900 font-semibold">R$ 95,00</strong> / R$ 100,00</span>
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                </div>
-
-                {/* Global Create Button */}
-                <button
-                  onClick={() => setIsNewTaskModalOpen(true)}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition shadow-sm flex items-center gap-1.5"
-                >
-                  <span>+ Criar</span>
-                </button>
-
-                {companyProfile.setupComplete && (
-                  <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-100/70 rounded-md">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100"></span>
-                    <span className="text-xs font-semibold text-slate-700">{companyProfile.name}</span>
-                  </div>
-                )}
-
                 {/* Notification Bell Icon Button */}
                 <button
                   onClick={() => setIsNotificationDrawerOpen(prev => !prev)}
@@ -8031,37 +7820,12 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   )}
                 </button>
                 
-                {/* Simulation control dashboard */}
-                {companyProfile.setupComplete && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleSimulateLead}
-                      className="px-2.5 py-1.5 border border-indigo-200 bg-indigo-50/50 text-indigo-700 hover:bg-indigo-50 font-semibold rounded text-[10px] transition"
-                    >
-                      + Simular Lead
-                    </button>
-                    <button
-                      onClick={handleSimulateTicket}
-                      className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold rounded text-[10px] transition"
-                    >
-                      + Simular Ticket
-                    </button>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleLogout}
-                  className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded text-[10px] font-semibold flex items-center gap-1 transition"
-                  title="Sair da conta e voltar para página de divulgação"
-                >
-                  <LogOut className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Sair</span>
-                </button>
+                <button type="button" onClick={() => setCurrentTab('settings')} className="ac-topbar-profile" title="Abrir configurações da conta" aria-label="Abrir configurações da conta">{(currentUser?.name || 'AC').split(' ').map(part => part[0]).slice(0,2).join('').toUpperCase()}</button>
               </div>
             </header>
 
             {/* Active view component render */}
-            <div className="flex-1 p-8 overflow-y-auto">
+            <div className="ac-main-content flex-1 overflow-y-auto p-4 md:p-8">
 
               {/* 0. SETUP CONSOLE (WIZARD FOR NON-UNLOCKED WORKSPACES) */}
               {currentTab === 'setup_console' && !isDashboardUnlocked && (
@@ -8552,488 +8316,28 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               {/* 1. APP: EXECUTIVE DASHBOARD */}
               {currentTab === 'code' && (
-                <div className="h-full min-h-[720px] flex flex-col gap-4 text-left animate-in fade-in duration-200">
-                  {!hasCodeAccess(workspaceMode, companyProfile.plan || currentUser?.plan || onboardingPlan || 'free') ? (
-                    <div className="m-auto max-w-lg bg-white border border-slate-200 rounded-2xl p-8 text-center shadow-sm">
-                      <Lock className="w-10 h-10 text-amber-500 mx-auto" />
-                      <h1 className="text-xl font-bold text-slate-950 mt-4">Lyriq Code não está incluído no seu plano</h1>
-                      <p className="text-sm text-slate-500 mt-2">No Business, o Lyriq Code está disponível a partir do plano Max. Seus agentes e ferramentas empresariais continuam ativos.</p>
-                      <button onClick={() => setCurrentTab('pricing')} className="mt-5 px-5 py-2.5 bg-slate-950 text-white rounded-lg text-xs font-bold">Ver planos com Code</button>
-                    </div>
-                  ) : (<>
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2"><Code2 className="w-6 h-6 text-cyan-600" /><h1 className="text-xl font-bold text-slate-950">Lyriq Code</h1></div>
-                        <p className="text-xs text-slate-500 mt-1">Transforme ideias em software funcional com agentes que escrevem, executam, testam e refinam o código.</p>
-                      </div>
-                      <div className="flex bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
-                        {([
-                          ['code', 'Code', Code2], ['apps', 'Apps', Smartphone], ['web', 'Web', Globe2], ['games', 'Games', Gamepad2]
-                        ] as const).map(([id, label, Icon]) => (
-                          <button key={id} onClick={() => setCodeSubTab(id)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${codeSubTab === id ? 'bg-slate-950 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>
-                            <Icon className="w-4 h-4" />{label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-12 flex-1 min-h-0 bg-[#0b1020] rounded-2xl overflow-hidden border border-slate-800 shadow-xl">
-                      <aside className="col-span-2 border-r border-slate-800 p-4 text-slate-300">
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Explorer</p>
-                          <div className="flex gap-1">
-                            <button title="Nova pasta" className="w-6 h-6 grid place-items-center rounded hover:bg-slate-800 text-slate-400"><FolderOpen className="w-3.5 h-3.5" /></button>
-                            <button title="Novo arquivo" className="w-6 h-6 grid place-items-center rounded hover:bg-slate-800 text-slate-400"><FileText className="w-3.5 h-3.5" /></button>
-                          </div>
-                        </div>
-                        <div className="mt-4 space-y-1.5 text-xs font-mono">
-                          <p className="text-cyan-300">▾ lyriq-agents-os</p>
-                          <p className="pl-3 text-slate-100">▾ src</p>
-                          <p className="pl-6 text-white bg-slate-800/70 rounded px-2 py-1">App.tsx</p>
-                          <p className="pl-6">components/</p>
-                          <p className="pl-6">services/</p>
-                          <p className="pl-3">▾ docs</p>
-                          <p className="pl-6">terms.md</p>
-                          <p className="pl-6">privacy.md</p>
-                          <p className="pl-3">public/</p>
-                          <p className="pl-3">package.json</p>
-                          <p className="pl-3">vite.config.ts</p>
-                        </div>
-                        <div className="mt-8 pt-4 border-t border-slate-800">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Skills ativas</p>
-                          <div className="mt-2 flex flex-wrap gap-1">
-                            {(codeSubTab === 'apps' ? ['React Native', 'Flutter', 'Build'] : codeSubTab === 'web' ? ['React', 'Vite', 'Deploy'] : codeSubTab === 'games' ? ['Godot', 'Three.js', gameDimension.toUpperCase()] : ['Git', 'Tests', 'Debug']).map(skill => <span key={skill} className="px-2 py-1 rounded bg-slate-800 text-[9px] text-slate-300">{skill}</span>)}
-                          </div>
-                        </div>
-                      </aside>
-
-                      <section className="col-span-5 flex flex-col border-r border-slate-800">
-                        <div className="h-10 border-b border-slate-800 flex items-center px-4 text-[10px] text-slate-400 font-mono">
-                          <span className="px-2 py-1 bg-slate-900 border border-slate-800 rounded-t">App.tsx</span>
-                          <span className="px-2 py-1 border border-slate-800 border-l-0 rounded-t">terms.md</span>
-                          <span className="ml-auto text-emerald-400">● agent connected</span>
-                        </div>
-                        <pre className="flex-1 p-5 text-[11px] leading-6 text-slate-300 font-mono overflow-auto whitespace-pre-wrap">{`import { LyriqApp } from '@lyriq/runtime';\n\nexport default function App() {\n  return (\n    <LyriqApp mode="${codeSubTab}"${codeSubTab === 'apps' ? ` platform="${codePlatform}"` : ''}${codeSubTab === 'games' ? ` dimension="${gameDimension}"` : ''}>\n      <Hero title="Sua ideia já está rodando" />\n      <Agent status="building" />\n    </LyriqApp>\n  );\n}`}</pre>
-                        <div className="border-t border-slate-800 bg-slate-950">
-                          <div className="h-8 px-3 border-b border-slate-800 flex items-center gap-3 text-[10px] text-slate-400 font-mono">
-                            <span className="text-white">Terminal</span>
-                            <span>Problems</span>
-                            <span>Git</span>
-                            <span className="ml-auto text-cyan-300">workspace: folder mode</span>
-                          </div>
-                          <div className="px-3 py-2 text-[10px] text-emerald-300 font-mono border-b border-slate-800">$ lyriq-code agent apply --project lyriq-agents-os --tests</div>
-                        </div>
-                        <div className="border-t border-slate-800 p-3">
-                          <textarea value={codePrompt} onChange={e => setCodePrompt(e.target.value)} rows={3} className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs text-white resize-none focus:outline-none focus:border-cyan-500" />
-                          <div className="mt-2 flex items-center gap-2">
-                            {codeSubTab === 'apps' && <select value={codePlatform} onChange={e => setCodePlatform(e.target.value as typeof codePlatform)} className="bg-slate-800 text-slate-200 rounded px-2 py-2 text-[10px]">{['android','ios','windows','macos','linux'].map(x => <option key={x}>{x}</option>)}</select>}
-                            {codeSubTab === 'games' && <div className="flex bg-slate-800 rounded p-0.5">{(['2d','3d'] as const).map(x => <button key={x} onClick={() => setGameDimension(x)} className={`px-3 py-1.5 text-[10px] rounded ${gameDimension === x ? 'bg-cyan-600 text-white' : 'text-slate-400'}`}>{x.toUpperCase()}</button>)}</div>}
-                            <button onClick={runLyriqCode} className="ml-auto px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 rounded-lg text-xs font-bold flex items-center gap-2"><Play className="w-3.5 h-3.5" />Executar agente</button>
-                          </div>
-                        </div>
-                      </section>
-
-                      <section className="col-span-5 bg-slate-100 flex flex-col">
-                        <div className="h-10 bg-white border-b border-slate-200 flex items-center px-3 gap-2 text-[10px] text-slate-500"><MonitorPlay className="w-4 h-4" /> Preview em tempo real <span className={`ml-auto font-bold ${codeRunStatus === 'building' ? 'text-amber-600' : 'text-emerald-600'}`}>{codeRunStatus === 'building' ? 'COMPILANDO...' : 'LIVE'}</span></div>
-                        <div className="flex-1 p-5 flex items-center justify-center">
-                          <div className={`w-full h-full max-h-[520px] bg-white shadow-xl overflow-hidden ${codeSubTab === 'apps' ? 'max-w-[270px] rounded-[32px] border-[8px] border-slate-900' : 'rounded-xl border border-slate-200'}`}>
-                            <div className="h-full bg-gradient-to-br from-slate-950 via-indigo-950 to-cyan-950 text-white p-8 flex flex-col justify-center">
-                              <span className="text-[10px] uppercase tracking-[0.3em] text-cyan-300">{codeSubTab === 'games' ? `Game ${gameDimension.toUpperCase()}` : codeSubTab === 'apps' ? `App ${codePlatform}` : codeSubTab === 'web' ? 'Web Application' : 'Code Workspace'}</span>
-                              <h2 className="text-3xl font-black mt-3">Sua ideia já está rodando.</h2>
-                              <p className="text-xs text-slate-300 mt-3 leading-relaxed">O agente alterou os arquivos, executou os testes e atualizou este preview automaticamente.</p>
-                              <button className="mt-6 self-start px-4 py-2 bg-cyan-400 text-slate-950 rounded-lg text-xs font-bold">Testar agora</button>
-                            </div>
-                          </div>
-                        </div>
-                      </section>
-                    </div>
-                  </>)}
-                </div>
+                !import.meta.env.DEV && !hasCodeAccess(workspaceMode, companyProfile.plan || currentUser?.plan || onboardingPlan || 'free') ? (
+                  <div className="m-auto max-w-lg rounded-2xl bg-white p-8 text-center">
+                    <Lock className="mx-auto h-10 w-10 text-amber-500" />
+                    <h1 className="mt-4 text-xl font-bold text-slate-950">Agent Center Code não está incluído no seu plano</h1>
+                    <p className="mt-2 text-sm text-slate-600">No Business, o Code está disponível a partir do plano Max.</p>
+                    <button onClick={() => setCurrentTab('pricing')} className="mt-5 rounded-lg bg-slate-950 px-5 py-2.5 text-xs font-bold text-white">Ver planos com Code</button>
+                  </div>
+                ) : <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Carregando Code…</div>}><CodeWorkspace /></React.Suspense>
               )}
 
               {currentTab === 'dashboard' && isDashboardUnlocked && (
-                <div className="space-y-6 max-w-6xl">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Dashboard de Operações</h1>
-                      <p className="text-xs text-slate-400 mt-0.5">Visão unificada das operações de inteligência, CRM e suporte da empresa.</p>
-                    </div>
-                  </div>
-
-                  {/* Metrics grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Oportunidades no CRM</span>
-                      <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(revenueSum)}
-                      </p>
-                      <span className="text-[10px] text-slate-400 mt-2 block font-mono">{leads.length} leads qualificados</span>
-                    </div>
-
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Fila de Suporte</span>
-                      <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">{tickets.filter(t => t.status !== 'resolved').length}</p>
-                      <span className="text-[10px] text-slate-400 mt-2 block font-mono">{urgentTicketsCount} tickets urgentes</span>
-                    </div>
-
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Arquivos na Memória</span>
-                      <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">{memoryDocs.length}</p>
-                      <span className="text-[10px] text-slate-400 mt-2 block font-mono">Base de RAG ativa</span>
-                    </div>
-
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Canais Integrados</span>
-                      <p className="text-2xl font-bold text-slate-900 mt-1 font-mono">{channels.filter(c => c.connected).length} / {channels.length}</p>
-                      <span className="text-[10px] text-slate-400 mt-2 block">webhooks conectados</span>
-                    </div>
-                  </div>
-
-                  {/* Dashboard body grids */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    
-                    {/* Left Column: Leads Funnel and Tickets Queue */}
-                    <div className="lg:col-span-2 space-y-6">
-                      
-                      {/* Leads CRM Table Card */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                          <div>
-                            <span className="text-xs font-bold text-slate-900">CRM Sync — Funil Comercial</span>
-                            <span className="block text-[9px] text-slate-400 mt-0.5">Mapeamento de pipelines e lead scoring automatizados</span>
-                          </div>
-                          <button
-                            onClick={handleSimulateLead}
-                            className="px-2.5 py-1 bg-slate-950 text-white rounded text-[10px] font-semibold hover:bg-slate-800 transition"
-                          >
-                            + Simular Lead
-                          </button>
-                        </div>
-                        
-                        {leads.length === 0 ? (
-                          <div className="p-8 text-center text-xs text-slate-400 italic">
-                            Nenhum lead cadastrado. Clique em "+ Simular Lead" para testar o funil de CRM.
-                          </div>
-                        ) : (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                              <thead>
-                                <tr className="bg-slate-50/50 text-[9px] font-bold text-slate-400 uppercase border-b border-slate-100">
-                                  <th className="px-5 py-2.5">Nome / Empresa</th>
-                                  <th className="px-5 py-2.5">E-mail</th>
-                                  <th className="px-5 py-2.5">Valor</th>
-                                  <th className="px-5 py-2.5">IA Score</th>
-                                  <th className="px-5 py-2.5 text-right">Etapa</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-slate-100 text-xs">
-                                {leads.map((lead) => (
-                                  <tr key={lead.id} className="hover:bg-slate-50/30 transition">
-                                    <td className="px-5 py-3">
-                                      <span className="font-semibold text-slate-900 block">{lead.name}</span>
-                                      <span className="text-[9px] text-slate-400">{lead.company}</span>
-                                    </td>
-                                    <td className="px-5 py-3 text-slate-500 font-mono text-[10px]">{lead.email}</td>
-                                    <td className="px-5 py-3 font-bold text-slate-800 font-mono">
-                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(lead.value)}
-                                    </td>
-                                    <td className="px-5 py-3">
-                                      <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 font-mono">
-                                        {lead.score}/100
-                                      </span>
-                                    </td>
-                                    <td className="px-5 py-3 text-right">
-                                      <span className="inline-block px-2 py-0.5 rounded-full text-[9px] font-semibold bg-emerald-50 text-emerald-700">
-                                        {lead.stage === 'new' ? 'Novo' : 'Qualificado'}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Caixa de Aprovações Humanas */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                          <div>
-                            <span className="text-xs font-bold text-slate-900">Caixa de Aprovação Humana ⚖️</span>
-                            <span className="block text-[9px] text-slate-400 mt-0.5">Validação de ações críticas executadas pelos agentes de IA</span>
-                          </div>
-                          <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded font-mono">
-                            {approvals.filter(a => a.status === 'pending').length} Pendentes
-                          </span>
-                        </div>
-
-                        {approvals.filter(a => a.status === 'pending').length === 0 ? (
-                          <div className="p-8 text-center text-xs text-slate-400 italic">
-                            Nenhuma ação pendente de aprovação humana. Tudo seguro!
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-slate-100">
-                            {approvals.filter(a => a.status === 'pending').map((app) => (
-                              <div key={app.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/30 transition text-xs">
-                                <div className="space-y-1 text-left">
-                                  <div className="flex items-center gap-2">
-                                    <span className="px-1.5 py-0.5 rounded text-[8px] font-bold bg-indigo-50 text-indigo-700 uppercase font-mono">
-                                      {app.agentName}
-                                    </span>
-                                    <span className="text-[9px] text-slate-400 font-mono">{app.createdAt}</span>
-                                  </div>
-                                  <h4 className="font-semibold text-slate-900">{app.actionType}</h4>
-                                  <p className="text-[10px] text-slate-500 font-sans">{app.actionPayload}</p>
-                                </div>
-
-                                <div className="flex gap-2 shrink-0">
-                                  <button
-                                    onClick={() => handleResolveApproval(app.id, 'approved')}
-                                    className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-[10px] font-semibold text-emerald-700 rounded transition"
-                                  >
-                                    Aprovar
-                                  </button>
-                                  <button
-                                    onClick={() => handleResolveApproval(app.id, 'denied')}
-                                    className="px-3 py-1 bg-red-50 hover:bg-red-100 text-[10px] font-semibold text-red-700 rounded transition"
-                                  >
-                                    Rejeitar
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Tickets Support Queue Card */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-                          <div>
-                            <span className="text-xs font-bold text-slate-900">Atendimento — Fila de Suporte</span>
-                            <span className="block text-[9px] text-slate-400 mt-0.5">Triagem de suporte inteligente de clientes</span>
-                          </div>
-                          <button
-                            onClick={handleSimulateTicket}
-                            className="px-2.5 py-1 bg-slate-950 text-white rounded text-[10px] font-semibold hover:bg-slate-800 transition"
-                          >
-                            + Simular Ticket
-                          </button>
-                        </div>
-
-                        {tickets.length === 0 ? (
-                          <div className="p-8 text-center text-xs text-slate-400 italic">
-                            Nenhum chamado aberto na fila de suporte.
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-slate-100">
-                            {tickets.map((ticket) => (
-                              <div key={ticket.id} className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/30 transition text-xs">
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold text-slate-400 font-mono">#{ticket.id}</span>
-                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                                      ticket.status === 'urgent' ? 'bg-red-50 text-red-700 border border-red-100' :
-                                      ticket.status === 'resolved' ? 'bg-slate-100 text-slate-500' : 'bg-indigo-50 text-indigo-700'
-                                    }`}>
-                                      {ticket.status === 'urgent' ? 'Urgente' : ticket.status === 'resolved' ? 'Resolvido' : 'Aberto'}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <h4 className="font-semibold text-slate-900">{ticket.subject}</h4>
-                                    {ticket.sentiment && (
-                                      <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold shrink-0 ${
-                                        ticket.sentiment === 'happy' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                                        ticket.sentiment === 'angry' ? 'bg-red-50 text-red-700 border border-red-100 animate-pulse' :
-                                        'bg-slate-50 text-slate-500 border border-slate-100'
-                                      }`}>
-                                        {ticket.sentiment === 'happy' ? '😊 Satisfeito' :
-                                         ticket.sentiment === 'angry' ? '😡 Insatisfeito' : '😐 Neutro'}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[9px] text-slate-400">Cliente: {ticket.customer} ({ticket.company}) | Categoria: {ticket.category}</p>
-                                </div>
-
-                                <div className="flex gap-2">
-                                  {ticket.status !== 'resolved' && (
-                                    <button
-                                      onClick={() => handleResolveTicket(ticket.id)}
-                                      className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-[10px] font-semibold text-emerald-700 rounded transition"
-                                    >
-                                      Resolver
-                                    </button>
-                                  )}
-                                  {ticket.status === 'open' && (
-                                    <button
-                                      onClick={() => handleEscalateTicket(ticket.id)}
-                                      className="px-2 py-1 border border-slate-200 hover:bg-slate-50 text-[10px] font-semibold text-slate-700 rounded transition"
-                                    >
-                                      Escalar
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                    </div>
-
-                    {/* Right Column: Main Agent, Coordinated Specialists & Connected Channels */}
-                    <div className="space-y-6">
-                      
-                      {/* Executive summary card */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5 relative overflow-hidden text-left">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Sparkles className="w-4 h-4 text-indigo-600 font-sans" />
-                          <span className="text-xs font-bold text-slate-905 text-slate-950 font-sans">Relatório Operacional ({agents.find(a => a.id === 'main')?.name || 'Coordenador Principal'})</span>
-                        </div>
-                        {leads.length === 0 && tickets.length === 0 ? (
-                          <p className="text-[10px] text-slate-400 italic font-sans">
-                            Aguardando interações dos agentes de IA no CRM e chamados para processar.
-                          </p>
-                        ) : (
-                          <div className="space-y-2 text-[10px] leading-relaxed text-slate-600 font-sans">
-                            <p>
-                              O sistema operacional está consolidando operações de inteligência da <strong className="text-slate-800">{companyProfile.name}</strong>.
-                              {leads.length > 0 && ` Detectamos ${leads.length} oportunidades qualificadas no pipeline comercial.`}
-                              {tickets.length > 0 && ` A central de suporte triou ${tickets.length} chamados, mantendo SLAs dentro das métricas.`}
-                            </p>
-                            {operationalDiagnosis && (
-                              <p className="border-t border-slate-100 pt-2 text-[9.5px] italic text-slate-500">
-                                💡 <strong>Aviso do Coordenador:</strong> {operationalDiagnosis.bottlenecks[0]}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Subordinate Specialists hierarchy list */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5 space-y-3 text-left">
-                        <span className="text-xs font-bold text-slate-950 block border-b border-slate-100 pb-2 font-sans">
-                          👥 Equipe Especialista Subordinada
-                        </span>
-                        <div className="space-y-2">
-                          {agents.filter(a => a.id !== 'main').map((sp) => (
-                            <div key={sp.id} className="flex justify-between items-center text-[10.5px]">
-                              <div>
-                                <span className="font-bold text-slate-800 block font-sans">👤 {sp.name}</span>
-                                <span className="text-[8.5px] text-slate-400 font-sans block">{sp.role}</span>
-                              </div>
-                              <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold ${
-                                sp.status ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                              }`}>
-                                {sp.status ? 'Ativo' : 'Pausado'}
-                              </span>
-                            </div>
-                          ))}
-                          {agents.filter(a => a.id !== 'main').length === 0 && (
-                            <div className="text-[10px] text-slate-400 italic text-center py-2 font-sans">
-                              Nenhum especialista subordinado ativo. Habilite na Central de Onboarding.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Webhook Connected Channels */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5">
-                        <span className="text-xs font-bold text-slate-900 block mb-3.5">Canais de Integração</span>
-                        <div className="space-y-3">
-                          {channels.map((chan) => (
-                            <div key={chan.id} className="flex justify-between items-center text-xs">
-                              <div>
-                                <span className="font-semibold text-slate-900 block">{chan.name}</span>
-                                <span className="text-[9px] text-slate-400 capitalize">
-                                  {chan.id === 'telegram' && chan.connected && chan.telegramBotUsername
-                                    ? `Ativo: ${chan.telegramBotUsername}`
-                                    : `${chan.type} Gateway`}
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => handleToggleChannel(chan.id)}
-                                className={`px-2 py-0.5 rounded text-[9px] font-bold transition ${
-                                  chan.connected ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
-                                }`}
-                              >
-                                {chan.connected ? 'Conectado' : 'Conectar'}
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Smart Calendar Scheduler */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5">
-                        <div className="flex justify-between items-center mb-3">
-                          <span className="text-xs font-bold text-slate-900">Agenda de Reuniões de IA</span>
-                          <span className="text-[9px] font-semibold bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-mono">
-                            {appointments.length} Ativas
-                          </span>
-                        </div>
-                        <div className="space-y-3 max-h-48 overflow-y-auto pr-1">
-                          {appointments.length === 0 ? (
-                            <div className="text-center py-4 text-[10px] text-slate-400 italic">
-                              Nenhum compromisso agendado.
-                            </div>
-                          ) : (
-                            appointments.map((meet) => (
-                              <div key={meet.id} className="p-2.5 bg-slate-50/50 border border-slate-100 rounded-lg space-y-1.5 hover:bg-slate-50 transition">
-                                <div className="flex justify-between items-center text-[10px]">
-                                  <span className="font-bold text-slate-900 truncate max-w-[150px]">{meet.title}</span>
-                                  <span className="font-mono text-slate-400 text-[9px]">{meet.time}</span>
-                                </div>
-                                <div className="flex justify-between items-center text-[9px] text-slate-500">
-                                  <span>Cliente: {meet.customer}</span>
-                                  <span className="bg-slate-200/60 text-slate-700 px-1 py-0.2 rounded font-semibold text-[8px] font-sans">
-                                    {meet.agent.split(' ')[0]}
-                                  </span>
-                                </div>
-                                <div className="text-[8px] text-slate-400 font-mono">
-                                  Data: {meet.date}
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Log history timeline */}
-                      <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5 flex flex-col h-[280px]">
-                        <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2 shrink-0">
-                          <span className="text-xs font-semibold text-slate-900">Histórico de Atividade</span>
-                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        </div>
-                        <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-[10px] min-h-0">
-                          {timelineLogs.length === 0 ? (
-                            <div className="text-center py-10 text-slate-450 italic">
-                              Nenhum log operacional registrado.
-                            </div>
-                          ) : (
-                            timelineLogs.map((log) => (
-                              <div key={log.id} className="relative border-l border-slate-100 pl-4 pb-2">
-                                <div className="absolute -left-1.5 top-1.5 w-3 h-3 rounded-full bg-indigo-50 border-2 border-white"></div>
-                                <span className="font-semibold text-slate-800 block leading-tight">{log.agent}</span>
-                                <span className="text-slate-500 mt-0.5 block leading-tight">{log.action}</span>
-                                <span className="text-[8px] font-mono text-slate-400 block mt-0.5">{log.time} • {log.source}</span>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-400">Carregando início…</div>}>
+                  <HomeWorkspace name={currentUser?.name || 'você'} activity={timelineLogs} onNavigate={setCurrentTab} />
+                </React.Suspense>
               )}
-
               {/* CHAT WORKSPACE TAB */}
               {currentTab === 'chat' && companyProfile.setupComplete && (
-                <div className="space-y-6 max-w-6xl h-[calc(100vh-12rem)] flex flex-col">
+                <div className="ac-chat space-y-6 max-w-6xl h-[calc(100vh-12rem)] flex flex-col">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Chat de Agentes</h1>
-                      <p className="text-xs text-slate-400 mt-0.5">Comunique-se diretamente com qualquer agente e execute comandos no banco de dados.</p>
+                      <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Chats</h1>
+                      <p className="text-xs text-slate-400 mt-0.5">Converse com seus agentes e retome o histórico de cada um.</p>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="flex bg-slate-100 p-0.5 rounded-lg text-xs font-semibold select-none border border-slate-200/50">
@@ -9066,17 +8370,17 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Equipe Operacional</span>
                       </div>
                       <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-                        {agents.map((agent) => {
+                        {displayedChatAgents.map((agent) => {
                           const AgentIcon = getIconComponent(agent.icon);
                           const isSelected = selectedChatAgentId === agent.id;
                           const messagesList = chatMessages[agent.id] || [];
                           const lastMsgText = messagesList.length > 0 ? messagesList[messagesList.length - 1].text : 'Nenhuma mensagem recente.';
 
                           return (
-                            <div
+                            <button type="button"
                               key={agent.id}
                               onClick={() => setSelectedChatAgentId(agent.id)}
-                              className={`p-4 flex items-start gap-3 cursor-pointer transition ${
+                              className={`ac-chat-agent w-full p-4 flex items-start gap-3 cursor-pointer transition text-left ${
                                 isSelected ? 'bg-white border-l-2 border-slate-950' : 'hover:bg-slate-50/80'
                               }`}
                             >
@@ -9097,7 +8401,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                                 <span className="text-[10px] text-slate-400 block truncate">{agent.role}</span>
                                 <p className="text-[10px] text-slate-500 truncate mt-1 italic">{lastMsgText}</p>
                               </div>
-                            </div>
+                            </button>
                           );
                         })}
                       </div>
@@ -9106,9 +8410,10 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                     {/* Right Pane - Chat Console */}
                     {chatModeActive === 'single' ? (
                       (() => {
-                        const activeChatAgent = agents.find(a => a.id === selectedChatAgentId);
+                        const activeChatAgent = displayedChatAgents.find(a => a.id === selectedChatAgentId);
                         if (!activeChatAgent) return null;
                         const chatHistory = chatMessages[selectedChatAgentId] || [];
+                        const isConfiguredAgent = configuredChatAgents.some(agent => agent.id === selectedChatAgentId);
 
                         return (
                           <div className="flex-1 flex flex-col justify-between h-full bg-white min-w-0">
@@ -9126,36 +8431,25 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                                 <div className="flex items-center gap-2 mt-0.5">
                                   <span className="text-[10px] text-slate-400">{activeChatAgent.role} • Módulo {activeChatAgent.model}</span>
                                   <span className="h-1.5 w-px bg-slate-200"></span>
-                                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${geminiApiKey.trim() ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-650'}`}>
-                                    {geminiApiKey.trim() || (onboardingSelectedProvider === 'gemini' && onboardingApiKeyValidated)
-                                      ? '✨ Gemini LLM Real Ativo'
-                                      : '🤖 Modo Simulação Local'}
+                                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded ${isConfiguredAgent || providers.some(provider => provider.status === 'valid') ? 'bg-indigo-50 text-indigo-600' : 'bg-amber-50 text-amber-650'}`}>
+                                    {isConfiguredAgent || providers.some(provider => provider.status === 'valid') ? 'Provedor conectado' : 'Modelo não validado'}
                                   </span>
                                 </div>
                                 <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {getAgentSkills(activeChatAgent.id).map(skill => (
+                                  {(isConfiguredAgent ? activeChatAgent.installedSkills || [] : getAgentSkills(activeChatAgent.id)).map(skill => (
                                     <span key={skill} className="px-1.5 py-0.5 rounded bg-slate-100 text-[8px] font-semibold text-slate-500 border border-slate-200/50">
-                                      ⚙️ {skill}
+                                      {({ 'skill-code': 'Programação', 'skill-automation': 'Automações', 'skill-research': 'Pesquisa', 'skill-telegram': 'Telegram' } as Record<string, string>)[skill] || skill}
                                     </span>
                                   ))}
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-4 text-[10px] text-slate-500 font-mono">
-                                <div>
-                                  <span className="block text-[8px] font-sans text-slate-400 uppercase">Métrica</span>
-                                  <span className="font-bold text-slate-900">{activeChatAgent.metric}</span>
-                                </div>
-                                <div className="h-6 w-px bg-slate-200"></div>
-                                <div>
-                                  <span className="block text-[8px] font-sans text-slate-400 uppercase">Tarefas</span>
-                                  <span className="font-bold text-slate-900">{activeChatAgent.tasksToday}</span>
-                                </div>
-                              </div>
+                              <button type="button" onClick={() => setCurrentTab('agents')} className="ac-chat-agent-link">Ver agentes <ArrowRight size={14}/></button>
                             </div>
 
                             {/* Chat Pane History */}
                             <div className="flex-1 overflow-y-auto p-6 space-y-4 min-h-0 bg-slate-50/20">
+                              {chatHistory.length === 0 && <div className="ac-chat-empty"><span><MessageSquare size={28}/></span><h4>{activeChatAgent.name}</h4><p>{!isConfiguredAgent && !providers.some(provider => provider.status === 'valid') ? 'Conecte um provedor de IA para começar uma conversa real com este agente.' : !isConfiguredAgent && !workspaceModelPreset ? 'Escolha um modelo de IA para este workspace antes de conversar.' : !activeChatAgent.status ? 'Este agente precisa estar ativo para responder.' : 'A conversa começa com a sua primeira mensagem.'}</p>{!isConfiguredAgent && (!providers.some(provider => provider.status === 'valid') || !workspaceModelPreset) ? <button type="button" onClick={() => setCurrentTab('providers')}>Configurar modelo <ArrowRight size={15}/></button> : !activeChatAgent.status ? <button type="button" onClick={() => setCurrentTab('agents')}>Abrir agentes <ArrowRight size={15}/></button> : null}</div>}
                               {chatHistory.map((msg, index) => {
                                 const isUser = msg.sender === 'user';
                                 const isSystem = msg.sender === 'system';
@@ -9363,11 +8657,11 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
                             {/* Message Input Box */}
                             <div className="p-4 border-t border-slate-100 bg-white shrink-0">
-                              {(!providers.some(p => p.status === 'valid')) ? (
+                              {(!isConfiguredAgent && !providers.some(p => p.status === 'valid')) ? (
                                 <div className="text-center py-2.5 bg-red-50/50 border border-red-100 rounded-lg text-xs text-red-700 font-sans">
                                   ⚠️ Chat bloqueado: Provedor de API inválido ou não configurado nas Configurações.
                                 </div>
-                              ) : (!workspaceModelPreset) ? (
+                              ) : (!isConfiguredAgent && !workspaceModelPreset) ? (
                                 <div className="text-center py-2.5 bg-amber-50/50 border border-amber-100 rounded-lg text-xs text-amber-800 font-sans">
                                   ⚠️ Chat bloqueado: Nenhum modelo de IA selecionado para o workspace nas Configurações.
                                 </div>
@@ -10222,88 +9516,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
-              {/* 2. APP: CENTRAL DE AGENTES */}
-              {currentTab === 'agents' && companyProfile.setupComplete && (
-                <div className="space-y-6 max-w-6xl">
-                  <div>
-                    <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Central de Agentes</h1>
-                    <p className="text-xs text-slate-400 mt-0.5">Ative, monitore e customize os parâmetros de IA do seu time digital.</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {agents.map((agent) => {
-                      const AgentIcon = getIconComponent(agent.icon);
-                      return (
-                        <div 
-                          key={agent.id}
-                          className={`bg-white border rounded-xl p-5 shadow-sm transition-all duration-300 flex flex-col justify-between ${
-                            agent.status ? 'border-indigo-100 hover:border-indigo-200' : 'border-slate-150 opacity-75'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-2.5">
-                                <div className={`p-2.5 bg-slate-50 border rounded-lg text-slate-700 ${agent.status ? 'agent-active-glow border-indigo-150' : 'border-slate-200/60'}`}>
-                                  <AgentIcon className="w-4.5 h-4.5" />
-                                </div>
-                                <div>
-                                  <h3 className="text-xs font-semibold text-slate-900">{agent.name}</h3>
-                                  <span className="text-[10px] text-slate-400">{agent.role}</span>
-                                </div>
-                              </div>
-
-                              <button
-                                onClick={() => handleAgentToggle(agent.id)}
-                                className={`w-8 h-4 rounded-full p-0.5 transition-all ${
-                                  agent.status ? 'bg-slate-950' : 'bg-slate-200'
-                                }`}
-                              >
-                                <div className={`w-3 h-3 rounded-full bg-white transition-all transform ${
-                                  agent.status ? 'translate-x-4' : 'translate-x-0'
-                                }`}></div>
-                              </button>
-                            </div>
-
-                            <p className="text-xs text-slate-500 mt-4 leading-relaxed min-h-[40px]">{agent.description}</p>
-                            
-                            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-mono">
-                              <div>
-                                <span className="block font-medium font-sans">Métrica Primária</span>
-                                <span className="font-bold text-slate-900">{agent.metric}</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="block font-medium font-sans">Processados</span>
-                                <span className="font-bold text-slate-900">{agent.tasksToday}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="mt-5 pt-3 border-t border-slate-100 flex items-center gap-2">
-                            <button
-                              onClick={() => {
-                                setSelectedAgent(agent);
-                                setIsConfigModalOpen(true);
-                              }}
-                              className="flex-1 py-1.5 border border-slate-200 hover:bg-slate-50 rounded text-[10px] font-semibold text-slate-700 transition"
-                            >
-                              Configurar
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedAgentForLogs(agent);
-                                setIsLogsDrawerOpen(true);
-                              }}
-                              className="flex-1 py-1.5 bg-slate-950 hover:bg-slate-800 text-white rounded text-[10px] font-semibold transition"
-                            >
-                              Console / Logs
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              {currentTab === 'agents' && companyProfile.setupComplete && <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Carregando agentes…</div>}><AgentWorkspace onOpenProviders={() => setCurrentTab('providers')} /></React.Suspense>}
               {currentTab === 'memory' && companyProfile.setupComplete && (
                 <div className="space-y-6 max-w-6xl">
                   <div>
@@ -10782,6 +9995,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
+              {currentTab === 'automation_builder' && companyProfile.setupComplete && <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Carregando automações…</div>}><AutomationWorkspace /></React.Suspense>}
               {/* 6. APP: WORKFLOWS */}
               {currentTab === 'workflows' && companyProfile.setupComplete && (
                 <div className="space-y-6 max-w-6xl">
@@ -12870,128 +12084,13 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                 </div>
               )}
 
-              {/* 1.19. APP: CONEXÃO DO MODELO COM TELEGRAM E BOTFATHER (PDF Specification) */}
               {currentTab === 'channel_telegram' && (
-                <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200 font-sans">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 bg-sky-500/10 text-sky-700 text-[10px] font-bold rounded uppercase tracking-wider font-mono">TELEGRAM BOTFATHER INTEGRATION</span>
-                        <span className="text-[10px] text-slate-400">| Webhook & Session Router</span>
-                      </div>
-                      <h1 className="text-xl font-bold text-slate-950 tracking-tight mt-1">Conexão Telegram & BotFather</h1>
-                      <p className="text-xs text-slate-500 mt-1">Conecte seu bot criado no @BotFather para conversar diretamente com o agente de IA pelo Telegram com aprovação humana.</p>
-                    </div>
-                  </div>
-
-                  {/* Step-by-Step Onboarding Wizard Card */}
-                  <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-6">
-                    <div className="border-b border-slate-100 pb-3">
-                      <h2 className="text-xs font-bold text-slate-900 uppercase font-mono tracking-wider">Passo a Passo de Conexão do Bot</h2>
-                      <p className="text-xs text-slate-500 mt-0.5 font-sans">Siga os passos abaixo para criar o bot no Telegram e parear com a plataforma.</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-sans">
-                      <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200/60">
-                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white font-mono font-bold flex items-center justify-center text-[11px]">1</span>
-                        <h3 className="font-bold text-slate-900">Abra o @BotFather</h3>
-                        <p className="text-slate-500 text-[11px]">No Telegram, busque por <strong>@BotFather</strong> (bot oficial verificado) e inicie uma conversa.</p>
-                      </div>
-
-                      <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200/60">
-                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white font-mono font-bold flex items-center justify-center text-[11px]">2</span>
-                        <h3 className="font-bold text-slate-900">Crie o Bot (/newbot)</h3>
-                        <p className="text-slate-500 text-[11px]">Envie o comando <code>/newbot</code>, defina o nome público (ex: Bóris Lyriq) e username (ex: boris_lyriq_bot).</p>
-                      </div>
-
-                      <div className="bg-slate-50 p-4 rounded-xl space-y-2 border border-slate-200/60">
-                        <span className="w-6 h-6 rounded-full bg-slate-900 text-white font-mono font-bold flex items-center justify-center text-[11px]">3</span>
-                        <h3 className="font-bold text-slate-900">Copie o Token</h3>
-                        <p className="text-slate-500 text-[11px]">Copie o HTTP API Token fornecido pelo BotFather e cole no campo de validação abaixo.</p>
-                      </div>
-                    </div>
-
-                    {/* Token Input Form */}
-                    <div className="bg-slate-900 rounded-xl p-5 text-white space-y-4 font-mono">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold uppercase tracking-wider text-sky-400">Token de Autenticação do BotFather</span>
-                        <span className="text-[10px] text-slate-400">Proteção com Fingerprint & Secret Vault</span>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <input
-                          type="password"
-                          defaultValue="8655720761:AAExemploDeTokenMuitoSecreto12345"
-                          placeholder="Cole aqui o token fornecido pelo @BotFather..."
-                          className="flex-1 bg-slate-950 border border-slate-800 rounded px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-sky-500"
-                        />
-                        <button
-                          onClick={() => addToast('Token do Telegram validado com sucesso via getMe! Fingerprint: 8655720761:...345', 'success')}
-                          className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded text-xs transition"
-                        >
-                          ⚡ Validar Bot (getMe)
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Connected Bots List */}
-                  <div className="space-y-4 font-mono">
-                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                      <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wider">Bots Ativos no Workspace</h2>
-                      <span className="text-[10.5px] text-slate-500">Conexões Webhook & Polling</span>
-                    </div>
-
-                    {/* Active Telegram Bot Card */}
-                    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-xs font-bold text-slate-950">@boris_lyriq_bot (Bóris Lyriq)</h3>
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[9px] font-bold uppercase">WEBHOOK ACTIVE</span>
-                          </div>
-                          <span className="text-[11px] text-slate-500 block mt-1 font-mono">Bot ID: 8655720761 | Fingerprint: 8655720761:...345</span>
-                        </div>
-                        <span className="text-[10px] text-slate-400">Privacidade em Grupos: ON</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg text-xs font-mono">
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase block">Agente Vinculado:</span>
-                          <span className="font-semibold text-indigo-600">Agente Principal (Bóris)</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase block">Remetentes Autorizados:</span>
-                          <span className="font-semibold text-slate-800">Augusto Weymar (Owner)</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-slate-400 uppercase block">Última Mensagem:</span>
-                          <span className="font-semibold text-emerald-600">HTTP 200 (há 2 min)</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
-                        <span className="text-[10.5px] text-slate-500 font-sans">Comandos suportados: /start, /help, /status, /reset.</span>
-                        <div className="flex gap-2 font-mono">
-                          <button
-                            onClick={() => addToast('Abra o Telegram em @boris_lyriq_bot e envie /start para testar.', 'info')}
-                            className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white font-bold rounded transition"
-                          >
-                            💬 Testar no Telegram (/start)
-                          </button>
-                          <button
-                            onClick={() => addToast('Conexão do Telegram desconectada.', 'info')}
-                            className="px-3 py-1.5 border border-slate-300 hover:bg-slate-100 text-slate-700 font-semibold rounded transition"
-                          >
-                            Desconectar Bot
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                <div className="max-w-3xl rounded-xl border border-sky-200 bg-white p-8">
+                  <h1 className="text-2xl font-bold text-slate-950">Telegram</h1>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">Conecte um bot real e escolha o agente que atenderá neste canal. A configuração fica dentro do agente para manter skills, conhecimento e permissões juntos.</p>
+                  <button type="button" onClick={() => setCurrentTab('agents')} className="mt-6 rounded-lg bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-900">Configurar Telegram nos agentes</button>
                 </div>
               )}
-
               {/* WHATSAPP BUSINESS V1 INTEGRATION TAB */}
               {currentTab === 'channel_whatsapp' && (
                 <div className="space-y-6 max-w-6xl text-left animate-in fade-in duration-200 font-sans">
@@ -14349,7 +13448,7 @@ Essas memórias são diretrizes operacionais internas do workspace. Mantenha a c
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => addToast('Wizard de criação de agente do zero iniciado.', 'info')}
+                        onClick={() => { setCurrentTab('agents'); }}
                         className="px-3.5 py-2 bg-slate-900 text-white rounded-lg text-xs font-semibold hover:bg-slate-800 transition shadow-sm"
                       >
                         + Criar Agente do Zero
@@ -16838,548 +15937,8 @@ Regras duras:
                 </div>
               )}
 
-              {/* 9. APP: CONFIGURAÇÕES DA EMPRESA */}
-              {currentTab === 'settings' && companyProfile.setupComplete && (
-                <div className="space-y-6 max-w-6xl">
-                  {/* Navigation sub-tabs */}
-                  <div className="flex gap-2 border-b border-slate-100 pb-2">
-                    <button
-                      onClick={() => setSettingsSubTab('general')}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${settingsSubTab === 'general' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                      Configurações Gerais
-                    </button>
-                    <button
-                      onClick={() => setCurrentTab('pricing')}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-500 hover:bg-slate-50"
-                    >
-                      Planos e Pagamento
-                    </button>
-                    <button
-                      onClick={() => setCurrentTab('providers')}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-500 hover:bg-slate-50"
-                    >
-                      Uso e Orçamento
-                    </button>
-                    <button
-                      onClick={() => setCurrentTab('workspace_settings')}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-md transition text-slate-500 hover:bg-slate-50"
-                    >
-                      Workspace e Equipe
-                    </button>
-                    <button
-                      onClick={() => setSettingsSubTab('diagnostics')}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${settingsSubTab === 'diagnostics' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-                    >
-                      Diagnostics Panel
-                    </button>
-                  </div>
-
-                  {settingsSubTab === 'general' && (
-                    <>
-                      <div>
-                        <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Configurações Gerais</h1>
-                        <p className="text-xs text-slate-400 mt-0.5">Revise chaves de API locais, altere informações do perfil e gerencie usuários.</p>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm space-y-3">
-                      <span className="text-xs font-bold text-slate-950 block">Credenciais e API</span>
-                      
-                      <div className="space-y-2">
-                        <label className="block text-[10px] font-semibold text-slate-500">Token Global Lyriq</label>
-                        <input
-                          type="password"
-                          readOnly
-                          value="••••••••••••••••••••••••••••"
-                          className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-md text-xs"
-                        />
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText('lq-key-auth-live-db');
-                            addToast('Chave de API copiada.', 'success');
-                          }}
-                          className="w-full py-2 bg-slate-950 text-white rounded text-xs font-semibold"
-                        >
-                          Copiar Chave
-                        </button>
-                        
-                        <div className="space-y-2 pt-3 border-t border-slate-100">
-                          <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Provedor de IA Ativo</label>
-                          <select
-                            value={activeProvider}
-                            onChange={(e) => setActiveProvider(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-200 bg-slate-50 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400"
-                          >
-                            <option value="gemini">Google Gemini API (1.5-flash)</option>
-                            <option value="openai">OpenAI GPT (gpt-4o-mini)</option>
-                            <option value="anthropic">Anthropic Claude (claude-3-5-sonnet)</option>
-                            <option value="ollama">Ollama / Local LLM (Custom Endpoint)</option>
-                          </select>
-                        </div>
-
-                        {activeProvider === 'gemini' && (
-                          <div className="space-y-3 pt-2">
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Chave de API Gemini (Google)</label>
-                              <input
-                                type="password"
-                                value={geminiApiKey}
-                                onChange={(e) => setGeminiApiKey(e.target.value)}
-                                placeholder="AI Studio API Key"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                              <a
-                                href="https://aistudio.google.com/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[9px] text-indigo-650 hover:underline block font-semibold"
-                              >
-                                Obter chave gratuita no Google AI Studio ↗
-                              </a>
-                            </div>
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nome do Modelo (Gemini)</label>
-                              <input
-                                type="text"
-                                value={geminiModel}
-                                onChange={(e) => setGeminiModel(e.target.value)}
-                                placeholder="gemini-1.5-flash"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {activeProvider === 'openai' && (
-                          <div className="space-y-3 pt-2">
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Chave de API OpenAI</label>
-                              <input
-                                type="password"
-                                value={openaiApiKey}
-                                onChange={(e) => setOpenaiApiKey(e.target.value)}
-                                placeholder="sk-..."
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nome do Modelo (OpenAI)</label>
-                              <input
-                                type="text"
-                                value={openaiModel}
-                                onChange={(e) => setOpenaiModel(e.target.value)}
-                                placeholder="gpt-4o-mini"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {activeProvider === 'anthropic' && (
-                          <div className="space-y-3 pt-2">
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Chave de API Anthropic Claude</label>
-                              <input
-                                type="password"
-                                value={anthropicApiKey}
-                                onChange={(e) => setAnthropicApiKey(e.target.value)}
-                                placeholder="sk-ant-..."
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nome do Modelo (Anthropic)</label>
-                              <input
-                                type="text"
-                                value={anthropicModel}
-                                onChange={(e) => setAnthropicModel(e.target.value)}
-                                placeholder="claude-3-5-sonnet-20241022"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {activeProvider === 'ollama' && (
-                          <div className="space-y-3 pt-2">
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Endpoint Ollama Local</label>
-                              <input
-                                type="text"
-                                value={ollamaEndpoint}
-                                onChange={(e) => setOllamaEndpoint(e.target.value)}
-                                placeholder="http://localhost:11434"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Nome do Modelo (Ollama)</label>
-                              <input
-                                type="text"
-                                value={ollamaModel}
-                                onChange={(e) => setOllamaModel(e.target.value)}
-                                placeholder="llama3"
-                                className="w-full px-3 py-2 border border-slate-200 bg-slate-50 focus:bg-white rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
-                              />
-                              <span className="text-[8px] text-slate-400 block leading-tight pt-1">
-                                Certifique-se de que o Ollama está rodando localmente na sua máquina (`ollama run llama3`).
-                              </span>
-                            </div>
-                          </div>
-                        )}
-                        <button
-                          onClick={() => {
-                            persistentStorage.clear();
-                            addToast('Todo o banco local foi reiniciado com sucesso! Recarregando...', 'success');
-                            setTimeout(() => window.location.reload(), 1500);
-                          }}
-                          className="w-full py-2 border border-red-200 hover:bg-red-50 text-red-600 rounded text-xs font-semibold mt-2 transition"
-                        >
-                          Resetar Banco de Dados
-                        </button>
-
-                        <div className="space-y-3.5 pt-4 border-t border-slate-100 mt-4">
-                          <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Budget Guard 🛡️</span>
-                            <span className="text-[9px] font-mono bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold">
-                              Gasto: ${apiExpenditureToday.toFixed(2)}
-                            </span>
-                          </div>
-
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-[10px] font-semibold text-slate-500">
-                              <span>Teto de Gasto Mensal</span>
-                              <span className="font-mono font-bold">${monthlyBudgetLimit} USD</span>
-                            </div>
-                            <input
-                              type="range"
-                              min="10"
-                              max="1000"
-                              step="10"
-                              value={monthlyBudgetLimit}
-                              onChange={(e) => setMonthlyBudgetLimit(parseInt(e.target.value))}
-                              className="w-full accent-slate-900"
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-between pt-1">
-                            <div className="flex flex-col text-left">
-                              <span className="text-[10px] font-bold text-slate-800">Bloqueio Rígido (Hard Limit)</span>
-                              <span className="text-[8px] text-slate-400 leading-tight">Travar queries se exceder o orçamento</span>
-                            </div>
-                            <input
-                              type="checkbox"
-                              checked={budgetGuardHardLimit}
-                              onChange={(e) => setBudgetGuardHardLimit(e.target.checked)}
-                              className="w-4 h-4 rounded text-slate-950 border-slate-300 focus:ring-0 accent-slate-950"
-                            />
-                          </div>
-
-                          <div className="space-y-2 pt-4 border-t border-slate-100 mt-4 text-left">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Tema do Sistema 🎨</span>
-                            <div className="grid grid-cols-2 gap-2 pt-1.5 text-[9px] font-semibold text-slate-700">
-                              <button
-                                type="button"
-                                onClick={() => { setActiveTheme('glassmorphism'); handleLogAuditEvent('Lyriq Theme Manager', 'Aparência alterada para Glassmorphism Slate', 'low'); }}
-                                className={`p-2 border rounded-lg text-center transition ${activeTheme === 'glassmorphism' ? 'border-indigo-600 bg-indigo-50/30 text-indigo-700 font-bold' : 'border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                🔗 Glassmorphism
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setActiveTheme('cyberpunk'); handleLogAuditEvent('Lyriq Theme Manager', 'Aparência alterada para Midnight Cyberpunk', 'low'); }}
-                                className={`p-2 border rounded-lg text-center transition ${activeTheme === 'cyberpunk' ? 'border-purple-500 bg-purple-50/30 text-purple-700 font-bold' : 'border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                🌌 Cyberpunk
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setActiveTheme('emerald'); handleLogAuditEvent('Lyriq Theme Manager', 'Aparência alterada para Emerald Forest', 'low'); }}
-                                className={`p-2 border rounded-lg text-center transition ${activeTheme === 'emerald' ? 'border-emerald-600 bg-emerald-50/30 text-emerald-700 font-bold' : 'border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                🍃 Emerald Forest
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setActiveTheme('light'); handleLogAuditEvent('Lyriq Theme Manager', 'Aparência alterada para Minimal Light', 'low'); }}
-                                className={`p-2 border rounded-lg text-center transition ${activeTheme === 'light' ? 'border-slate-400 bg-slate-100 text-slate-800 font-bold' : 'border-slate-200 hover:bg-slate-50'}`}
-                              >
-                                ❄️ Minimal Light
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5">
-                      <span className="text-xs font-semibold text-slate-900 block mb-4">Equipe do Sistema</span>
-                      <div className="divide-y divide-slate-100 text-xs">
-                        {team.map((member, i) => (
-                          <div key={i} className="py-2 flex justify-between">
-                            <div>
-                              <span className="font-semibold text-slate-900 block">{member.name}</span>
-                              <span className="text-[10px] text-slate-400">{member.email}</span>
-                            </div>
-                            <span className="text-slate-500 font-medium self-center">{member.role}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Compliance Audit Ledger Widget */}
-                      <div className="pt-6 border-t border-slate-100 mt-6 text-left space-y-3">
-                        <div>
-                          <span className="text-xs font-bold text-slate-900 block">Cofre de Conformidade & Auditoria (Audit Vault) 🛡️</span>
-                          <span className="text-[9px] text-slate-400 block mt-0.5">Assinaturas criptográficas SHA-256 e análise de risco dos agentes de IA</span>
-                        </div>
-                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                          {auditLogs.slice(0, 10).map((log) => (
-                            <div key={log.id} className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg text-[10px] space-y-1 hover:bg-slate-100/60 transition">
-                              <div className="flex justify-between items-center font-bold text-slate-900">
-                                <span>{log.agent}</span>
-                                <span className={`px-1.5 py-0.2 rounded text-[8px] uppercase tracking-wider ${
-                                  log.riskLevel === 'high' ? 'bg-red-50 text-red-700 border border-red-100' :
-                                  log.riskLevel === 'medium' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                                  'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                }`}>
-                                  {log.riskLevel}
-                                </span>
-                              </div>
-                              <p className="text-slate-600 text-[9.5px] leading-tight">{log.action}</p>
-                              <div className="flex justify-between items-center text-[8px] text-slate-400 font-mono">
-                                <span className="truncate max-w-[200px]">SHA-256: {log.hash}</span>
-                                <span>{log.timestamp.split(' ')[1] || log.timestamp}</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Column 3: Observabilidade & Sandbox Lab */}
-                    <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-5 space-y-4 text-left">
-                      <div>
-                        <span className="text-xs font-bold text-slate-900 block">Observabilidade & Sandbox Lab 🔬</span>
-                        <span className="text-[9px] text-slate-400 block mt-0.5">Simulação de periféricos externos, browser e mídias</span>
-                      </div>
-
-                      <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg space-y-1.5 text-[9px]">
-                        <span className="font-bold text-slate-500 uppercase tracking-wider block">Status do Runtime</span>
-                        <div className="grid grid-cols-2 gap-2 text-slate-700">
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span>IA Gateway: Ativo</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span>Fila Webhook: 200 OK</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Nodes Externos (Execução Remota)</span>
-                        <div className="flex gap-2">
-                          <input 
-                            type="password" 
-                            readOnly 
-                            value="lq-node-token-8273" 
-                            className="flex-1 px-2.5 py-1 border border-slate-200 bg-slate-50 rounded text-[9px] font-mono"
-                          />
-                          <button 
-                            onClick={() => addToast('Pareamento de Node iniciado! Porta 8080 aguardando handshake...', 'info')}
-                            className="px-2 py-1 bg-slate-950 text-white rounded text-[8px] font-semibold"
-                          >
-                            Parear
-                          </button>
-                        </div>
-                        <div className="text-[8px] text-slate-400 font-mono">Status: 1 Node conectado (local-docker-worker)</div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Automação de Navegador (Headless)</span>
-                        <div className="flex gap-2">
-                          <input 
-                            type="text" 
-                            placeholder="https://example.com" 
-                            defaultValue="https://vitalis-pediatria.com.br"
-                            className="flex-1 px-2.5 py-1 border border-slate-200 rounded text-[9px]"
-                          />
-                          <button 
-                            onClick={() => addToast('Browser headless executando em background. Logs enviados ao terminal.', 'success')}
-                            className="px-2 py-1 bg-indigo-600 text-white rounded text-[8px] font-semibold"
-                          >
-                            Abrir Site
-                          </button>
-                        </div>
-                        <div className="p-2 bg-slate-950 text-[8px] text-slate-305 font-mono rounded h-16 overflow-y-auto space-y-0.5">
-                          <div>[15:14:02] browser.open("https://vitalis...")</div>
-                          <div>[15:14:03] browser.extract_data("pediatras_disponiveis")</div>
-                          <div>[15:14:04] browser.screenshot() saved as: proof.png</div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Processador de Mídias e Áudio</span>
-                        <div className="grid grid-cols-2 gap-2 text-[8px] font-semibold">
-                          <button 
-                            onClick={() => addToast('Áudio transcrito: "Gostaria de agendar para amanhã às 14h".', 'info')}
-                            className="p-1.5 border border-slate-200 hover:bg-slate-50 rounded text-center"
-                          >
-                            🎙️ Transcrever Áudio
-                          </button>
-                          <button 
-                            onClick={() => addToast('Imagem comercial gerada sob demanda. Arquivo salvo na memória.', 'success')}
-                            className="p-1.5 border border-slate-200 hover:bg-slate-50 rounded text-center"
-                          >
-                            🖼️ Gerar Imagem IA
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  </>
-                  )}
-
-                  {settingsSubTab === 'diagnostics' && (
-                    <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h1 className="text-lg font-semibold text-slate-900 tracking-tight">Diagnostics Panel</h1>
-                          <p className="text-xs text-slate-400 mt-0.5 font-medium">Diagnose connections, database write states, active providers, and execution trace logs.</p>
-                        </div>
-                        
-                        <button
-                          onClick={handleRunFullDiagnostics}
-                          disabled={isDiagnosing}
-                          className="px-4 py-2 bg-slate-950 hover:bg-slate-800 disabled:opacity-50 text-white text-xs font-semibold rounded-md shadow-sm transition flex items-center gap-1.5"
-                        >
-                          {isDiagnosing ? (
-                            <>
-                              <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                              Rodando...
-                            </>
-                          ) : 'Run Full Diagnostic'}
-                        </button>
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Status Card Grid */}
-                        <div className="bg-white border border-slate-200/60 rounded-xl p-5 shadow-sm space-y-4">
-                          <span className="text-xs font-bold text-slate-950 block">Status de Componentes</span>
-                          
-                          <div className="space-y-3">
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Servidor Backend:</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.backend === 'healthy' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.backend}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Banco de Dados (Local):</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.database === 'healthy' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.database}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Armazenamento Local (Storage):</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.storage === 'healthy' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.storage}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Vector DB (RAG):</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.vectorDb === 'healthy' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.vectorDb}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Provedor Conectado:</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.provider === 'valid' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.provider}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center pb-2 border-b border-slate-50 text-xs">
-                              <span className="text-slate-500 font-medium">Catálogo de Modelos:</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.models === 'ready' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.models}
-                              </span>
-                            </div>
-                            <div className="flex justify-between items-center text-xs">
-                              <span className="text-slate-500 font-medium">Main Agent Coordenador:</span>
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${diagnosticsStatus.mainAgent === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
-                                {diagnosticsStatus.mainAgent}
-                              </span>
-                            </div>
-                          </div>
-
-                          {diagnosticsResult && (
-                            <div className={`p-3 rounded-lg border text-xs font-semibold ${diagnosticsResult === 'passed' ? 'bg-emerald-50/50 border-emerald-200 text-emerald-800' : 'bg-rose-50/50 border-rose-200 text-rose-800'}`}>
-                              {diagnosticsResult === 'passed' 
-                                ? '🎉 Todos os sistemas passaram nos testes de diagnóstico.'
-                                : '❌ Diagnóstico apontou falhas críticas de infraestrutura ou modelo.'}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Console & Audit log outputs */}
-                        <div className="lg:col-span-2 space-y-4">
-                          {/* Terminal Logs */}
-                          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm flex flex-col h-64">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">Live Diagnostic Console</span>
-                            <div className="flex-1 overflow-y-auto font-mono text-[10px] text-emerald-400 space-y-1">
-                              {diagnosticsLogs.length === 0 ? (
-                                <div className="text-slate-500 italic">Nenhum teste de diagnóstico em andamento. Clique em "Run Full Diagnostic" acima.</div>
-                              ) : (
-                                diagnosticsLogs.map((l, idx) => <div key={idx}>{l}</div>)
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Audit events list */}
-                          <div className="bg-white border border-slate-200/60 rounded-xl p-4 shadow-sm space-y-2">
-                            <span className="text-xs font-bold text-slate-950 block">Últimos Eventos de Auditoria (Runtime Logs)</span>
-                            <div className="max-h-60 overflow-y-auto text-[10px] border border-slate-100 rounded-md">
-                              <table className="w-full text-left">
-                                <thead className="bg-slate-50 border-b border-slate-100">
-                                  <tr>
-                                    <th className="p-2 font-semibold text-slate-500">Timestamp</th>
-                                    <th className="p-2 font-semibold text-slate-500">Event</th>
-                                    <th className="p-2 font-semibold text-slate-500">Status</th>
-                                    <th className="p-2 font-semibold text-slate-500">Duration</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50 font-mono">
-                                  {timelineLogs.length === 0 ? (
-                                    <tr>
-                                      <td colSpan={4} className="p-4 text-center text-slate-400 italic">Sem logs operacionais salvos.</td>
-                                    </tr>
-                                  ) : (
-                                    timelineLogs.slice(0, 50).map((log: any, idx) => (
-                                      <tr key={idx}>
-                                        <td className="p-2 text-slate-400">{new Date(log.created_at || Date.now()).toLocaleTimeString()}</td>
-                                        <td className="p-2 text-slate-700 font-semibold">{log.event}</td>
-                                        <td className="p-2">
-                                          <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold ${log.status === 'completed' ? 'bg-emerald-50 text-emerald-600' : log.status === 'failed' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>
-                                            {log.status}
-                                          </span>
-                                        </td>
-                                        <td className="p-2 text-slate-500">{log.duration_ms || log.durationMs || 0}ms</td>
-                                      </tr>
-                                    ))
-                                  )}
-                                </tbody>
-                              </table>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                </div>
-              )}
+              {/* 9. APP: CONFIGURAÇÕES */}
+              {currentTab === 'settings' && companyProfile.setupComplete && <React.Suspense fallback={<div role="status" className="p-6 text-sm text-slate-500">Carregando configurações…</div>}><SettingsWorkspace companyName={companyProfile.name} onOpenProviders={() => setCurrentTab('providers')} onOpenAgents={() => setCurrentTab('agents')} /></React.Suspense>}
 
               {/* 10. APP: ONBOARDING WIZARD */}
               {currentTab === 'onboarding' && !isDashboardUnlocked && (

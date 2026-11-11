@@ -2,8 +2,57 @@ import assert from 'assert';
 import { selectOrchestrationAgents, orchestrateMultiAgentTask } from '../src/services/main_chat_service.js';
 import { getModelsForProvider } from '../providersCatalog.js';
 import { PLAN_CATALOG, hasCodeAccess } from '../plansCatalog.js';
+import { reviewGeneratedDesign, stabilizeGeneratedSiteScript } from '../src/services/code_design_quality.js';
+import { getCodeSkills, buildCodeSkillPrompt } from '../src/services/code_skills.js';
+import { buildAgentSystemPrompt, resolveAgentSkills } from '../src/services/agent_skills.js';
+import { normalizeAgentIdentity, isValidAgentIdentity, evaluateAgentReadiness } from '../src/services/agent_identity.js';
 
 console.log('=== RUNNING UNIT TESTS ===');
+assert.deepStrictEqual(getCodeSkills().map(skill => skill.id), ['site-direction', 'site-build', 'site-review']);
+assert.ok(buildCodeSkillPrompt('build').includes('375px'));
+assert.ok(!buildCodeSkillPrompt('plan').includes('Construção de site'));
+console.log('✅ Code site skills are loaded by stage.');
+
+const trainedPrompt = buildAgentSystemPrompt({ instructions: 'Ajude a equipe.', boundaries: 'Não envie mensagens sem aprovação.', installedSkills: ['skill-code', 'skill-telegram', 'unknown'] });
+assert.ok(trainedPrompt.includes('Programação') && trainedPrompt.includes('Telegram'));
+assert.ok(trainedPrompt.includes('Não envie mensagens sem aprovação.'));
+assert.ok(!trainedPrompt.includes('unknown'));
+assert.strictEqual(resolveAgentSkills(['skill-code', 'skill-code']).length, 1);
+console.log('✅ Installed skills and boundaries enter the agent prompt.');
+
+const professionalIdentity = { purpose: 'professional', audience: 'Equipe de produto', tone: 'Claro', outputs: 'Planos de ação revisáveis', successCriteria: 'Entregas verificadas', autonomy: 'approve' };
+assert.strictEqual(normalizeAgentIdentity(professionalIdentity).purpose, 'professional');
+assert.strictEqual(isValidAgentIdentity({ purpose: 'unknown' }), false);
+const readyAgent = { name: 'Analista', role: 'Pesquisa', instructions: 'Pesquise fontes e organize evidências verificáveis para a equipe.', boundaries: 'Peça aprovação antes de agir externamente.', installedSkills: ['skill-research'], provider_connection_id: 'provider-1', model_id: 'model-1', identity: professionalIdentity };
+assert.strictEqual(evaluateAgentReadiness(readyAgent, { providerValid: true }).stage, 'test');
+assert.strictEqual(evaluateAgentReadiness({ ...readyAgent, last_tested_at: '2026-11-02T00:00:00Z' }, { providerValid: true }).stage, 'ready');
+assert.strictEqual(evaluateAgentReadiness(readyAgent, { providerValid: false }).stage, 'configuring');
+assert.ok(buildAgentSystemPrompt(readyAgent).includes('Equipe de produto'));
+console.log('✅ Agent identity, readiness, and operational prompt tests passed.');
+
+const weakDesign = reviewGeneratedDesign({ creating: true, appProject: true, html: '<header>Agenda 🗓️</header><main><form></form></main>', css: 'body { place-items: center } .container { max-width: 600px; margin: 0 auto; box-shadow: 0 8px 30px #0002; }', script: '' });
+assert.ok(weakDesign.some(issue => issue.includes('emojis')));
+assert.ok(weakDesign.some(issue => issue.includes('coluna estreita')));
+assert.ok(weakDesign.some(issue => issue.includes('formulário')));
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: false, appProject: true, html: '', css: '', script: '' }), []);
+const fakeSiteActions = reviewGeneratedDesign({ creating: true, html: '<a href="#">Ver detalhes</a><p>(XX) XXXX-XXXX</p>', css: '', script: '' });
+assert.ok(fakeSiteActions.some(issue => issue.includes('link de ação')));
+assert.ok(fakeSiteActions.some(issue => issue.includes('contato fictícios')));
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, html: '<a href="#">CASA AURA</a><a href="#projetos">Ver projetos</a><section id="projetos"></section>', css: '', script: '' }), []);
+const selfLinkIssues = reviewGeneratedDesign({ creating: true, html: '<section id="projetos"><a href="#projetos">Detalhes</a></section><section id="contato"><a href="#contato">Iniciar um diálogo</a></section>', css: '', script: '' });
+assert.strictEqual(selfLinkIssues.filter(issue => issue.includes('volta para a mesma seção')).length, 2);
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, prompt: 'Use contato@formaviva.com', html: '<nav><a href="#projetos">Projetos</a></nav><section id="projetos"><a href="#contato">Iniciar um diálogo</a></section><section id="contato"><a href="mailto:contato@formaviva.com">E-mail</a></section>', css: '', script: '' }), []);
+assert.ok(reviewGeneratedDesign({ creating: true, prompt: 'Site para Forma Viva', html: '<a href="mailto:contato@formaviva.com">Contato</a>' }).some(issue => issue.includes('e-mail')));
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, prompt: 'Use contato@formaviva.com', html: '<a href="mailto:contato@formaviva.com">Contato</a>' }), []);
+assert.ok(reviewGeneratedDesign({ creating: true, html: '<footer id="contato"><h2>Contato</h2><p>Entre em contato conosco.</p></footer>' }).some(issue => issue.includes('canal funcional')));
+assert.deepStrictEqual(reviewGeneratedDesign({ creating: true, prompt: 'Use contato@formaviva.com', html: '<footer id="contato"><a href="mailto:contato@formaviva.com">Contato</a></footer>' }), []);
+assert.ok(reviewGeneratedDesign({ creating: true, script: 'path.style.strokeDashoffset = length;' }).some(issue => issue.includes('SVG começa invisível')));
+assert.ok(reviewGeneratedDesign({ creating: true, script: "el.style.opacity = '0'; new IntersectionObserver(() => {});" }).some(issue => issue.includes('conteúdo importante começa invisível')));
+const repairedVisibility = stabilizeGeneratedSiteScript("path.style.strokeDashoffset = length; path.style.strokeDashoffset = Math.max(0, draw); el.style.opacity = '0';");
+assert.ok(!reviewGeneratedDesign({ creating: true, script: repairedVisibility }).some(issue => issue.includes('invisível')));
+assert.ok(repairedVisibility.includes('path.style.strokeDashoffset = 0;'));
+assert.ok(repairedVisibility.includes('el.style.opacity = "1"'));
+console.log('✅ Code design quality gate rejects generic app layouts and fake forms.');
 
 assert.strictEqual(PLAN_CATALOG.personal.pro.priceCents, 4990);
 assert.strictEqual(PLAN_CATALOG.business.max.priceCents, 59990);
@@ -47,17 +96,22 @@ const createJsonResponse = (status, body) => ({
   }
 });
 
+let geminiRequest;
 const geminiModels = await getModelsForProvider('gemini', 'real-looking-key', {
   allowFallback: false,
-  fetchImpl: async () => createJsonResponse(200, {
+  fetchImpl: async (url, options) => { geminiRequest = { url, headers: options.headers }; return createJsonResponse(200, {
     models: [
       { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+      { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
       { name: 'models/embedding-001', supportedGenerationMethods: ['embedContent'] }
     ]
-  })
+  }); }
 });
 assert.ok(geminiModels.some(m => m.id === 'gemini-2.5-flash' && m.source === 'provider_api'));
+assert.ok(geminiModels.some(m => m.id === 'gemini-3.8-flash' && m.source === 'provider_api'));
 assert.ok(!geminiModels.some(m => m.id === 'embedding-001'));
+assert.strictEqual(geminiRequest.headers['x-goog-api-key'], 'real-looking-key');
+assert.ok(!geminiRequest.url.includes('real-looking-key'));
 
 const openAiModels = await getModelsForProvider('openai', 'sk-real-looking-key', {
   allowFallback: false,
