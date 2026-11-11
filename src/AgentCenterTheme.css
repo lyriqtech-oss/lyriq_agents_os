@@ -119,3 +119,56 @@
   .ac-app .code-builder-workspace>section[aria-label="Prévia do projeto"]{grid-column:3;grid-row:3;min-width:0;min-height:690px;border:1px solid #2d4054;border-radius:12px;overflow:hidden}
   .ac-app .code-builder-workspace>section[aria-label="Prévia do projeto"] iframe{min-height:620px}
 }
+
+/* Agent library: clear overview first, full editor one click away. */
+.ac-app .aw-header h1 span{color:#54d6ed}
+.ac-app .aw-overview{display:grid;gap:20px}
+.ac-app .aw-overview-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px}
+.ac-app .aw-overview-stats>div{display:flex;align-items:center;gap:16px;min-height:86px;padding:17px 20px;border:1px solid #2b3d54;border-radius:13px;background:#111d30}
+.ac-app .aw-overview-stats svg{width:42px;height:42px;padding:10px;border-radius:11px;background:#1c3148;color:#6fdef1}
+.ac-app .aw-overview-stats span{display:grid;gap:3px}.ac-app .aw-overview-stats strong{font-size:25px;line-height:1;color:#f3f9ff;font-variant-numeric:tabular-nums}.ac-app .aw-overview-stats small{font-size:12px;color:#a8b9cc}
+.ac-app .aw-overview-toolbar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-top:12px}
+.ac-app .aw-overview-toolbar>div{display:flex;align-items:baseline;gap:12px}.ac-app .aw-overview-toolbar strong{font-size:17px;color:#edf8ff}.ac-app .aw-overview-toolbar>div span{font-size:12px;color:#9db3ca}
+.ac-app .aw-overview-toolbar .aw-search{margin:0;width:min(100%,310px);min-height:39px;background:#101e31;border-color:#35516a;box-shadow:none}
+.ac-app .aw-overview-toolbar .aw-search input{background:transparent!important;border:0!important;padding:0!important;box-shadow:none!important}
+.ac-app .aw-overview-layout{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(320px,.8fr);gap:18px;align-items:start}
+.ac-app .aw-overview-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ac-app .aw-overview-card{display:flex;flex-direction:column;align-items:stretch;gap:5px;min-width:0;min-height:174px;padding:18px;text-align:left;border:1px solid #2a3b51;border-radius:13px;background:#111e30;color:#eff8ff;cursor:pointer;transition:background .18s,border-color .18s,transform .18s}
+.ac-app .aw-overview-card:hover{background:#172942;border-color:#4298b3;transform:translateY(-2px)}.ac-app .aw-overview-card.selected{border-color:#22c7e7;background:#122a3d;box-shadow:inset 0 0 0 1px #1fbdd338}
+.ac-app .aw-overview-card-top{display:flex;justify-content:space-between;align-items:start;margin-bottom:7px}.ac-app .aw-overview-card .aw-avatar{width:43px;height:43px;background:#1d384e;color:#6be1f2}
+.ac-app .aw-overview-card>strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px;letter-spacing:-.02em}.ac-app .aw-overview-card>small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:#a9bdd1}
+.ac-app .aw-overview-state{display:inline-flex;align-items:center;gap:6px;padding:5px 8px;border-radius:6px;background:#26354a;color:#b8c7d8;font-size:10px;font-weight:700}.ac-app .aw-overview-state:before{content:"";width:6px;height:6px;border-radius:50%;background:#9aacc0}.ac-app .aw-overview-state.active{background:#12382f;color:#8ceab9}.ac-app .aw-overview-state.active:before{background:#48dda0}
+.ac-app .aw-overview-card-foot{display:flex;align-items:center;gap:15px;margin-top:auto;padding-top:17px;color:#a8bcd0;font-size:11px}.ac-app .aw-overview-card-foot>span{display:inline-flex;align-items:center;gap:5px}.ac-app .aw-overview-card-foot>svg{margin-left:auto;color:#5ed5e9}
+.ac-app .aw-overview-detail{min-height:360px;padding:22px;border:1px solid #2d4057;border-radius:14px;background:#111d2e;position:sticky;top:18px}
+.ac-app .aw-overview-detail-head{display:flex;align-items:center;gap:15px;padding-bottom:20px;border-bottom:1px solid #2a3d53}.ac-app .aw-overview-detail-head .aw-avatar{width:56px;height:56px;background:#1d4054;color:#65dceb}.ac-app .aw-overview-detail-head h2{font-size:19px;margin:5px 0 1px}.ac-app .aw-overview-detail-head p{font-size:12px;color:#a9bbce;margin:0}
+.ac-app .aw-overview-edit{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:39px;margin:17px 0 5px;border:1px solid #1ebcdb;border-radius:8px;background:#11364a;color:#b9f5ff;font-size:12px;font-weight:700;cursor:pointer}.ac-app .aw-overview-edit>svg:last-child{margin-left:auto}.ac-app .aw-overview-edit:hover{background:#174b61}
+.ac-app .aw-overview-detail-section{padding:17px 0;border-bottom:1px solid #2a3d53}.ac-app .aw-overview-detail-section:last-child{border:0}.ac-app .aw-overview-detail-section h3{margin:0 0 9px;font-size:13px;color:#f0f8ff}.ac-app .aw-overview-detail-section p{margin:0 0 7px;font-size:12px;line-height:1.5;color:#acbed0}.ac-app .aw-overview-tags{display:flex;flex-wrap:wrap;gap:6px}.ac-app .aw-overview-tags span{padding:6px 8px;border-radius:6px;background:#1a3448;color:#b8eaf2;font-size:11px}
+.ac-app .aw-overview-empty{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px;gap:9px;text-align:center;color:#9ab1c9}.ac-app .aw-overview-empty strong{color:#eaf6ff}.ac-app .aw-overview-empty p{font-size:12px;max-width:30ch}.ac-app .aw-overview-empty button{display:flex;align-items:center;gap:7px;border:1px solid #26c7e6;border-radius:8px;background:#143b50;color:#d1f9ff;padding:9px 12px;cursor:pointer}
+.ac-app .aw-back{display:inline-flex;align-items:center;gap:6px;margin:0 0 13px;padding:5px 0;border:0;background:none;color:#9dc2d7;font-size:12px;cursor:pointer}.ac-app .aw-back svg{transform:rotate(180deg)}.ac-app .aw-back:hover{color:#63dbef}
+.ac-app .aw-search{background:#101e31;border-color:#344b62}.ac-app .aw-search input{background:transparent!important;border:0!important;color:#f1f8ff!important;padding:0!important}
+.ac-app .aw-tabs{scrollbar-width:thin;scrollbar-color:#3f647d transparent}.ac-app .aw-tabs button{font-size:12px}
+@media(max-width:1100px){.ac-app .aw-overview-layout{grid-template-columns:1fr}.ac-app .aw-overview-detail{position:static}}
+@media(max-width:650px){.ac-app .aw-overview-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.ac-app .aw-overview-stats>div{display:grid;gap:7px;padding:12px;min-height:95px}.ac-app .aw-overview-stats svg{width:30px;height:30px;padding:7px}.ac-app .aw-overview-stats strong{font-size:20px}.ac-app .aw-overview-stats small{font-size:10px}.ac-app .aw-overview-toolbar{align-items:stretch;flex-direction:column}.ac-app .aw-overview-toolbar .aw-search{width:100%}.ac-app .aw-overview-cards{grid-template-columns:1fr}}
+
+/* Put the core workflow in the same order as the supplied reference. */
+.ac-app .ac-main-sidebar nav{display:flex;flex-direction:column;gap:4px}
+.ac-app .ac-main-sidebar nav>*{margin-top:0!important}
+.ac-app .ac-main-sidebar nav .ac-nav-home{order:1}
+.ac-app .ac-main-sidebar nav .ac-nav-chat{order:2}
+.ac-app .ac-main-sidebar nav .ac-nav-agents{order:3}
+.ac-app .ac-main-sidebar nav .ac-nav-automations{order:4}
+.ac-app .ac-main-sidebar nav .ac-nav-code{order:5}
+.ac-app .ac-main-sidebar nav .ac-nav-settings{order:6;margin-top:20px!important;border-top:1px solid #25374d;border-radius:0 0 10px 10px;padding-top:12px}
+.ac-app .ac-main-sidebar nav:before{content:"FERRAMENTAS";order:7;margin:22px 14px 5px;color:#718ba4;font-size:10px;font-weight:700;letter-spacing:.12em}
+.ac-app .ac-main-sidebar nav .ac-nav-tasks{order:8}
+.ac-app .ac-main-sidebar nav .ac-nav-connections{order:9}
+.ac-app .ac-main-sidebar nav .ac-nav-documents{order:10}
+.ac-app .ac-main-sidebar nav .ac-nav-reports{order:11}
+.ac-app .ac-main-sidebar nav>:not(button){order:12}
+.ac-app .ac-main-sidebar nav>button:not([class*="ac-nav-"]){order:13}
+.ac-app .ac-main-topbar{gap:20px}.ac-app .ac-topbar-location{align-items:center;gap:10px;color:#d7e7f7;font-size:13px;font-weight:650;white-space:nowrap}.ac-app .ac-topbar-location svg{color:#93bdd2}
+.ac-app .ac-main-topbar .relative.hidden{width:min(34vw,340px);margin-left:auto;margin-right:5px}
+.ac-app .ac-main-topbar .ac-topbar-profile{display:grid;place-items:center;width:35px;height:35px;padding:0;border:1px solid #3b5369;border-radius:50%;background:#1b2b41;color:#eef8ff;font-size:12px;font-weight:750;letter-spacing:.02em}
+.ac-app .ac-main-topbar .ac-topbar-profile:hover{background:#24435a;border-color:#55d6ec}
+.ac-app .ac-main-topbar button[title="Central de Notificações"] svg{width:19px;height:19px}
+.ac-app .ac-nav-chat>span,.ac-app .ac-nav-code>span,.ac-app .ac-nav-agents>span{display:none}

@@ -36,8 +36,8 @@ export default function HomeWorkspace({ name, activity, onNavigate }: { name: st
 
   return <div className="ac-home">
     <div className="ac-home-intro">
-      <div><span className="ac-home-kicker"><Sparkles size={15} /> Seu espaço de trabalho</span><h1>Olá, <em>{firstName}</em></h1><p>Gerencie agentes, automações e projetos em um só lugar.</p></div>
-      <div className="ac-home-orbit" aria-hidden="true"><span /></div>
+      <div><h1>Olá, <em>{firstName}</em></h1><p>Gerencie seus agentes, automações e projetos em um só lugar.</p></div>
+      <svg className="ac-home-orbit" viewBox="0 0 650 150" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="ac-wave" x1="0" y1="0" x2="1" y2="0"><stop stopColor="#154b93" stopOpacity="0"/><stop offset=".45" stopColor="#37bdff"/><stop offset="1" stopColor="#16e0eb" stopOpacity=".15"/></linearGradient><filter id="ac-wave-glow"><feGaussianBlur stdDeviation="5"/></filter></defs><path d="M0 40 C125 3 174 145 318 103 S525 10 650 40" stroke="url(#ac-wave)" strokeWidth="7" fill="none" opacity=".36" filter="url(#ac-wave-glow)"/><path d="M0 40 C125 3 174 145 318 103 S525 10 650 40" stroke="url(#ac-wave)" strokeWidth="1.5" fill="none"/></svg>
     </div>
 
     <div className="ac-home-actions" aria-label="Ações rápidas">

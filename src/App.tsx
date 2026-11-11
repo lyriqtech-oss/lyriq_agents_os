@@ -7580,7 +7580,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('dashboard')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-home w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'dashboard'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7594,7 +7594,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => companyProfile.setupComplete ? setCurrentTab('chat') : addToast('Disponível depois de configurar a empresa e o provedor de IA.', 'info')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-chat w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'chat'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7609,7 +7609,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('code')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-code w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'code' ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
                 }`}
               >
@@ -7622,7 +7622,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('agents')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-agents w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'agents' || currentTab === 'agent_studio' || currentTab === 'main_agent'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7637,7 +7637,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               {workspaceMode === 'personal' && <button
                 onClick={() => setCurrentTab('automation_builder')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-automations w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'automation_builder'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7652,7 +7652,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               {workspaceMode === 'business' && (<>
               <button
                 onClick={() => setCurrentTab('tasks')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-tasks w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'tasks'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7671,7 +7671,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('automation_builder')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-automations w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'automation_builder'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7685,7 +7685,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('connections')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-connections w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   ['connections', 'channels', 'channel_telegram', 'channel_whatsapp', 'whatsapp_inbox', 'channel_email', 'email_inbox', 'integrations', 'mcps', 'webhooks_outbound', 'webhooks_inbound'].includes(currentTab)
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7700,7 +7700,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('documents')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-documents w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   ['documents', 'memory', 'knowledge_bases', 'rag_sandbox', 'workspace_memories', 'memory_candidates', 'memory_debug'].includes(currentTab)
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7715,7 +7715,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               {workspaceMode === 'business' && <button
                 onClick={() => setCurrentTab('reports')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-reports w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   currentTab === 'reports' || currentTab === 'executive_dashboard'
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7729,7 +7729,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
 
               <button
                 onClick={() => setCurrentTab('settings')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
+                className={`ac-nav-settings w-full flex items-center justify-between px-3 py-2 rounded-md text-xs font-medium transition-all ${
                   ['settings', 'providers', 'pricing', 'workspace_settings'].includes(currentTab)
                     ? 'bg-slate-950 text-white shadow-sm'
                     : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
@@ -7793,11 +7793,12 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
             <header className="ac-main-topbar h-16 px-4 md:px-8 border-b border-slate-200/60 bg-white flex items-center justify-between shrink-0 z-10">
               <button type="button" onClick={() => setMobileNavOpen(true)} aria-label="Abrir navegação" className="rounded-lg p-2 text-slate-800 hover:bg-slate-100 md:hidden"><Menu className="h-5 w-5" /></button>
               <span className="text-sm font-bold text-slate-950 md:hidden">Agent Center</span>
+              <div className="ac-topbar-location hidden md:flex"><LayoutDashboard size={16}/><span>{currentTab === 'dashboard' ? 'Início' : currentTab === 'chat' ? 'Chats' : currentTab === 'agents' ? 'Meus Agentes' : currentTab === 'automation_builder' ? 'Automações' : currentTab === 'code' ? 'Agent Center Code' : currentTab === 'settings' ? 'Configurações' : 'Agent Center'}</span></div>
               <div className="relative hidden w-96 md:block">
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Buscar agentes, tarefas, arquivos ou comandos..."
+                  placeholder="Buscar no Agent Center"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-slate-400 transition"
@@ -7805,13 +7806,6 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
               </div>
 
               <div className="flex items-center gap-4">
-                {companyProfile.setupComplete && (
-                  <div className="flex items-center gap-2 px-2.5 py-1 bg-slate-100/70 rounded-md">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-emerald-100"></span>
-                    <span className="text-xs font-semibold text-slate-700">{companyProfile.name}</span>
-                  </div>
-                )}
-
                 {/* Notification Bell Icon Button */}
                 <button
                   onClick={() => setIsNotificationDrawerOpen(prev => !prev)}
@@ -7826,14 +7820,7 @@ Formato de relatório preferido: ${mainAgentReportFormat || 'executivo por tópi
                   )}
                 </button>
                 
-                <button
-                  onClick={handleLogout}
-                  className="px-2.5 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 rounded text-[10px] font-semibold flex items-center gap-1 transition"
-                  title="Sair da conta e voltar para página de divulgação"
-                >
-                  <LogOut className="w-3.5 h-3.5 text-slate-500" />
-                  <span>Sair</span>
-                </button>
+                <button type="button" onClick={() => setCurrentTab('settings')} className="ac-topbar-profile" title="Abrir configurações da conta" aria-label="Abrir configurações da conta">{(currentUser?.name || 'AC').split(' ').map(part => part[0]).slice(0,2).join('').toUpperCase()}</button>
               </div>
             </header>
 

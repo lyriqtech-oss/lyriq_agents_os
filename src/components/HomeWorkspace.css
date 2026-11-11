@@ -2,3 +2,7 @@
 
 .ac-home-activity{margin-top:18px}
 
+.ac-home-intro{min-height:132px}.ac-home-intro h1{margin:0 0 8px;font-size:clamp(36px,3.5vw,50px)}.ac-home-intro p{font-size:14px;color:#b1bfd0}.ac-home-orbit{right:-2%;top:5px;width:50%;height:130px;overflow:visible;opacity:.95;pointer-events:none}.ac-home-orbit:before{content:none}
+.ac-home-actions{margin-top:19px;gap:12px}.ac-home-actions button{min-height:103px;background:#111d2e;box-shadow:none}.ac-home-actions button:first-child{background:linear-gradient(115deg,#102c40,#102033)}.ac-home-action-copy strong{font-size:14px;line-height:1.25}.ac-home-action-copy small{font-size:12px;line-height:1.35}.ac-home-panel,.ac-home-code{background:#111d2e;box-shadow:none}.ac-home-panel-head h2{font-size:18px}.ac-home-row-copy strong{font-size:13px}.ac-home-row-copy small{font-size:12px}.ac-home-state{font-size:11px}
+@media(max-width:560px){.ac-home-orbit{width:80%;opacity:.38}.ac-home-intro{min-height:112px}.ac-home-actions button{min-height:78px}}
+
